@@ -1,4 +1,4 @@
-import type { DownloadMode, FormatPreset, ProviderId, ResolvedMedia } from "../types";
+import type { DownloadMode, FormatPreset, ProviderId, ResolvedMedia, YoutubeDownloadOptions } from "../types";
 
 export interface ResolveContext {
   format?: FormatPreset;
@@ -7,6 +7,7 @@ export interface ResolveContext {
   extractorUrl?: string;
   fragmentConcurrency?: number;
   signal?: AbortSignal;
+  youtube?: YoutubeDownloadOptions;
 }
 
 export interface MediaProvider {

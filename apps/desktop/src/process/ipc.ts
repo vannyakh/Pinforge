@@ -6,10 +6,12 @@ import {
   extractMediaPreview,
   PRESETS,
   DEFAULT_ENHANCE_FEATURES,
+  DEFAULT_YOUTUBE_OPTIONS,
   type PresetName,
   type FormatPreset,
   type ProcessResult,
   type EnhanceFeatures,
+  type YoutubeDownloadOptions,
 } from "@pinterest-desktop/core";
 import {
   getStore,
@@ -85,6 +87,7 @@ async function runProcess(
     enhance?: boolean;
     format?: FormatPreset;
     features?: Partial<EnhanceFeatures>;
+    youtube?: YoutubeDownloadOptions;
   }
 ) {
   const store = getStore();
@@ -94,6 +97,11 @@ async function runProcess(
     ...DEFAULT_ENHANCE_FEATURES,
     ...store.get("enhanceFeatures"),
     ...payload.features,
+  };
+  const youtube = {
+    ...DEFAULT_YOUTUBE_OPTIONS,
+    ...store.get("youtube"),
+    ...payload.youtube,
   };
 
   // Provider extension overrides (engine / format / extractor / plugins)
@@ -151,6 +159,7 @@ async function runProcess(
       enhance,
       features,
       format,
+      youtube,
       extractorUrl,
       delayMs: store.get("delayMs"),
       itemConcurrency: 3,
@@ -332,6 +341,10 @@ export function registerIpc(): void {
       },
       autoDownload: store.get("autoDownload") ?? true,
       format: store.get("format"),
+      youtube: {
+        ...DEFAULT_YOUTUBE_OPTIONS,
+        ...store.get("youtube"),
+      },
       extractorUrl: store.get("extractorUrl"),
       history: store.get("history"),
       packs: store.get("packs"),
@@ -355,6 +368,7 @@ export function registerIpc(): void {
         enhanceFeatures: Partial<EnhanceFeatures>;
         autoDownload: boolean;
         format: FormatPreset;
+        youtube: Partial<YoutubeDownloadOptions>;
         extractorUrl: string;
         system: Partial<SystemConfig>;
       }>
@@ -373,6 +387,13 @@ export function registerIpc(): void {
       }
       if (partial.autoDownload !== undefined) store.set("autoDownload", partial.autoDownload);
       if (partial.format !== undefined) store.set("format", partial.format);
+      if (partial.youtube !== undefined) {
+        store.set("youtube", {
+          ...DEFAULT_YOUTUBE_OPTIONS,
+          ...store.get("youtube"),
+          ...partial.youtube,
+        });
+      }
       if (partial.extractorUrl !== undefined) store.set("extractorUrl", partial.extractorUrl);
       if (partial.system !== undefined) {
         const next = { ...store.get("system"), ...partial.system };
@@ -390,6 +411,10 @@ export function registerIpc(): void {
         },
         autoDownload: store.get("autoDownload") ?? true,
         format: store.get("format"),
+        youtube: {
+          ...DEFAULT_YOUTUBE_OPTIONS,
+          ...store.get("youtube"),
+        },
         extractorUrl: store.get("extractorUrl"),
         system: resolveSystemPaths(store.get("system")),
       };

@@ -1,7 +1,7 @@
 import type { MediaProvider } from "./types";
 import { registerProvider } from "./registry";
 import { hostMatches } from "./extractors/http";
-import { extractYouTubeViaPiped } from "./extractors/youtube";
+import { resolveYouTubeVideo } from "./youtube/service";
 import { extractInstagram } from "./extractors/instagram";
 import { extractTikTok } from "./extractors/tiktok";
 
@@ -14,8 +14,10 @@ export const youtubeProvider: MediaProvider = {
   match: (url) =>
     hostMatches(url, /^(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)$/i),
   resolve: (url, ctx) =>
-    extractYouTubeViaPiped(url, {
+    resolveYouTubeVideo(url, {
       format: ctx?.format ?? "best",
+      youtube: ctx?.youtube,
+      outDir: ctx?.outDir,
       extractorUrl: ctx?.extractorUrl,
       fragmentConcurrency: ctx?.fragmentConcurrency,
       signal: ctx?.signal,

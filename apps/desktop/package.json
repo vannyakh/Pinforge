@@ -22,7 +22,8 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.2",
     "sharp": "^0.33.5",
-    "youtubei.js": "17.2.0"
+    "youtubei.js": "17.2.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/classnames": "^2.3.4",

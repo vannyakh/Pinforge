@@ -21,6 +21,10 @@ import type {
   ExtractPreview,
   ExtractPreviewItem,
   DownloadMode,
+  YoutubeDownloadOptions,
+  YoutubeQuality,
+  AudioContainer,
+  SubtitleMode,
 } from "../../preload/index";
 
 export type {
@@ -46,6 +50,10 @@ export type {
   ExtractPreview,
   ExtractPreviewItem,
   DownloadMode,
+  YoutubeDownloadOptions,
+  YoutubeQuality,
+  AudioContainer,
+  SubtitleMode,
 };
 
 export const api = {
@@ -56,6 +64,7 @@ export const api = {
     enhance?: boolean;
     format?: FormatPreset;
     features?: Partial<EnhanceFeatures>;
+    youtube?: Partial<YoutubeDownloadOptions>;
   }) => window.api.processMedia(payload),
   processPin: (url: string, preset: PresetName, outDir: string) =>
     window.api.processPin(url, preset, outDir),

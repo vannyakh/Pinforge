@@ -3,6 +3,20 @@ import { contextBridge, ipcRenderer } from "electron";
 export type PresetName = "auto" | "soft" | "crisp" | "upscale";
 export type FormatPreset = "best" | "mp4" | "audio-only";
 
+export type YoutubeQuality = "best" | "4320" | "2160" | "1440" | "1080" | "720" | "480" | "360";
+export type AudioContainer = "m4a" | "mp3" | "flac";
+export type SubtitleMode = "none" | "separate" | "embed";
+
+export interface YoutubeDownloadOptions {
+  quality?: YoutubeQuality;
+  audioContainer?: AudioContainer;
+  subtitles?: SubtitleMode;
+  subtitleLang?: string;
+  organizeByChannel?: boolean;
+  tagMetadata?: boolean;
+  resume?: boolean;
+}
+
 export interface EnhanceFeatures {
   autoLevels: boolean;
   denoise: boolean;
@@ -174,6 +188,7 @@ export interface AppSettings {
   enhanceFeatures: EnhanceFeatures;
   autoDownload: boolean;
   format: FormatPreset;
+  youtube: YoutubeDownloadOptions;
   extractorUrl: string;
   history: HistoryItem[];
   packs: DownloadPack[];
@@ -232,6 +247,7 @@ export type SettingsPartial = Partial<{
   enhanceFeatures: Partial<EnhanceFeatures>;
   autoDownload: boolean;
   format: FormatPreset;
+  youtube: Partial<YoutubeDownloadOptions>;
   extractorUrl: string;
   system: Partial<SystemConfig>;
 }>;
@@ -255,6 +271,7 @@ const api = {
     enhance?: boolean;
     format?: FormatPreset;
     features?: Partial<EnhanceFeatures>;
+    youtube?: Partial<YoutubeDownloadOptions>;
   }): Promise<ProcessResponse> => ipcRenderer.invoke("media:process", payload),
   processPin: (url: string, preset: PresetName, outDir: string): Promise<ProcessResponse> =>
     ipcRenderer.invoke("pin:process", { url, preset, outDir }),

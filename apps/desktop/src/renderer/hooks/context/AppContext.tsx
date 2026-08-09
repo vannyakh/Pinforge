@@ -8,6 +8,7 @@ import {
   type FormatPreset,
   type PresetName,
   type EnhanceFeatures,
+  type YoutubeDownloadOptions,
   type SettingsPartial,
   type MediaProgressEvent,
   type PackStatus,
@@ -19,6 +20,7 @@ interface ProcessOpts {
   preset?: PresetName;
   outDir?: string;
   features?: Partial<EnhanceFeatures>;
+  youtube?: Partial<YoutubeDownloadOptions>;
 }
 
 export interface DownloadTask {
@@ -97,6 +99,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           enhance: opts?.enhance ?? settings.enhance,
           format: opts?.format ?? settings.format,
           features: opts?.features ?? settings.enhanceFeatures,
+          youtube: opts?.youtube ?? settings.youtube,
         });
         Message.clear();
         const ok = res.results.length;
@@ -146,6 +149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               ? { ...prev.enhanceFeatures, ...next.enhanceFeatures }
               : prev.enhanceFeatures,
             autoDownload: next.autoDownload ?? prev.autoDownload,
+            youtube: next.youtube ? { ...prev.youtube, ...next.youtube } : prev.youtube,
           }
         : prev
     );

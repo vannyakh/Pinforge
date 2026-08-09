@@ -16,7 +16,7 @@ import {
 import type { ColumnProps, SorterInfo } from "@arco-design/web-react/es/Table/interface";
 import { FolderOpen, Plus, Redo } from "@icon-park/react";
 import { useApp } from "@renderer/hooks/context/AppContext";
-import { api, type FormatPreset, type PackStatus, type PresetName } from "@renderer/api";
+import { api, type FormatPreset, type PackStatus, type PresetName, type YoutubeQuality, type AudioContainer, type SubtitleMode } from "@renderer/api";
 
 const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
 
@@ -152,6 +152,9 @@ const TasksPage: React.FC = () => {
   const [addFormat, setAddFormat] = useState<FormatPreset>("best");
   const [addPreset, setAddPreset] = useState<PresetName>("auto");
   const [addEnhance, setAddEnhance] = useState(true);
+  const [addYtQuality, setAddYtQuality] = useState<YoutubeQuality>("best");
+  const [addAudio, setAddAudio] = useState<AudioContainer>("m4a");
+  const [addSubs, setAddSubs] = useState<SubtitleMode>("separate");
   const [sorted, setSorted] = useState<SorterInfo>({
     field: "updatedAt",
     direction: "descend",
@@ -165,6 +168,9 @@ const TasksPage: React.FC = () => {
       setAddFormat(settings.format);
       setAddPreset(settings.preset);
       setAddEnhance(settings.enhance);
+      setAddYtQuality(settings.youtube?.quality ?? "best");
+      setAddAudio(settings.youtube?.audioContainer ?? "m4a");
+      setAddSubs(settings.youtube?.subtitles ?? "separate");
     }
     setAddText("");
     setAddOpen(true);
@@ -338,6 +344,11 @@ const TasksPage: React.FC = () => {
       format: addFormat,
       preset: addPreset,
       outDir,
+      youtube: {
+        quality: addYtQuality,
+        audioContainer: addAudio,
+        subtitles: addSubs,
+      },
     };
     closeAddModal();
     void (async () => {
@@ -665,6 +676,53 @@ const TasksPage: React.FC = () => {
                     : []
                 }
               />
+            </div>
+          </div>
+
+          <div className="flex gap-12px">
+            <div className="flex-1 min-w-0">
+              <div className="text-13px text-t-secondary mb-6px">YouTube quality</div>
+              <Select
+                value={addYtQuality}
+                disabled={busy || addFormat === "audio-only"}
+                onChange={(v) => setAddYtQuality(v as YoutubeQuality)}
+                options={[
+                  { value: "best", label: "Best" },
+                  { value: "2160", label: "2160p" },
+                  { value: "1440", label: "1440p" },
+                  { value: "1080", label: "1080p" },
+                  { value: "720", label: "720p" },
+                  { value: "480", label: "480p" },
+                  { value: "360", label: "360p" },
+                ]}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-13px text-t-secondary mb-6px">Audio / Subs</div>
+              <div className="flex gap-8px">
+                <Select
+                  className="flex-1"
+                  value={addAudio}
+                  disabled={busy || addFormat !== "audio-only"}
+                  onChange={(v) => setAddAudio(v as AudioContainer)}
+                  options={[
+                    { value: "m4a", label: "M4A" },
+                    { value: "mp3", label: "MP3" },
+                    { value: "flac", label: "FLAC" },
+                  ]}
+                />
+                <Select
+                  className="flex-1"
+                  value={addSubs}
+                  disabled={busy}
+                  onChange={(v) => setAddSubs(v as SubtitleMode)}
+                  options={[
+                    { value: "none", label: "No subs" },
+                    { value: "separate", label: "Subs file" },
+                    { value: "embed", label: "Embed" },
+                  ]}
+                />
+              </div>
             </div>
           </div>
 

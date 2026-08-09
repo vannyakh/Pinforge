@@ -1,8 +1,8 @@
 import Store from "electron-store";
 import { app } from "electron";
 import { join } from "node:path";
-import type { FormatPreset, PresetName, ProviderId, MediaKind, EnhanceFeatures } from "@pinterest-desktop/core";
-import { DEFAULT_ENHANCE_FEATURES } from "@pinterest-desktop/core";
+import type { FormatPreset, PresetName, ProviderId, MediaKind, EnhanceFeatures, YoutubeDownloadOptions } from "@pinterest-desktop/core";
+import { DEFAULT_ENHANCE_FEATURES, DEFAULT_YOUTUBE_OPTIONS } from "@pinterest-desktop/core";
 import {
   DEFAULT_REMOTE,
   DEFAULT_TUNNEL,
@@ -76,6 +76,7 @@ export interface AppStoreSchema {
   /** Skip confirm and start the task after URL detection. */
   autoDownload: boolean;
   format: FormatPreset;
+  youtube: YoutubeDownloadOptions;
   extractorUrl: string;
   history: HistoryItem[];
   packs: DownloadPack[];
@@ -99,6 +100,7 @@ export function getStore(): Store<AppStoreSchema> {
         enhanceFeatures: { ...DEFAULT_ENHANCE_FEATURES },
         autoDownload: true,
         format: "best",
+        youtube: { ...DEFAULT_YOUTUBE_OPTIONS },
         extractorUrl: "",
         history: [],
         packs: [],
@@ -111,6 +113,7 @@ export function getStore(): Store<AppStoreSchema> {
     ensureRemoteDefaults(store);
     ensureSystemDefaults(store);
     ensureEnhanceFeatures(store);
+    ensureYoutubeOptions(store);
     if (!Array.isArray(store.get("customProviders"))) {
       store.set("customProviders", []);
     }
@@ -121,6 +124,11 @@ export function getStore(): Store<AppStoreSchema> {
 function ensureEnhanceFeatures(s: Store<AppStoreSchema>): void {
   const cur = s.get("enhanceFeatures");
   s.set("enhanceFeatures", { ...DEFAULT_ENHANCE_FEATURES, ...cur });
+}
+
+function ensureYoutubeOptions(s: Store<AppStoreSchema>): void {
+  const cur = s.get("youtube");
+  s.set("youtube", { ...DEFAULT_YOUTUBE_OPTIONS, ...cur });
 }
 
 export function resolveSystemPaths(system: SystemConfig): SystemConfig {

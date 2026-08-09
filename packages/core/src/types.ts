@@ -38,6 +38,40 @@ export type ProviderId =
 
 export type FormatPreset = "best" | "mp4" | "audio-only";
 
+/** Max video height for YouTube single downloads (`best` = highest available). */
+export type YoutubeQuality = "best" | "4320" | "2160" | "1440" | "1080" | "720" | "480" | "360";
+
+export type AudioContainer = "m4a" | "mp3" | "flac";
+
+export type SubtitleMode = "none" | "separate" | "embed";
+
+export interface YoutubeDownloadOptions {
+  /** Preferred max height (ignored for audio-only). */
+  quality?: YoutubeQuality;
+  /** Audio output container when format is audio-only (or extracted). */
+  audioContainer?: AudioContainer;
+  /** Caption handling. */
+  subtitles?: SubtitleMode;
+  /** Preferred caption language (default en). */
+  subtitleLang?: string;
+  /** Sort into outDir/<channel>/ (default true). */
+  organizeByChannel?: boolean;
+  /** Embed title/uploader/date/thumbnail via ffmpeg (default true). */
+  tagMetadata?: boolean;
+  /** Resume interrupted .part downloads (default true). */
+  resume?: boolean;
+}
+
+export const DEFAULT_YOUTUBE_OPTIONS: Required<YoutubeDownloadOptions> = {
+  quality: "best",
+  audioContainer: "m4a",
+  subtitles: "separate",
+  subtitleLang: "en",
+  organizeByChannel: true,
+  tagMetadata: true,
+  resume: true,
+};
+
 /** What kinds of URLs / jobs a provider can handle. */
 export type DownloadMode = "single" | "board" | "profile" | "playlist" | "story";
 
@@ -50,7 +84,9 @@ export interface ProcessOptions {
   /** Per-step enhance toggles (stills pipeline). */
   features?: Partial<EnhanceFeatures>;
   format?: FormatPreset;
-  /** Piped-compatible extractor API base (YouTube). */
+  /** YouTube single-video options (quality, audio, subs, folders). */
+  youtube?: YoutubeDownloadOptions;
+  /** Piped-compatible extractor API base (YouTube fallback). */
   extractorUrl?: string;
   /** Concurrent item downloads for boards/batches (default 3). */
   itemConcurrency?: number;
@@ -76,6 +112,10 @@ export interface ResolvedMedia {
   sourceUrl: string;
   title?: string;
   provider: ProviderId;
+  /** Channel / uploader name for auto-organization. */
+  channel?: string;
+  /** Sidecar subtitle paths written next to the media. */
+  subtitlePaths?: string[];
 }
 
 export interface EnhancedAsset {

@@ -7,22 +7,18 @@ import {
   type DetectedProvider,
   type ExtractPreview,
   type FormatPreset,
+  type YoutubeQuality,
+  type AudioContainer,
+  type SubtitleMode,
+  type YoutubeDownloadOptions,
 } from "@renderer/api";
 import { PlatformIcon, PLATFORMS, type PlatformId } from "./platforms";
-import PlatformSelectionBar, { type PlatformFilter } from "./PlatformSelectionBar";
-
-type ChatRole = "user" | "assistant";
-
-type ChatMessage = {
-  id: string;
-  role: ChatRole;
-  text: string;
-  url?: string;
-  detected?: DetectedProvider | null;
-  extract?: ExtractPreview | null;
-  status?: "detecting" | "ready" | "error" | "started";
-  pendingConfirm?: boolean;
-};
+import PlatformSelectionBar from "./PlatformSelectionBar";
+import {
+  selectPendingConfirm,
+  useHomeChatStore,
+  type ChatMessage,
+} from "./homeChatStore";
 
 const SUGGESTIONS = [
   {
@@ -74,14 +70,28 @@ function describeExtract(extract: ExtractPreview): string {
 
 const DownloadPage: React.FC = () => {
   const { settings, busy, processUrl, updateSettings } = useApp();
-  const [url, setUrl] = useState("");
-  const [filter, setFilter] = useState<PlatformFilter>("auto");
+
+  const url = useHomeChatStore((s) => s.url);
+  const filter = useHomeChatStore((s) => s.filter);
+  const messages = useHomeChatStore((s) => s.messages);
+  const confirmFormat = useHomeChatStore((s) => s.confirmFormat);
+  const confirmEnhance = useHomeChatStore((s) => s.confirmEnhance);
+  const confirmYtQuality = useHomeChatStore((s) => s.confirmYtQuality);
+  const confirmAudio = useHomeChatStore((s) => s.confirmAudio);
+  const confirmSubs = useHomeChatStore((s) => s.confirmSubs);
+  const extracting = useHomeChatStore((s) => s.extracting);
+  const setUrl = useHomeChatStore((s) => s.setUrl);
+  const setFilter = useHomeChatStore((s) => s.setFilter);
+  const setConfirmFormat = useHomeChatStore((s) => s.setConfirmFormat);
+  const setConfirmEnhance = useHomeChatStore((s) => s.setConfirmEnhance);
+  const setConfirmYtQuality = useHomeChatStore((s) => s.setConfirmYtQuality);
+  const setConfirmAudio = useHomeChatStore((s) => s.setConfirmAudio);
+  const setConfirmSubs = useHomeChatStore((s) => s.setConfirmSubs);
+  const setExtracting = useHomeChatStore((s) => s.setExtracting);
+  const appendMessages = useHomeChatStore((s) => s.appendMessages);
+  const mapMessages = useHomeChatStore((s) => s.mapMessages);
+
   const [inputFocused, setInputFocused] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [confirmFormat, setConfirmFormat] = useState<FormatPreset>("best");
-  const [confirmEnhance, setConfirmEnhance] = useState(true);
-  const [extracting, setExtracting] = useState(false);
-  const [processStartedAt, setProcessStartedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -93,8 +103,18 @@ const DownloadPage: React.FC = () => {
     if (settings) {
       setConfirmFormat(settings.format);
       setConfirmEnhance(settings.enhance);
+      setConfirmYtQuality(settings.youtube?.quality ?? "best");
+      setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
+      setConfirmSubs(settings.youtube?.subtitles ?? "separate");
     }
-  }, [settings]);
+  }, [
+    settings,
+    setConfirmFormat,
+    setConfirmEnhance,
+    setConfirmYtQuality,
+    setConfirmAudio,
+    setConfirmSubs,
+  ]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -102,12 +122,10 @@ const DownloadPage: React.FC = () => {
 
   useEffect(() => {
     if (!showProcessing) {
-      setProcessStartedAt(null);
       setElapsedSec(0);
       return;
     }
     const started = Date.now();
-    setProcessStartedAt(started);
     setElapsedSec(0);
     const timer = window.setInterval(() => {
       setElapsedSec(Math.floor((Date.now() - started) / 1000));
@@ -116,7 +134,7 @@ const DownloadPage: React.FC = () => {
   }, [showProcessing]);
 
   const pendingConfirmMsg = useMemo(
-    () => messages.find((m) => m.pendingConfirm && m.status === "ready"),
+    () => selectPendingConfirm(messages),
     [messages]
   );
 
@@ -130,14 +148,16 @@ const DownloadPage: React.FC = () => {
   const hasUrl = url.trim().length > 0;
   const showEnhanceConfirm =
     !pendingConfirmMsg?.detected || pendingConfirmMsg.detected.id === "pinterest";
+  const showYoutubeConfirm = pendingConfirmMsg?.detected?.id === "youtube";
 
   const startDownload = async (
     targetUrl: string,
-    opts: { format: FormatPreset; enhance: boolean }
+    opts: { format: FormatPreset; enhance: boolean; youtube?: Partial<YoutubeDownloadOptions> }
   ) => {
     await processUrl(targetUrl, {
       enhance: opts.enhance,
       format: opts.format,
+      youtube: opts.youtube,
     });
   };
 
@@ -162,7 +182,7 @@ const DownloadPage: React.FC = () => {
       url: target,
       status: "detecting",
     };
-    setMessages((prev) => [...prev, userMsg, detectingMsg]);
+    appendMessages([userMsg, detectingMsg]);
 
     let extract: ExtractPreview | null = null;
     try {
@@ -183,7 +203,9 @@ const DownloadPage: React.FC = () => {
 
     const detected = toDetected(extract);
     const replyText = describeExtract(extract);
-    const canDownload = Boolean(extract.modeSupported && extract.provider.live && extract.itemCount > 0);
+    const canDownload = Boolean(
+      extract.modeSupported && extract.provider.live && extract.itemCount > 0
+    );
     const shouldAuto = autoDownload && canDownload;
 
     const formats = extract.formats?.length
@@ -194,9 +216,12 @@ const DownloadPage: React.FC = () => {
     ) as FormatPreset;
     setConfirmFormat(nextFormat);
     setConfirmEnhance(settings.enhance);
+    setConfirmYtQuality(settings.youtube?.quality ?? "best");
+    setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
+    setConfirmSubs(settings.youtube?.subtitles ?? "separate");
 
     if (shouldAuto) {
-      setMessages((prev) =>
+      mapMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
             ? {
@@ -214,11 +239,19 @@ const DownloadPage: React.FC = () => {
       void startDownload(target, {
         format: nextFormat,
         enhance: settings.enhance,
+        youtube:
+          detected.id === "youtube"
+            ? {
+                quality: settings.youtube?.quality ?? "best",
+                audioContainer: settings.youtube?.audioContainer ?? "m4a",
+                subtitles: settings.youtube?.subtitles ?? "separate",
+              }
+            : undefined,
       });
       return;
     }
 
-    setMessages((prev) =>
+    mapMessages((prev) =>
       prev.map((m) =>
         m.id === assistantId
           ? {
@@ -240,7 +273,7 @@ const DownloadPage: React.FC = () => {
   const confirmDownload = () => {
     const msg = pendingConfirmMsg;
     if (!msg?.url || !msg.detected?.live || !msg.extract?.modeSupported) return;
-    setMessages((prev) =>
+    mapMessages((prev) =>
       prev.map((m) =>
         m.id === msg.id
           ? {
@@ -255,11 +288,29 @@ const DownloadPage: React.FC = () => {
     void startDownload(msg.url, {
       format: confirmFormat,
       enhance: showEnhanceConfirm ? confirmEnhance : false,
+      youtube:
+        msg.detected?.id === "youtube"
+          ? {
+              quality: confirmYtQuality,
+              audioContainer: confirmAudio,
+              subtitles: confirmSubs,
+            }
+          : undefined,
     });
+    if (msg.detected?.id === "youtube") {
+      void updateSettings({
+        format: confirmFormat,
+        youtube: {
+          quality: confirmYtQuality,
+          audioContainer: confirmAudio,
+          subtitles: confirmSubs,
+        },
+      });
+    }
   };
 
   const cancelConfirm = () => {
-    setMessages((prev) =>
+    mapMessages((prev) =>
       prev.map((m) =>
         m.pendingConfirm
           ? {
@@ -502,11 +553,16 @@ const DownloadPage: React.FC = () => {
                                     {extract.sourceUrl}
                                   </a>
                                   <div className="home-extract__stats">
-                                    <span>{extract.itemCount} item{extract.itemCount === 1 ? "" : "s"}</span>
+                                    <span>
+                                      {extract.itemCount} item
+                                      {extract.itemCount === 1 ? "" : "s"}
+                                    </span>
                                     <span>·</span>
                                     <span>{extract.mode}</span>
                                     <span>·</span>
-                                    <span>{extract.modeSupported ? "supported" : "not supported"}</span>
+                                    <span>
+                                      {extract.modeSupported ? "supported" : "not supported"}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -622,6 +678,57 @@ const DownloadPage: React.FC = () => {
                                   ))}
                                 </Select>
                               </div>
+                              {showYoutubeConfirm && confirmFormat !== "audio-only" && (
+                                <div className="home-chat-confirm__row">
+                                  <span className="home-chat-confirm__label">Quality</span>
+                                  <Select
+                                    size="small"
+                                    style={{ width: 140 }}
+                                    value={confirmYtQuality}
+                                    onChange={(v) => setConfirmYtQuality(v as YoutubeQuality)}
+                                  >
+                                    {(
+                                      ["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]
+                                    ).map((q) => (
+                                      <Select.Option key={q} value={q}>
+                                        {q === "best" ? "Best" : `${q}p`}
+                                      </Select.Option>
+                                    ))}
+                                  </Select>
+                                </div>
+                              )}
+                              {showYoutubeConfirm && confirmFormat === "audio-only" && (
+                                <div className="home-chat-confirm__row">
+                                  <span className="home-chat-confirm__label">Audio</span>
+                                  <Select
+                                    size="small"
+                                    style={{ width: 140 }}
+                                    value={confirmAudio}
+                                    onChange={(v) => setConfirmAudio(v as AudioContainer)}
+                                  >
+                                    {(["m4a", "mp3", "flac"] as AudioContainer[]).map((a) => (
+                                      <Select.Option key={a} value={a}>
+                                        {a.toUpperCase()}
+                                      </Select.Option>
+                                    ))}
+                                  </Select>
+                                </div>
+                              )}
+                              {showYoutubeConfirm && (
+                                <div className="home-chat-confirm__row">
+                                  <span className="home-chat-confirm__label">Subtitles</span>
+                                  <Select
+                                    size="small"
+                                    style={{ width: 140 }}
+                                    value={confirmSubs}
+                                    onChange={(v) => setConfirmSubs(v as SubtitleMode)}
+                                  >
+                                    <Select.Option value="none">None</Select.Option>
+                                    <Select.Option value="separate">Separate file</Select.Option>
+                                    <Select.Option value="embed">Embed</Select.Option>
+                                  </Select>
+                                </div>
+                              )}
                               {showEnhanceConfirm && (
                                 <div className="home-chat-confirm__row">
                                   <span className="home-chat-confirm__label">Enhance</span>

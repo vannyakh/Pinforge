@@ -66,9 +66,31 @@ async function writeResolved(
     };
   }
 
-  const buffer =
-    media.buffer ??
-    (media.filePath ? await fs.readFile(media.filePath) : null);
+  // Provider already wrote the final file (YouTube service, etc.)
+  if (media.filePath) {
+    const resolvedPath = path.resolve(media.filePath);
+    const outRoot = path.resolve(opts.outDir);
+    if (resolvedPath === outRoot || resolvedPath.startsWith(outRoot + path.sep)) {
+      return {
+        outPath: media.filePath,
+        sourceUrl: media.sourceUrl,
+        title: media.title,
+        provider: media.provider,
+        kind: media.kind,
+      };
+    }
+    const dest = path.join(opts.outDir, `${base}-${stamp}.${media.ext}`);
+    await fs.copyFile(media.filePath, dest);
+    return {
+      outPath: dest,
+      sourceUrl: media.sourceUrl,
+      title: media.title,
+      provider: media.provider,
+      kind: media.kind,
+    };
+  }
+
+  const buffer = media.buffer ?? null;
   if (!buffer) throw new Error("Resolved media has no buffer or file path");
 
   const outPath = path.join(opts.outDir, `${base}-${stamp}.${media.ext}`);
@@ -108,6 +130,7 @@ export async function processMedia(
     extractorUrl: opts.extractorUrl,
     fragmentConcurrency: opts.fragmentConcurrency ?? 4,
     signal: opts.signal,
+    youtube: opts.youtube,
   });
 
   const list = Array.isArray(resolved) ? resolved : [resolved];
