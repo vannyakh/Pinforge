@@ -1,0 +1,27 @@
+{
+  "name": "@pinterest-desktop/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "smoke": "tsx scripts/smoke.mts",
+    "playwright:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
+    "playwright": "^1.62.1",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.23.11",
+    "typescript": "^5.7.0"
+  }
+}

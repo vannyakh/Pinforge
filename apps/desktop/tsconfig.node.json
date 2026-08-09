@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@process/*": ["src/process/*"],
+      "@common/*": ["src/common/*"]
+    }
+  },
+  "include": [
+    "electron.vite.config.ts",
+    "uno.config.ts",
+    "src/index.ts",
+    "src/process/**/*",
+    "src/preload/**/*",
+    "src/common/**/*",
+    "../../packages/core/src/**/*"
+  ]
+}

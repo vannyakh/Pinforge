@@ -1,0 +1,90 @@
+import { resolve } from "path";
+import { defineConfig, externalizeDepsPlugin } from "electron-vite";
+import react from "@vitejs/plugin-react";
+import UnoCSS from "unocss/vite";
+import unoConfig from "./uno.config";
+
+const desktopSrc = resolve("src");
+const rendererRoot = resolve("src/renderer");
+
+/** Heavy / Node-native deps must stay external — bundling undici pulls `node:sqlite` (unsupported in Electron 31). */
+const MAIN_EXTERNALS = [
+  "sharp",
+  "playwright",
+  "playwright-core",
+  "@distube/ytdl-core",
+  "undici",
+  "electron-store",
+  "conf",
+  "node:sqlite",
+];
+
+export default defineConfig({
+  main: {
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: ["@pinterest-desktop/core"],
+      }),
+    ],
+    resolve: {
+      alias: {
+        "@": desktopSrc,
+        "@common": resolve("src/common"),
+        "@process": resolve("src/process"),
+        "@renderer": rendererRoot,
+        "@pinterest-desktop/core": resolve("../../packages/core/src/index.ts"),
+      },
+      extensions: [".ts", ".tsx", ".js", ".json"],
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve("src/index.ts"),
+        },
+        external: MAIN_EXTERNALS,
+      },
+    },
+  },
+  preload: {
+    plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias: {
+        "@": desktopSrc,
+        "@common": resolve("src/common"),
+      },
+      extensions: [".ts", ".tsx", ".js", ".json"],
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve("src/preload/index.ts"),
+        },
+      },
+    },
+  },
+  renderer: {
+    root: rendererRoot,
+    base: "./",
+    resolve: {
+      alias: {
+        "@": desktopSrc,
+        "@common": resolve("src/common"),
+        "@renderer": rendererRoot,
+      },
+      extensions: [".ts", ".tsx", ".js", ".jsx", ".css"],
+      dedupe: ["react", "react-dom", "react-router-dom"],
+    },
+    plugins: [react(), UnoCSS(unoConfig)],
+    build: {
+      target: "es2022",
+      rollupOptions: {
+        input: {
+          index: resolve(rendererRoot, "index.html"),
+        },
+      },
+    },
+    optimizeDeps: {
+      include: ["react", "react-dom", "react-router-dom", "@arco-design/web-react", "@icon-park/react", "classnames"],
+    },
+  },
+});

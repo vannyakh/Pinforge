@@ -1,0 +1,30 @@
+appId: com.pinterestdesktop.app
+productName: Pinforge
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - "**/*.node"
+  - "**/sharp/**"
+  - "**/@img/**"
+win:
+  icon: resources/icon.png
+  target:
+    - nsis
+  artifactName: ${productName}-${version}-Setup.${ext}
+mac:
+  icon: resources/icon.png
+  target:
+    - dmg
+  artifactName: ${productName}-${version}.${ext}
+linux:
+  icon: resources/icon.png
+  target:
+    - AppImage
+  artifactName: ${productName}-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

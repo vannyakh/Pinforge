@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@renderer/*": ["src/renderer/*"],
+      "@common/*": ["src/common/*"]
+    }
+  },
+  "include": [
+    "src/renderer/**/*",
+    "src/common/**/*",
+    "src/preload/index.d.ts",
+    "src/preload/index.ts"
+  ]
+}
