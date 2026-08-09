@@ -41,6 +41,11 @@ function emitProgress(
     status: PackStatus;
     title?: string;
     message?: string;
+    percent?: number;
+    downloaded?: number;
+    totalBytes?: number | null;
+    phase?: string;
+    etaSec?: number | null;
   }
 ): void {
   e.sender.send("media:progress", payload);
@@ -150,6 +155,8 @@ async function runProcess(
     current: 0,
     total: 1,
     status: "running",
+    percent: 0,
+    phase: "start",
     message: `Starting${providerCfg?.engine ? ` (${providerCfg.engine})` : ""}${pluginHint}…`,
   });
 
@@ -161,6 +168,9 @@ async function runProcess(
       path: ffPath ?? system.ffmpegPath ?? undefined,
       enabled: Boolean(system.ffmpegEnabled) && Boolean(ffPath),
     });
+
+    const progressStartedAt = Date.now();
+    let lastDownloaded = 0;
 
     const res = await processMedia(url, {
       preset,
@@ -174,16 +184,45 @@ async function runProcess(
       itemConcurrency: 3,
       fragmentConcurrency: 4,
       onProgress: (info) => {
+        const percent =
+          typeof info.percent === "number"
+            ? info.percent
+            : info.total > 0
+              ? Math.round((info.current / info.total) * 100)
+              : undefined;
+        let etaSec: number | null | undefined;
+        if (
+          typeof info.downloaded === "number" &&
+          info.totalBytes &&
+          info.totalBytes > 0 &&
+          info.downloaded > lastDownloaded
+        ) {
+          const elapsed = (Date.now() - progressStartedAt) / 1000;
+          const rate = info.downloaded / Math.max(elapsed, 0.2);
+          etaSec = rate > 0 ? Math.round((info.totalBytes - info.downloaded) / rate) : null;
+          lastDownloaded = info.downloaded;
+        }
         emitProgress(e, {
           packId,
           url,
           current: info.current,
           total: info.total,
           status: "running",
-          title: info.result?.title,
+          title: info.title ?? info.result?.title,
+          percent,
+          downloaded: info.downloaded,
+          totalBytes: info.totalBytes,
+          phase: info.phase,
+          etaSec,
           message: info.error
             ? info.error
-            : `Saving ${info.current}/${info.total}…`,
+            : info.phase === "mux"
+              ? "Merging…"
+              : info.phase === "convert"
+                ? "Converting…"
+                : typeof percent === "number"
+                  ? `Downloading ${percent}%`
+                  : `Saving ${info.current}/${info.total}…`,
         });
       },
     });
@@ -615,6 +654,49 @@ export function registerIpc(): void {
     if (!/^https?:\/\//i.test(url)) return false;
     await shell.openExternal(url);
     return true;
+  });
+
+  ipcMain.handle("fs:diskSpace", async (_e, dirPath?: string) => {
+    const target = (dirPath || getStore().get("outDir") || "").trim();
+    if (!target) return null;
+    try {
+      const { existsSync, mkdirSync } = await import("node:fs");
+      const { statfs } = await import("node:fs/promises");
+      const { dirname } = await import("node:path");
+      let probe = target;
+      if (!existsSync(probe)) {
+        try {
+          mkdirSync(probe, { recursive: true });
+        } catch {
+          probe = dirname(probe);
+        }
+      }
+      const s = await statfs(probe);
+      const bsize = Number(s.bsize) || 0;
+      return {
+        path: target,
+        free: Number(s.bavail) * bsize,
+        total: Number(s.blocks) * bsize,
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("fs:fileSizes", async (_e, paths: string[]) => {
+    const list = Array.isArray(paths) ? paths.filter(Boolean).slice(0, 500) : [];
+    const { stat } = await import("node:fs/promises");
+    const out: Record<string, number> = {};
+    await Promise.all(
+      list.map(async (p) => {
+        try {
+          out[p] = (await stat(p)).size;
+        } catch {
+          // missing file
+        }
+      })
+    );
+    return out;
   });
 
   ipcMain.handle("window:minimize", (e) => {

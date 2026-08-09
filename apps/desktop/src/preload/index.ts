@@ -80,6 +80,11 @@ export interface MediaProgressEvent {
   status: PackStatus;
   title?: string;
   message?: string;
+  percent?: number;
+  downloaded?: number;
+  totalBytes?: number | null;
+  phase?: string;
+  etaSec?: number | null;
 }
 
 export interface ProviderInfo {
@@ -263,6 +268,17 @@ export interface DownloadTask {
   title?: string;
   message?: string;
   updatedAt: number;
+  percent?: number;
+  downloaded?: number;
+  totalBytes?: number | null;
+  phase?: string;
+  etaSec?: number | null;
+}
+
+export interface DiskSpaceInfo {
+  path: string;
+  free: number;
+  total: number;
 }
 
 const api = {

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Select, Spin, Switch } from "@arco-design/web-react";
+import { Button, Progress, Select, Spin, Switch } from "@arco-design/web-react";
 import { ArrowRightUp } from "@icon-park/react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
@@ -16,9 +16,10 @@ import {
 import { PlatformIcon, PLATFORMS, type PlatformId } from "./platforms";
 import PlatformSelectionBar from "./PlatformSelectionBar";
 import {
+  makeDownloadCards,
   selectPendingConfirm,
   useHomeChatStore,
-  type ChatDownloadResult,
+  type ChatDownloadCard,
   type ChatMessage,
 } from "./homeChatStore";
 import GuidHomeInputCard from "./guid/GuidHomeInputCard";
@@ -56,6 +57,11 @@ function parseMediaUrls(raw: string): string[] {
   const matches = raw.match(/https?:\/\/[^\s<>"'`]+/gi) ?? [];
   const cleaned = matches.map((u) => u.replace(/[),.;]+$/g, "").trim()).filter(Boolean);
   return [...new Set(cleaned)];
+}
+
+function urlsEqual(a: string, b: string): boolean {
+  const norm = (s: string) => s.trim().replace(/\/+$/, "");
+  return norm(a) === norm(b);
 }
 
 function toDetected(extract: ExtractPreview): DetectedProvider {
@@ -104,11 +110,15 @@ const DownloadPage: React.FC = () => {
   const setExtracting = useHomeChatStore((s) => s.setExtracting);
   const appendMessages = useHomeChatStore((s) => s.appendMessages);
   const mapMessages = useHomeChatStore((s) => s.mapMessages);
+  const patchDownloadCard = useHomeChatStore((s) => s.patchDownloadCard);
 
   const [inputFocused, setInputFocused] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const progressTargetRef = useRef<{ assistantId: string; activeUrl: string } | null>(
+    null
+  );
 
   const hasChat = messages.length > 0;
   const showProcessing = extracting || busy;
@@ -133,6 +143,42 @@ const DownloadPage: React.FC = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, extracting, busy]);
+
+  useEffect(() => {
+    return api.onMediaProgress((ev) => {
+      const target = progressTargetRef.current;
+      if (!target) return;
+      const matchUrl = ev.url || target.activeUrl;
+      if (!matchUrl) return;
+      const percent =
+        typeof ev.percent === "number"
+          ? ev.percent
+          : ev.total > 0
+            ? Math.round((ev.current / ev.total) * 100)
+            : undefined;
+      patchDownloadCard(target.assistantId, matchUrl, {
+        status: "downloading",
+        ...(ev.title ? { title: ev.title } : {}),
+        ...(typeof percent === "number" ? { percent } : {}),
+        ...(ev.etaSec !== undefined ? { etaSec: ev.etaSec } : {}),
+        ...(ev.phase ? { phase: ev.phase } : {}),
+        ...(ev.message ? { message: ev.message } : {}),
+        packId: ev.packId,
+      });
+      // Also patch by activeUrl when IPC url differs slightly
+      if (matchUrl !== target.activeUrl) {
+        patchDownloadCard(target.assistantId, target.activeUrl, {
+          status: "downloading",
+          ...(ev.title ? { title: ev.title } : {}),
+          ...(typeof percent === "number" ? { percent } : {}),
+          ...(ev.etaSec !== undefined ? { etaSec: ev.etaSec } : {}),
+          ...(ev.phase ? { phase: ev.phase } : {}),
+          ...(ev.message ? { message: ev.message } : {}),
+          packId: ev.packId,
+        });
+      }
+    });
+  }, [patchDownloadCard]);
 
   useEffect(() => {
     if (!showProcessing) {
@@ -174,11 +220,41 @@ const DownloadPage: React.FC = () => {
     }
   ) => {
     const urls = Array.isArray(targetUrls) ? targetUrls : [targetUrls];
-    const collected: ChatDownloadResult[] = [];
+    let okCount = 0;
     let failCount = 0;
+
+    mapMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== opts.assistantId) return m;
+        const base =
+          m.results && m.results.length > 0
+            ? m.results
+            : makeDownloadCards(urls, "queued");
+        return {
+          ...m,
+          text:
+            urls.length > 1
+              ? `Downloading ${urls.length} items…`
+              : `${(m.text || "").split("\n")[0]}\nStarting download…`,
+          status: "started",
+          results: base.map((c) =>
+            urls.some((u) => urlsEqual(u, c.sourceUrl))
+              ? { ...c, status: c.status === "done" ? "done" : "queued" }
+              : c
+          ),
+        };
+      })
+    );
 
     for (let i = 0; i < urls.length; i++) {
       const targetUrl = urls[i];
+      progressTargetRef.current = { assistantId: opts.assistantId, activeUrl: targetUrl };
+      patchDownloadCard(opts.assistantId, targetUrl, {
+        status: "downloading",
+        percent: 0,
+        etaSec: null,
+        message: "Starting…",
+      });
       mapMessages((prev) =>
         prev.map((m) =>
           m.id === opts.assistantId
@@ -187,9 +263,7 @@ const DownloadPage: React.FC = () => {
                 text:
                   urls.length > 1
                     ? `Downloading ${i + 1} of ${urls.length}…`
-                    : `${(m.text || "").split("\n")[0]}\nStarting download…`,
-                status: "started",
-                results: collected.length ? [...collected] : m.results,
+                    : m.text,
               }
             : m
         )
@@ -203,39 +277,37 @@ const DownloadPage: React.FC = () => {
 
       if (!res || res.results.length === 0) {
         failCount += 1;
+        patchDownloadCard(opts.assistantId, targetUrl, {
+          status: "failed",
+          percent: undefined,
+          etaSec: null,
+          message: "Download failed",
+          error: "Download failed",
+        });
         continue;
       }
 
-      for (const item of res.results) {
-        collected.push({
-          outPath: item.outPath,
-          originalPath: item.originalPath,
-          title: item.title,
-          sourceUrl: item.sourceUrl || targetUrl,
-          provider: item.provider ?? res.provider,
-          kind: item.kind,
-          packId: res.packId,
-        });
-      }
-
-      // Progressive cards while batch runs
-      if (urls.length > 1) {
-        mapMessages((prev) =>
-          prev.map((m) =>
-            m.id === opts.assistantId
-              ? {
-                  ...m,
-                  results: [...collected],
-                  result: collected.length === 1 ? collected[0] : null,
-                }
-              : m
-          )
-        );
-      }
+      // Board / multi-file under one URL → keep a single card with count
+      const primary = res.results[0];
+      patchDownloadCard(opts.assistantId, targetUrl, {
+        status: "done",
+        percent: 100,
+        etaSec: 0,
+        title: primary.title,
+        outPath: primary.outPath,
+        originalPath: primary.originalPath,
+        provider: primary.provider ?? res.provider,
+        kind: primary.kind,
+        packId: res.packId,
+        message:
+          res.results.length > 1 ? `${res.results.length} files saved` : "Saved",
+      });
+      okCount += res.results.length;
     }
 
-    const ok = collected.length;
-    if (ok === 0) {
+    progressTargetRef.current = null;
+
+    if (okCount === 0) {
       mapMessages((prev) =>
         prev.map((m) =>
           m.id === opts.assistantId
@@ -243,8 +315,6 @@ const DownloadPage: React.FC = () => {
                 ...m,
                 text: "Download failed.",
                 status: "failed",
-                result: null,
-                results: [],
               }
             : m
         )
@@ -253,20 +323,21 @@ const DownloadPage: React.FC = () => {
     }
 
     mapMessages((prev) =>
-      prev.map((m) =>
-        m.id === opts.assistantId
-          ? {
-              ...m,
-              text:
-                urls.length > 1
-                  ? `Download complete — ${ok} saved${failCount ? `, ${failCount} failed` : ""}.`
-                  : "Download complete.",
-              status: failCount && !ok ? "failed" : "done",
-              result: ok === 1 ? collected[0] : null,
-              results: collected,
-            }
-          : m
-      )
+      prev.map((m) => {
+        if (m.id !== opts.assistantId) return m;
+        const cards = m.results ?? [];
+        const doneCards = cards.filter((c) => c.status === "done");
+        return {
+          ...m,
+          text:
+            urls.length > 1 || doneCards.length > 1
+              ? `Download complete — ${okCount} saved${failCount ? `, ${failCount} failed` : ""}.`
+              : "Download complete.",
+          status: failCount && !okCount ? "failed" : "done",
+          result: doneCards.length === 1 ? doneCards[0] : null,
+          results: cards,
+        };
+      })
     );
   };
 
@@ -285,6 +356,7 @@ const DownloadPage: React.FC = () => {
       url: urls[0],
     };
     const assistantId = uid();
+    const seedCards = makeDownloadCards(urls, "extracting");
     const detectingMsg: ChatMessage = {
       id: assistantId,
       role: "assistant",
@@ -294,6 +366,7 @@ const DownloadPage: React.FC = () => {
           : "Extracting source…",
       url: urls[0],
       status: "detecting",
+      results: seedCards,
     };
     appendMessages([userMsg, detectingMsg]);
 
@@ -349,6 +422,11 @@ const DownloadPage: React.FC = () => {
                 extract: primary,
                 status: "error",
                 pendingConfirm: false,
+                results: (m.results ?? seedCards).map((c) => ({
+                  ...c,
+                  status: "failed" as const,
+                  message: "Not supported",
+                })),
               }
             : m
         )
@@ -377,6 +455,12 @@ const DownloadPage: React.FC = () => {
         }
       : primary;
 
+    const infoCards = makeDownloadCards(
+      downloadUrls,
+      "ready",
+      downloadable.map((e) => e.title)
+    );
+
     if (shouldAuto) {
       mapMessages((prev) =>
         prev.map((m) =>
@@ -388,6 +472,7 @@ const DownloadPage: React.FC = () => {
                 extract: extractForMsg,
                 status: "started",
                 pendingConfirm: false,
+                results: infoCards,
               }
             : m
         )
@@ -419,7 +504,7 @@ const DownloadPage: React.FC = () => {
               extract: extractForMsg,
               status: "ready",
               pendingConfirm: true,
-              // stash all downloadable URLs on extract items for confirm
+              results: infoCards,
             }
           : { ...m, pendingConfirm: false }
       )
@@ -449,6 +534,14 @@ const DownloadPage: React.FC = () => {
               text: `${describeExtract(m.extract!)}\nDownload started.`,
               pendingConfirm: false,
               status: "started",
+              results:
+                m.results && m.results.length > 0
+                  ? m.results.map((c) =>
+                      batchUrls.some((u) => urlsEqual(u, c.sourceUrl))
+                        ? { ...c, status: "queued" as const }
+                        : c
+                    )
+                  : makeDownloadCards(batchUrls, "queued"),
             }
           : m
       )
@@ -644,67 +737,36 @@ const DownloadPage: React.FC = () => {
                             </div>
                           )}
                           {(() => {
-                            const cards: ChatDownloadResult[] =
+                            const cards: ChatDownloadCard[] =
                               msg.results && msg.results.length > 0
                                 ? msg.results
                                 : msg.result
                                   ? [msg.result]
                                   : [];
                             const showCards =
-                              msg.role === "assistant" &&
-                              cards.length > 0 &&
-                              (msg.status === "done" || msg.status === "started");
-                            const hideText = showCards && msg.status === "done" && cards.length >= 1;
+                              msg.role === "assistant" && cards.length > 0;
+                            const showText =
+                              Boolean(msg.text) &&
+                              (msg.role === "user" ||
+                                msg.status === "ready" ||
+                                msg.status === "error" ||
+                                msg.status === "failed" ||
+                                msg.status === "detecting" ||
+                                (msg.status === "started" && cards.every((c) => !c.percent)));
                             return (
                               <>
-                                {!hideText && (
-                                  <div className="home-chat__text whitespace-pre-wrap">{msg.text}</div>
+                                {showText && (
+                                  <div className="home-chat__text whitespace-pre-wrap">
+                                    {msg.text}
+                                  </div>
                                 )}
                                 {showCards && (
                                   <div className="home-result-list">
                                     {cards.map((card) => (
-                                      <div
-                                        key={`${card.outPath}-${card.sourceUrl}`}
-                                        className="home-result-card"
-                                      >
-                                        <div className="home-result-card__thumb">
-                                          {isImagePath(card.outPath) ? (
-                                            <img src={toMediaUrl(card.outPath)} alt="" />
-                                          ) : (
-                                            <span className="home-result-card__kind">
-                                              {(card.kind || "file").toUpperCase()}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="home-result-card__body">
-                                          <div className="home-result-card__title">
-                                            {card.title || fileNameFromPath(card.outPath)}
-                                          </div>
-                                          <div className="home-result-card__meta">
-                                            Saved
-                                            {card.kind ? ` · ${card.kind}` : ""}
-                                            {card.provider ? ` · ${card.provider}` : ""}
-                                          </div>
-                                          <div className="home-result-card__actions">
-                                            <Button
-                                              size="mini"
-                                              type="secondary"
-                                              onClick={() =>
-                                                void api.showItemInFolder(card.outPath)
-                                              }
-                                            >
-                                              Show in folder
-                                            </Button>
-                                            <Button
-                                              size="mini"
-                                              type="text"
-                                              onClick={() => void api.openPath(card.outPath)}
-                                            >
-                                              Open
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      </div>
+                                      <DownloadCard
+                                        key={card.id || `${card.sourceUrl}-${card.status}`}
+                                        card={card}
+                                      />
                                     ))}
                                   </div>
                                 )}
@@ -1016,5 +1078,124 @@ function isImagePath(p: string): boolean {
 function fileNameFromPath(p: string): string {
   return p.split(/[/\\]/).filter(Boolean).pop() || p;
 }
+
+function shortHostPath(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    const path = u.pathname.length > 36 ? `${u.pathname.slice(0, 34)}…` : u.pathname;
+    return `${host}${path === "/" ? "" : path}`;
+  } catch {
+    return url.length > 48 ? `${url.slice(0, 46)}…` : url;
+  }
+}
+
+function formatEta(sec: number | null | undefined): string {
+  if (sec == null || !Number.isFinite(sec) || sec < 0) return "";
+  if (sec < 60) return `${Math.max(1, Math.round(sec))}s left`;
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  if (m < 60) return s > 0 ? `${m}m ${s}s left` : `${m}m left`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h}h ${rm}m left` : `${h}h left`;
+}
+
+function cardStatusLabel(card: ChatDownloadCard): string {
+  switch (card.status) {
+    case "extracting":
+      return "Extracting…";
+    case "queued":
+      return "Queued";
+    case "ready":
+      return "Ready";
+    case "downloading":
+      if (card.phase === "mux") return "Merging…";
+      if (card.phase === "convert") return "Converting…";
+      if (typeof card.percent === "number") {
+        const eta = formatEta(card.etaSec);
+        return eta ? `${card.percent}% · ${eta}` : `${card.percent}%`;
+      }
+      return card.message || "Downloading…";
+    case "done":
+      return card.message || "Saved";
+    case "failed":
+      return "Failed";
+    default:
+      return "";
+  }
+}
+
+const DownloadCard: React.FC<{ card: ChatDownloadCard }> = ({ card }) => {
+  const title =
+    card.title ||
+    (card.outPath ? fileNameFromPath(card.outPath) : shortHostPath(card.sourceUrl));
+  const showProgress =
+    card.status === "downloading" ||
+    card.status === "extracting" ||
+    (card.status === "queued" && typeof card.percent === "number");
+  const percent =
+    card.status === "done"
+      ? 100
+      : typeof card.percent === "number"
+        ? card.percent
+        : card.status === "extracting"
+          ? undefined
+          : 0;
+
+  return (
+    <div className={`home-result-card home-result-card--${card.status}`}>
+      <div className="home-result-card__thumb">
+        {card.outPath && isImagePath(card.outPath) ? (
+          <img src={toMediaUrl(card.outPath)} alt="" />
+        ) : (
+          <span className="home-result-card__kind">
+            {(card.kind || (card.status === "done" ? "file" : "url")).toUpperCase()}
+          </span>
+        )}
+      </div>
+      <div className="home-result-card__body">
+        <div className="home-result-card__title" title={title}>
+          {title}
+        </div>
+        <div className="home-result-card__meta">
+          <span className="home-result-card__status">{cardStatusLabel(card)}</span>
+          {card.status === "done" && card.kind ? ` · ${card.kind}` : ""}
+          {card.status === "done" && card.provider ? ` · ${card.provider}` : ""}
+          {(card.status === "extracting" || card.status === "ready" || card.status === "queued") && (
+            <span className="home-result-card__url"> · {shortHostPath(card.sourceUrl)}</span>
+          )}
+        </div>
+        {showProgress && (
+          <div className="home-result-card__progress">
+            <Progress
+              percent={typeof percent === "number" ? percent : card.status === "extracting" ? 30 : 0}
+              showText={false}
+              status={card.status === "failed" ? "error" : undefined}
+              size="small"
+            />
+          </div>
+        )}
+        {card.status === "failed" && card.error && (
+          <div className="home-result-card__error">{card.error}</div>
+        )}
+        {card.status === "done" && card.outPath && (
+          <div className="home-result-card__actions">
+            <Button
+              size="mini"
+              type="secondary"
+              onClick={() => void api.showItemInFolder(card.outPath!)}
+            >
+              Show in folder
+            </Button>
+            <Button size="mini" type="text" onClick={() => void api.openPath(card.outPath!)}>
+              Open
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default DownloadPage;

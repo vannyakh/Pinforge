@@ -27,6 +27,12 @@ export interface ProcessBoardOptions extends ProcessOptions {
     url: string;
     result?: ProcessResult;
     error?: string;
+    /** 0–100 when byte progress is known */
+    percent?: number;
+    downloaded?: number;
+    totalBytes?: number | null;
+    phase?: string;
+    title?: string;
   }) => void;
 }
 
@@ -131,9 +137,34 @@ export async function processMedia(
     fragmentConcurrency: opts.fragmentConcurrency ?? 4,
     signal: opts.signal,
     youtube: opts.youtube,
+    onByteProgress: (p) => {
+      const percent =
+        p.total && p.total > 0
+          ? Math.min(99, Math.round((p.downloaded / p.total) * 100))
+          : undefined;
+      opts.onProgress?.({
+        current: 0,
+        total: 1,
+        url,
+        percent,
+        downloaded: p.downloaded,
+        totalBytes: p.total,
+        phase: p.phase ?? "download",
+      });
+    },
   });
 
   const list = Array.isArray(resolved) ? resolved : [resolved];
+  if (list[0]?.title) {
+    opts.onProgress?.({
+      current: 0,
+      total: list.length,
+      url,
+      title: list[0].title,
+      phase: "resolved",
+      percent: 0,
+    });
+  }
   const outcomes = await mapPool(list, itemConcurrency, async (item, i) => {
     try {
       const result = await writeResolved(item, opts);

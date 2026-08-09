@@ -8,6 +8,12 @@ export interface ResolveContext {
   fragmentConcurrency?: number;
   signal?: AbortSignal;
   youtube?: YoutubeDownloadOptions;
+  /** Byte-level download progress (YouTube / fragment downloads). */
+  onByteProgress?: (info: {
+    downloaded: number;
+    total: number | null;
+    phase?: string;
+  }) => void;
 }
 
 export interface MediaProvider {

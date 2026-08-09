@@ -1031,6 +1031,44 @@
   color: var(--text-secondary);
 }
 
+.home-result-card__status {
+  font-variant-numeric: tabular-nums;
+}
+
+.home-result-card__eta {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  opacity: 0.75;
+}
+
+.home-result-card__url {
+  opacity: 0.7;
+}
+
+.home-result-card__progress {
+  margin-top: 4px;
+}
+
+.home-result-card__progress .arco-progress-line {
+  margin-inline-end: 0;
+}
+
+.home-result-card__error {
+  font-size: 12px;
+  color: rgb(var(--danger-6));
+}
+
+.home-result-card--extracting,
+.home-result-card--queued,
+.home-result-card--ready,
+.home-result-card--downloading {
+  background: color-mix(in srgb, var(--bg-2) 88%, var(--bg-1));
+}
+
+.home-result-card--failed {
+  border-color: color-mix(in srgb, rgb(var(--danger-6)) 35%, var(--border-base));
+}
+
 .home-result-card__actions {
   display: flex;
   gap: 6px;

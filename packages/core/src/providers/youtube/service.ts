@@ -47,6 +47,11 @@ export type YoutubeResolveOpts = {
   signal?: AbortSignal;
   /** Legacy Piped/Invidious fallback base. */
   extractorUrl?: string;
+  onByteProgress?: (info: {
+    downloaded: number;
+    total: number | null;
+    phase?: string;
+  }) => void;
 };
 
 type CaptionTrack = {
@@ -144,6 +149,7 @@ async function downloadUrlToFile(
     signal?: AbortSignal;
     resume?: boolean;
     accept?: string;
+    onProgress?: (info: { downloaded: number; total: number | null }) => void;
   }
 ): Promise<void> {
   await downloadToFile(url, destPath, {
@@ -152,6 +158,7 @@ async function downloadUrlToFile(
     concurrency: opts.concurrency ?? 4,
     signal: opts.signal,
     resume: opts.resume !== false,
+    onProgress: opts.onProgress,
   });
   if (opts.resume !== false) await clearResumeState(destPath);
 }
@@ -237,10 +244,13 @@ export async function resolveYouTubeVideo(
   const headersAcceptAudio = "audio/*,*/*;q=0.8";
   const concurrency = opts.fragmentConcurrency ?? 4;
   const resume = ytOpts.resume;
+  const onProg = opts.onByteProgress;
 
   let mediaPath: string;
   let outExt: string;
   let kind: "video" | "audio" = audioOnly ? "audio" : "video";
+
+  onProg?.({ downloaded: 0, total: null, phase: "meta" });
 
   try {
     if (audioOnly) {
@@ -253,6 +263,7 @@ export async function resolveYouTubeVideo(
         signal: opts.signal,
         resume,
         accept: headersAcceptAudio,
+        onProgress: onProg,
       });
 
       const want = ytOpts.audioContainer;
@@ -263,6 +274,7 @@ export async function resolveYouTubeVideo(
       } else {
         const ff = await resolveFfmpeg();
         if (!ff) throw new Error(requireFfmpegMessage());
+        onProg?.({ downloaded: 0, total: null, phase: "convert" });
         await convertAudio(rawPath, mediaPath, want);
       }
     } else {
@@ -274,20 +286,45 @@ export async function resolveYouTubeVideo(
         const aExt = extFromMime(dash.audio.mime_type) || "m4a";
         const vPath = path.join(tmpDir, `video.${vExt}`);
         const aPath = path.join(tmpDir, `audio.${aExt}`);
+        let vTotal: number | null = null;
+        let aTotal: number | null = null;
+        let vDone = 0;
+        let aDone = 0;
+        const emitDash = () => {
+          const total =
+            vTotal != null && aTotal != null ? vTotal + aTotal : vTotal != null ? vTotal * 1.25 : null;
+          const downloaded = vDone + aDone;
+          onProg?.({ downloaded, total, phase: "download" });
+        };
         await downloadUrlToFile(dash.video.url, vPath, {
           concurrency,
           signal: opts.signal,
           resume,
           accept: headersAcceptVideo,
+          onProgress: (p) => {
+            vDone = p.downloaded;
+            vTotal = p.total;
+            emitDash();
+          },
         });
         await downloadUrlToFile(dash.audio.url, aPath, {
           concurrency,
           signal: opts.signal,
           resume,
           accept: headersAcceptAudio,
+          onProgress: (p) => {
+            aDone = p.downloaded;
+            aTotal = p.total;
+            emitDash();
+          },
         });
         outExt = vExt === "webm" && aExt === "webm" ? "webm" : "mp4";
         mediaPath = path.join(tmpDir, `merged.${outExt}`);
+        onProg?.({
+          downloaded: (vTotal ?? vDone) + (aTotal ?? aDone),
+          total: (vTotal ?? vDone) + (aTotal ?? aDone),
+          phase: "mux",
+        });
         await muxAv(vPath, aPath, mediaPath);
       } else {
         const progressive = pickProgressive(meta.formats, quality);
@@ -302,6 +339,7 @@ export async function resolveYouTubeVideo(
           signal: opts.signal,
           resume,
           accept: headersAcceptVideo,
+          onProgress: onProg,
         });
       }
     }

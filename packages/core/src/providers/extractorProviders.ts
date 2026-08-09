@@ -21,6 +21,7 @@ export const youtubeProvider: MediaProvider = {
       extractorUrl: ctx?.extractorUrl,
       fragmentConcurrency: ctx?.fragmentConcurrency,
       signal: ctx?.signal,
+      onByteProgress: ctx?.onByteProgress,
     }),
 };
 
