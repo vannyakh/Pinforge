@@ -28,6 +28,9 @@ import type {
   DiskSpaceInfo,
   SystemResourcesInfo,
   PinterestOptions,
+  ProviderPrefs,
+  RegistryListItem,
+  InstalledProviderView,
 } from "../../preload/index";
 
 export type {
@@ -60,6 +63,9 @@ export type {
   DiskSpaceInfo,
   SystemResourcesInfo,
   PinterestOptions,
+  ProviderPrefs,
+  RegistryListItem,
+  InstalledProviderView,
 };
 
 export const api = {
@@ -92,6 +98,11 @@ export const api = {
   pickProviderSource: () => window.api.pickProviderSource(),
   pickFormatPlugin: () => window.api.pickFormatPlugin(),
   listCustomProviders: () => window.api.listCustomProviders(),
+  listInstalledProviders: () => window.api.listInstalledProviders(),
+  registryList: () => window.api.registryList(),
+  setProviderEnabled: (id: string, enabled: boolean) => window.api.setProviderEnabled(id, enabled),
+  installFromRegistry: (id: string) => window.api.installFromRegistry(id),
+  uninstallProvider: (id: string) => window.api.uninstallProvider(id),
   upsertCustomProvider: (provider: CustomProviderConfig) => window.api.upsertCustomProvider(provider),
   removeCustomProvider: (id: string) => window.api.removeCustomProvider(id),
   installProviderFromSource: (sourcePath: string) => window.api.installProviderFromSource(sourcePath),

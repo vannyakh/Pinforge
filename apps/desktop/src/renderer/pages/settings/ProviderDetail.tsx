@@ -6,8 +6,10 @@ import { useApp } from "@renderer/hooks/context/AppContext";
 import { api, type CustomProviderConfig, type FormatPluginConfig, type ProviderManifest } from "@renderer/api";
 import {
   BUILTIN_PROVIDER_META,
+  CAPABILITY_LABELS,
   PROVIDER_ENGINES,
   PROVIDER_REGISTRY,
+  type ProviderCapability,
   type ProviderEngineId,
 } from "@common/providers/types";
 import { PROVIDER_LOGOS, slugifyProviderId } from "./providerLogos";
@@ -64,6 +66,9 @@ type FormState = {
   live: boolean;
   description: string;
   formats: string[];
+  capabilities: string[];
+  origin?: string;
+  checksum?: string;
 };
 
 function metaFor(id: string) {
@@ -162,6 +167,7 @@ const ProviderDetailPage: React.FC = () => {
             live: false,
             description: "Add a custom download provider and configure how links are matched.",
             formats: ["best"],
+            capabilities: [],
           });
           setLoaded(true);
           return;
@@ -170,6 +176,8 @@ const ProviderDetailPage: React.FC = () => {
         const cfg = customList.find((c) => c.id === providerId);
         const builtin = settings.providers.find((p) => p.id === providerId);
         const meta = metaFor(providerId);
+        const prefs = settings.providerPrefs;
+        const disabledBuiltin = prefs?.disabledBuiltinIds?.includes(providerId) ?? false;
 
         if (!cfg && !builtin) {
           Message.error("Provider not found");
@@ -189,11 +197,20 @@ const ProviderDetailPage: React.FC = () => {
           builtin?.formats?.map(String) ||
           (meta && "formats" in meta && meta.formats ? meta.formats : []) ||
           [];
+        const capabilities =
+          cfg?.capabilities ||
+          cfg?.manifest?.capabilities ||
+          (meta && "capabilities" in meta ? meta.capabilities : []) ||
+          [];
+
+        const enabled = builtin
+          ? !disabledBuiltin && (cfg?.enabled ?? true)
+          : cfg?.enabled ?? true;
 
         setForm({
           id: providerId,
           label,
-          enabled: cfg?.enabled ?? builtin?.status === "live",
+          enabled,
           hosts,
           notes: cfg?.notes ?? "",
           sourcePath: cfg?.sourcePath ?? "",
@@ -205,13 +222,16 @@ const ProviderDetailPage: React.FC = () => {
           format: cfg?.format ?? settings.format ?? "best",
           engine: defaultEngine(providerId, cfg),
           formatPlugins: cfg?.formatPlugins ?? [],
-          version: cfg?.version ?? cfg?.manifest?.version ?? "",
+          version: cfg?.installedVersion ?? cfg?.version ?? cfg?.manifest?.version ?? (meta && "version" in meta ? meta.version : "") ?? "",
           builtin: Boolean(builtin) || Boolean(cfg?.builtin),
           createdAt: cfg?.createdAt,
-          removable: !builtin && !cfg?.builtin,
+          removable: !builtin || builtin.status === "stub",
           live: builtin?.status === "live",
           description,
           formats,
+          capabilities: capabilities.map(String),
+          origin: cfg?.origin,
+          checksum: cfg?.checksum || cfg?.manifest?.checksum,
         });
         setLoaded(true);
       } catch (e) {
@@ -361,10 +381,17 @@ const ProviderDetailPage: React.FC = () => {
         engine: form.engine,
         formatPlugins: form.formatPlugins,
         version: form.version || form.manifest?.version,
+        installedVersion: form.version || form.manifest?.version,
+        capabilities: form.capabilities as CustomProviderConfig["capabilities"],
+        checksum: form.checksum,
+        origin: (form.origin as CustomProviderConfig["origin"]) ||
+          (form.builtin ? "builtin-override" : form.sourceUrl?.startsWith("registry://") ? "registry" : "local"),
         builtin: form.builtin || Boolean(builtinProvider),
         createdAt: form.createdAt ?? Date.now(),
+        updatedAt: Date.now(),
       };
       await api.upsertCustomProvider(next);
+      await api.setProviderEnabled(id, form.enabled);
       if (id === "youtube" && form.extractorUrl.trim() !== settings?.extractorUrl) {
         await updateSettings({ extractorUrl: form.extractorUrl.trim() });
       }
@@ -380,9 +407,13 @@ const ProviderDetailPage: React.FC = () => {
 
   const remove = async () => {
     if (!form?.id || !form.removable) return;
-    await api.removeCustomProvider(form.id);
-    Message.success("Provider removed");
-    navigate("/settings/providers");
+    try {
+      await api.uninstallProvider(form.id);
+      Message.success("Provider uninstalled");
+      navigate("/settings/providers");
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : String(e));
+    }
   };
 
   if (!settings || !loaded || !form) {
@@ -425,6 +456,26 @@ const ProviderDetailPage: React.FC = () => {
           <code>pinforge.provider.json</code> manifest drive engine and download defaults.
         </span>
       </div>
+
+      {form.capabilities.length > 0 && (
+        <div className="flex flex-wrap gap-6px mb-14px">
+          {form.capabilities.map((c) => (
+            <Tag key={c} size="small" color="gray">
+              {CAPABILITY_LABELS[c as ProviderCapability] ?? c}
+            </Tag>
+          ))}
+          {form.origin && (
+            <Tag size="small" color="arcoblue">
+              {form.origin}
+            </Tag>
+          )}
+          {form.checksum && (
+            <Tag size="small" color="green">
+              checksum {form.checksum.slice(0, 8)}…
+            </Tag>
+          )}
+        </div>
+      )}
 
       <Section title="Identity" badge={{ text: "Applies immediately", tone: "now" }}>
         <FieldRow label="Logo">

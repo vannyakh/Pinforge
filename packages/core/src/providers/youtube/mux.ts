@@ -6,7 +6,7 @@ let ffmpegPathCache: string | null | undefined;
 let configuredPath: string | undefined;
 let configuredEnabled = true;
 
-/** Desktop main calls this so System settings control mux/convert/tag. */
+/** Call from desktop main before YouTube mux/convert so settings are honored. */
 export function configureFfmpeg(opts: { path?: string; enabled?: boolean }): void {
   configuredPath = opts.path?.trim() || undefined;
   if (opts.enabled !== undefined) configuredEnabled = opts.enabled;
@@ -29,7 +29,9 @@ export async function resolveFfmpeg(): Promise<string | null> {
 
   for (const bin of candidates) {
     try {
-      if (path.isAbsolute(bin)) await fs.access(bin);
+      if (path.isAbsolute(bin)) {
+        await fs.access(bin);
+      }
       await runFfmpeg(bin, ["-version"]);
       ffmpegPathCache = bin;
       return bin;
@@ -119,8 +121,12 @@ export async function embedMetadata(opts: {
   await fs.mkdir(path.dirname(opts.outPath), { recursive: true });
 
   const args = ["-y", "-i", opts.inputPath];
-  if (opts.thumbnailPath) args.push("-i", opts.thumbnailPath);
-  if (opts.subtitlePath) args.push("-i", opts.subtitlePath);
+  if (opts.thumbnailPath) {
+    args.push("-i", opts.thumbnailPath);
+  }
+  if (opts.subtitlePath) {
+    args.push("-i", opts.subtitlePath);
+  }
 
   args.push("-map", "0");
   if (opts.thumbnailPath) {
@@ -149,34 +155,4 @@ export async function remuxCopy(inputPath: string, outPath: string): Promise<voi
     return;
   }
   await runFfmpeg(bin, ["-y", "-i", inputPath, "-c", "copy", outPath]);
-}
-
-/** Remux an HLS playlist (m3u8) to a progressive MP4 via ffmpeg. */
-export async function remuxHlsToMp4(
-  m3u8Url: string,
-  outPath: string,
-  opts?: { referer?: string; userAgent?: string }
-): Promise<void> {
-  const bin = await resolveFfmpeg();
-  if (!bin) throw new Error(requireFfmpegMessage());
-  await fs.mkdir(path.dirname(outPath), { recursive: true });
-  const ua =
-    opts?.userAgent ??
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-  const referer = opts?.referer ?? "https://www.pinterest.com/";
-  const headerBlock = `User-Agent: ${ua}\r\nReferer: ${referer}\r\n`;
-  await runFfmpeg(bin, [
-    "-y",
-    "-headers",
-    headerBlock,
-    "-i",
-    m3u8Url,
-    "-c",
-    "copy",
-    "-bsf:a",
-    "aac_adtstoasc",
-    "-movflags",
-    "+faststart",
-    outPath,
-  ]);
 }

@@ -10,10 +10,11 @@ import {
   Sun,
   Left,
   Plus,
-  Message,
+  Message as MessageIcon,
   Delete,
+  LoadingFour,
 } from "@icon-park/react";
-import { Tag, Tooltip } from "@arco-design/web-react";
+import { Tag, Tooltip, Modal, Notification } from "@arco-design/web-react";
 import { useThemeContext } from "@renderer/hooks/context/ThemeContext";
 import { useLayoutContext } from "@renderer/hooks/context/LayoutContext";
 import { useApp } from "@renderer/hooks/context/AppContext";
@@ -21,6 +22,7 @@ import SettingsSider from "@renderer/pages/settings/components/SettingsSider";
 import {
   selectRecentChats,
   useHomeChatStore,
+  type ChatSession,
 } from "@renderer/pages/download/homeChatStore";
 import siderStyles from "./Sider.module.css";
 
@@ -37,22 +39,42 @@ const NAV = [
 
 const LAST_PATH_KEY = "pinforge:last-non-settings-path";
 
+function chatHasActiveProcess(chat: ChatSession): boolean {
+  return chat.messages.some(
+    (m) =>
+      m.role === "assistant" &&
+      (m.status === "started" || m.status === "detecting")
+  );
+}
+
 const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const navigate = useNavigate();
   const { pathname, search, hash } = useLocation();
   const { theme, setTheme } = useThemeContext();
   const { isMobile } = useLayoutContext();
-  const { tasks } = useApp();
+  const { tasks, busy } = useApp();
   const sessions = useHomeChatStore((s) => s.sessions);
   const activeId = useHomeChatStore((s) => s.activeId);
+  const liveMessages = useHomeChatStore((s) => s.messages);
   const openChat = useHomeChatStore((s) => s.openChat);
   const newChat = useHomeChatStore((s) => s.newChat);
   const removeChat = useHomeChatStore((s) => s.removeChat);
   const isSettings = pathname.startsWith("/settings");
   const runningCount = tasks.filter((t) => t.status === "running").length;
+  const tasksBusy = busy || runningCount > 0;
   const lastNonSettingsPathRef = useRef("/");
 
   const recent = useMemo(() => selectRecentChats(sessions, 14), [sessions]);
+
+  const activeLiveBusy = useMemo(
+    () =>
+      liveMessages.some(
+        (m) =>
+          m.role === "assistant" &&
+          (m.status === "started" || m.status === "detecting")
+      ),
+    [liveMessages]
+  );
 
   useEffect(() => {
     if (!pathname.startsWith("/settings")) {
@@ -106,7 +128,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
             className={classNames(
               "flex-1 min-h-0 overflow-y-auto flex flex-col",
               siderStyles.scrollArea,
-              collapsed && "chat-history--collapsed"
+              collapsed && "chat-history--truncated"
             )}
           >
             <div className="px-10px pt-4px pb-8px text-11px font-500 text-t-tertiary tracking-wide uppercase sider-section-title">
@@ -114,6 +136,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
             </div>
             {NAV.map(({ path, label, Icon, soon }) => {
               const active = path === "/" ? pathname === "/" : pathname.startsWith(path);
+              const showTasksLoading = path === "/tasks" && tasksBusy;
               return (
                 <button
                   key={path}
@@ -127,7 +150,17 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                   onClick={() => go(path)}
                   title={collapsed ? label : undefined}
                 >
-                  <Icon theme="outline" size="18" fill="currentColor" strokeWidth={3} />
+                  {showTasksLoading ? (
+                    <LoadingFour
+                      theme="outline"
+                      size="18"
+                      fill="currentColor"
+                      strokeWidth={3}
+                      className="sider-nav-spin shrink-0"
+                    />
+                  ) : (
+                    <Icon theme="outline" size="18" fill="currentColor" strokeWidth={3} />
+                  )}
                   {!collapsed && (
                     <span className="settings-sider__item-label flex-1 flex items-center justify-between gap-8px">
                       <span>{label}</span>
@@ -154,7 +187,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
             <div
               className={classNames(
                 "chat-history flex-1 min-h-0 flex flex-col",
-                collapsed && "chat-history--collapsed"
+                collapsed && "chat-history--truncated"
               )}
             >
               <div className="chat-history__section px-10px pb-6px flex items-center justify-between gap-8px">
@@ -185,6 +218,8 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               ) : (
                 recent.map((chat) => {
                   const active = pathname === "/" && activeId === chat.id;
+                  const processing =
+                    (activeId === chat.id && activeLiveBusy) || chatHasActiveProcess(chat);
                   return (
                     <div
                       key={chat.id}
@@ -201,13 +236,23 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                         onClick={() => openRecent(chat.id)}
                         title={collapsed ? chat.title : undefined}
                       >
-                        <Message
-                          theme="outline"
-                          size="16"
-                          fill="currentColor"
-                          strokeWidth={3}
-                          className="shrink-0"
-                        />
+                        {processing ? (
+                          <LoadingFour
+                            theme="outline"
+                            size="16"
+                            fill="currentColor"
+                            strokeWidth={3}
+                            className="sider-nav-spin shrink-0"
+                          />
+                        ) : (
+                          <MessageIcon
+                            theme="outline"
+                            size="16"
+                            fill="currentColor"
+                            strokeWidth={3}
+                            className="shrink-0"
+                          />
+                        )}
                         {!collapsed && (
                           <span className="chat-history__item-name text-13px">{chat.title}</span>
                         )}
@@ -219,7 +264,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                           aria-label="Remove chat"
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeChat(chat.id);
+                            Modal.confirm({
+                              title: "Delete chat?",
+                              content: `Are you sure you want to delete “${chat.title}”? This can’t be undone.`,
+                              okText: "Delete",
+                              okButtonProps: { status: "danger" },
+                              onOk: () => {
+                                removeChat(chat.id);
+                                Notification.success({
+                                  title: "Deleted",
+                                  content: "Chat removed from Recent.",
+                                });
+                              },
+                            });
                           }}
                         >
                           <Delete theme="outline" size="12" fill="currentColor" strokeWidth={3} />

@@ -10,10 +10,11 @@ import {
   type RemoteChannelConfig,
   type CloudflareTunnelConfig,
 } from "../common/remote/types";
-import type { CustomProviderConfig } from "../common/providers/types";
+import type { CustomProviderConfig, ProviderPrefs } from "../common/providers/types";
+import { DEFAULT_PROVIDER_PREFS } from "../common/providers/types";
 
 export type { RemoteConfig, RemoteChannelConfig, CloudflareTunnelConfig };
-export type { CustomProviderConfig };
+export type { CustomProviderConfig, ProviderPrefs };
 export type PackStatus = "running" | "done" | "failed" | "partial";
 
 export interface HistoryItem {
@@ -90,6 +91,7 @@ export interface AppStoreSchema {
   remote: RemoteConfig;
   system: SystemConfig;
   customProviders: CustomProviderConfig[];
+  providerPrefs: ProviderPrefs;
   windowBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -115,6 +117,7 @@ export function getStore(): Store<AppStoreSchema> {
         remote: DEFAULT_REMOTE,
         system: DEFAULT_SYSTEM,
         customProviders: [],
+        providerPrefs: { ...DEFAULT_PROVIDER_PREFS },
       },
     });
     migrateFlatHistoryToPacks(store);
@@ -126,6 +129,7 @@ export function getStore(): Store<AppStoreSchema> {
     if (!Array.isArray(store.get("customProviders"))) {
       store.set("customProviders", []);
     }
+    ensureProviderPrefs(store);
   }
   return store;
 }
@@ -143,6 +147,14 @@ function ensureYoutubeOptions(s: Store<AppStoreSchema>): void {
 function ensurePinterestOptions(s: Store<AppStoreSchema>): void {
   const cur = s.get("pinterest");
   s.set("pinterest", { ...DEFAULT_PINTEREST_OPTIONS, ...cur });
+}
+
+function ensureProviderPrefs(s: Store<AppStoreSchema>): void {
+  const cur = s.get("providerPrefs");
+  const disabled = Array.isArray(cur?.disabledBuiltinIds)
+    ? cur.disabledBuiltinIds.filter((id): id is string => typeof id === "string")
+    : [];
+  s.set("providerPrefs", { disabledBuiltinIds: disabled });
 }
 
 export function resolveSystemPaths(system: SystemConfig): SystemConfig {

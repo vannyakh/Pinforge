@@ -42,6 +42,15 @@ export type ChatDownloadCard = {
 /** @deprecated Prefer ChatDownloadCard — kept for older call sites. */
 export type ChatDownloadResult = ChatDownloadCard;
 
+export type ChatBatchJob = {
+  total: number;
+  done: number;
+  failed: number;
+  current: number;
+  /** Provider / mode label for the summary line. */
+  label?: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -55,8 +64,10 @@ export type ChatMessage = {
   selectedItemUrls?: string[];
   /** Single-item download result card (shown when done). */
   result?: ChatDownloadCard | null;
-  /** Download / extract cards (list). */
+  /** Single-item cards only — batch jobs use `batchJob` + Tasks instead. */
   results?: ChatDownloadCard[];
+  /** Multi-item download progress summary (Tasks page holds the file list). */
+  batchJob?: ChatBatchJob | null;
 };
 
 export type ChatSession = {
@@ -109,6 +120,7 @@ type HomeChatState = LiveChatFields & {
     matchUrl: string,
     patch: Partial<ChatDownloadCard>
   ) => void;
+  patchBatchJob: (messageId: string, patch: Partial<ChatBatchJob>) => void;
   clearConfirmPending: () => void;
   /** Start a blank workspace; keeps prior chats in history when they have messages. */
   newChat: () => void;
@@ -266,6 +278,21 @@ export const useHomeChatStore = create<HomeChatState>()(
           })
         ),
 
+      patchBatchJob: (messageId, patch) =>
+        set((s) =>
+          withSyncedSession(s, {
+            messages: s.messages.map((m) => {
+              if (m.id !== messageId || !m.batchJob) return m;
+              const batchJob = { ...m.batchJob, ...patch };
+              return {
+                ...m,
+                batchJob,
+                text: formatBatchMessage(m, batchJob),
+              };
+            }),
+          })
+        ),
+
       clearConfirmPending: () =>
         set((s) =>
           withSyncedSession(s, {
@@ -389,6 +416,19 @@ export function isSelectableExtract(extract: ExtractPreview | null | undefined):
     return true;
   }
   return extract.itemCount > 1;
+}
+
+export function formatBatchMessage(
+  msg: Pick<ChatMessage, "extract" | "detected" | "status">,
+  job: ChatBatchJob
+): string {
+  const kind =
+    job.label ||
+    msg.extract?.mode ||
+    msg.detected?.label ||
+    "batch";
+  const title = msg.extract?.title?.trim();
+  return title ? `${title} · ${kind}` : kind;
 }
 
 export function makeDownloadCards(

@@ -16,30 +16,23 @@ export type FfmpegStatus = {
   installing: boolean;
 };
 
-export type FfmpegInstallProgress = {
-  phase: "download" | "extract" | "done" | "error";
-  percent: number;
-  message: string;
-};
-
 let installing = false;
 
-function bundledDir(): string {
+function bundledFfmpegDir(): string {
   return path.join(app.getPath("userData"), "tools", "ffmpeg");
 }
 
-function bundledBin(): string {
-  return path.join(bundledDir(), process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+function bundledFfmpegBin(): string {
+  return path.join(bundledFfmpegDir(), process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
 }
 
 async function probeBinary(bin: string): Promise<{ ok: boolean; version?: string }> {
   if (!bin.trim()) return { ok: false };
-  if (path.isAbsolute(bin)) {
-    try {
-      await fs.access(bin);
-    } catch {
-      return { ok: false };
-    }
+  try {
+    await fs.access(bin);
+  } catch {
+    // May still be on PATH (no absolute path)
+    if (path.isAbsolute(bin)) return { ok: false };
   }
   return await new Promise((resolve) => {
     const child = spawn(bin, ["-version"], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
@@ -52,8 +45,12 @@ async function probeBinary(bin: string): Promise<{ ok: boolean; version?: string
     });
     child.on("error", () => resolve({ ok: false }));
     child.on("close", (code) => {
-      if (code !== 0) resolve({ ok: false });
-      else resolve({ ok: true, version: out.split(/\r?\n/)[0]?.trim() });
+      if (code !== 0) {
+        resolve({ ok: false });
+        return;
+      }
+      const version = out.split(/\r?\n/)[0]?.trim();
+      resolve({ ok: true, version });
     });
   });
 }
@@ -77,7 +74,7 @@ export async function getFfmpegStatus(): Promise<FfmpegStatus> {
     }
   }
 
-  const bundled = bundledBin();
+  const bundled = bundledFfmpegBin();
   {
     const probe = await probeBinary(bundled);
     if (probe.ok) {
@@ -106,9 +103,16 @@ export async function getFfmpegStatus(): Promise<FfmpegStatus> {
     }
   }
 
-  return { available: false, enabled: false, path: "", source: "none", installing };
+  return {
+    available: false,
+    enabled: false,
+    path: "",
+    source: "none",
+    installing,
+  };
 }
 
+/** Effective binary for tools — only when enabled + available. */
 export async function resolveConfiguredFfmpeg(): Promise<string | null> {
   const status = await getFfmpegStatus();
   if (!status.available || !status.enabled) return null;
@@ -180,20 +184,39 @@ async function findFfmpegInDir(root: string): Promise<string | null> {
   return null;
 }
 
+function downloadUrlForPlatform(): string {
+  if (process.platform === "win32") {
+    // Essentials build (smaller) from gyan.dev
+    return "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+  }
+  if (process.platform === "linux") {
+    return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz";
+  }
+  // macOS: recommend brew; no automatic large download for now
+  throw new Error("Automatic ffmpeg install is supported on Windows. On macOS use: brew install ffmpeg");
+}
+
+export type FfmpegInstallProgress = {
+  phase: "download" | "extract" | "done" | "error";
+  percent: number;
+  message: string;
+};
+
+/**
+ * Download and install ffmpeg into userData/tools/ffmpeg.
+ * Emits progress via callback. Enables ffmpeg when finished.
+ */
 export async function installFfmpeg(
   onProgress?: (ev: FfmpegInstallProgress) => void
 ): Promise<FfmpegStatus> {
   if (installing) throw new Error("ffmpeg install already in progress");
-  if (process.platform !== "win32") {
-    throw new Error("Automatic install is supported on Windows. On macOS use: brew install ffmpeg");
-  }
   installing = true;
   const store = getStore();
   try {
-    const url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+    const url = downloadUrlForPlatform();
     const toolsRoot = path.join(app.getPath("userData"), "tools");
     const staging = path.join(toolsRoot, "ffmpeg-staging");
-    const finalDir = bundledDir();
+    const finalDir = bundledFfmpegDir();
     const zipPath = path.join(toolsRoot, "ffmpeg-download.zip");
 
     await fs.rm(staging, { recursive: true, force: true }).catch(() => undefined);
@@ -205,18 +228,22 @@ export async function installFfmpeg(
     });
 
     onProgress?.({ phase: "extract", percent: 0, message: "Extracting…" });
-    await extractZipWindows(zipPath, staging);
+    if (process.platform === "win32") {
+      await extractZipWindows(zipPath, staging);
+    } else {
+      throw new Error("Unsupported platform for zip install");
+    }
 
     const found = await findFfmpegInDir(staging);
     if (!found) throw new Error("ffmpeg binary not found in archive");
 
     await fs.rm(finalDir, { recursive: true, force: true }).catch(() => undefined);
     await fs.mkdir(finalDir, { recursive: true });
-    const destBin = bundledBin();
+    const destBin = bundledFfmpegBin();
     await fs.copyFile(found, destBin);
-
+    // Copy sibling tools if present (ffprobe)
     const siblingDir = path.dirname(found);
-    for (const name of ["ffprobe.exe", "ffplay.exe"]) {
+    for (const name of ["ffprobe.exe", "ffprobe", "ffplay.exe", "ffplay"]) {
       const src = path.join(siblingDir, name);
       try {
         await fs.access(src);

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, Progress, Select, Spin, Switch } from "@arco-design/web-react";
-import { ArrowRightUp } from "@icon-park/react";
+import { Button, Checkbox, Progress, Select, Switch } from "@arco-design/web-react";
+import { ArrowRightUp, Right } from "@icon-park/react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import {
@@ -19,10 +19,12 @@ import {
   makeDownloadCards,
   coverUrlFromMediaUrl,
   isSelectableExtract,
+  formatBatchMessage,
   selectPendingConfirm,
   useHomeChatStore,
   type ChatDownloadCard,
   type ChatMessage,
+  type ChatBatchJob,
 } from "./homeChatStore";
 import GuidHomeInputCard from "./guid/GuidHomeInputCard";
 import GuidHomeActionRow from "./guid/GuidHomeActionRow";
@@ -115,6 +117,7 @@ const DownloadPage: React.FC = () => {
   const appendMessages = useHomeChatStore((s) => s.appendMessages);
   const mapMessages = useHomeChatStore((s) => s.mapMessages);
   const patchDownloadCard = useHomeChatStore((s) => s.patchDownloadCard);
+  const patchBatchJob = useHomeChatStore((s) => s.patchBatchJob);
 
   const [inputFocused, setInputFocused] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -129,9 +132,30 @@ const DownloadPage: React.FC = () => {
   const progressTargetRef = useRef<{ assistantId: string; activeUrl: string } | null>(
     null
   );
+  const downloadQueueRef = useRef<Array<() => Promise<void>>>([]);
+  const drainingQueueRef = useRef(false);
+
+  const drainDownloadQueue = async () => {
+    if (drainingQueueRef.current) return;
+    drainingQueueRef.current = true;
+    try {
+      while (downloadQueueRef.current.length > 0) {
+        const job = downloadQueueRef.current.shift();
+        if (job) await job();
+      }
+    } finally {
+      drainingQueueRef.current = false;
+    }
+  };
+
+  const enqueueDownload = (job: () => Promise<void>) => {
+    downloadQueueRef.current.push(job);
+    void drainDownloadQueue();
+  };
 
   const hasChat = messages.length > 0;
-  const showProcessing = extracting || busy;
+  // Composer chip only while extracting — batch progress lives in the chat pipeline.
+  const showProcessing = extracting;
 
   useEffect(() => {
     if (settings) {
@@ -231,7 +255,6 @@ const DownloadPage: React.FC = () => {
         packId: ev.packId,
       };
       patchDownloadCard(target.assistantId, matchUrl, patch);
-      // Also patch by activeUrl when IPC url differs slightly
       if (matchUrl !== target.activeUrl) {
         patchDownloadCard(target.assistantId, target.activeUrl, patch);
       }
@@ -261,8 +284,8 @@ const DownloadPage: React.FC = () => {
   }
 
   const autoDownload = settings.autoDownload !== false;
-  const canSubmit =
-    url.trim().length > 0 && !!settings.outDir && !busy && !extracting;
+  // Allow pasting more links while a download runs; only block during extract.
+  const canSubmit = url.trim().length > 0 && !!settings.outDir && !extracting;
   const hasUrl = url.trim().length > 0;
   const showEnhanceConfirm =
     !pendingConfirmMsg?.detected || pendingConfirmMsg.detected.id === "pinterest";
@@ -275,27 +298,49 @@ const DownloadPage: React.FC = () => {
       enhance: boolean;
       youtube?: Partial<YoutubeDownloadOptions>;
       assistantId: string;
+      /** Multi-item: chat shows summary only; Tasks holds the file list. */
+      asBatch?: boolean;
+      batchLabel?: string;
     }
   ) => {
     const urls = Array.isArray(targetUrls) ? targetUrls : [targetUrls];
-    const isBatch = urls.length > 1;
+    const isBatch = opts.asBatch === true || urls.length > 1;
     let okCount = 0;
     let failCount = 0;
+
+    const initialJob: ChatBatchJob | null = isBatch
+      ? {
+          total: urls.length,
+          done: 0,
+          failed: 0,
+          current: 0,
+          label: opts.batchLabel,
+        }
+      : null;
 
     mapMessages((prev) =>
       prev.map((m) => {
         if (m.id !== opts.assistantId) return m;
+        if (isBatch && initialJob) {
+          return {
+            ...m,
+            text: formatBatchMessage({ ...m, status: "started" }, initialJob),
+            status: "started",
+            pendingConfirm: false,
+            results: [],
+            result: null,
+            batchJob: initialJob,
+          };
+        }
         const base =
           m.results && m.results.length > 0
             ? m.results
             : makeDownloadCards(urls, "queued");
         return {
           ...m,
-          text:
-            urls.length > 1
-              ? `Downloading ${urls.length} items…`
-              : `${(m.text || "").split("\n")[0]}\nStarting download…`,
+          text: `${(m.text || "").split("\n")[0]}\nStarting download…`,
           status: "started",
+          batchJob: null,
           results: base.map((c) =>
             urls.some((u) => urlsEqual(u, c.sourceUrl))
               ? { ...c, status: c.status === "done" ? "done" : "queued" }
@@ -308,62 +353,68 @@ const DownloadPage: React.FC = () => {
     for (let i = 0; i < urls.length; i++) {
       const targetUrl = urls[i];
       progressTargetRef.current = { assistantId: opts.assistantId, activeUrl: targetUrl };
-      patchDownloadCard(opts.assistantId, targetUrl, {
-        status: "downloading",
-        percent: 0,
-        etaSec: null,
-        message: "Starting…",
-      });
-      mapMessages((prev) =>
-        prev.map((m) =>
-          m.id === opts.assistantId
-            ? {
-                ...m,
-                text:
-                  urls.length > 1
-                    ? `Downloading ${i + 1} of ${urls.length}…`
-                    : m.text,
-              }
-            : m
-        )
-      );
+
+      if (isBatch) {
+        patchBatchJob(opts.assistantId, { current: i + 1 });
+      } else {
+        patchDownloadCard(opts.assistantId, targetUrl, {
+          status: "downloading",
+          percent: 0,
+          etaSec: null,
+          message: "Starting…",
+        });
+      }
 
       const res = await processUrl(targetUrl, {
         enhance: opts.enhance,
         format: opts.format,
         youtube: opts.youtube,
-        // Batch: one notification after the whole run finishes.
         notify: !isBatch,
       });
 
       if (!res || res.results.length === 0) {
         failCount += 1;
-        patchDownloadCard(opts.assistantId, targetUrl, {
-          status: "failed",
-          percent: undefined,
-          etaSec: null,
-          message: "Download failed",
-          error: "Download failed",
-        });
+        if (isBatch) {
+          patchBatchJob(opts.assistantId, {
+            current: i + 1,
+            failed: failCount,
+            done: okCount,
+          });
+        } else {
+          patchDownloadCard(opts.assistantId, targetUrl, {
+            status: "failed",
+            percent: undefined,
+            etaSec: null,
+            message: "Download failed",
+            error: "Download failed",
+          });
+        }
         continue;
       }
 
-      // Board / multi-file under one URL → keep a single card with count
       const primary = res.results[0];
-      patchDownloadCard(opts.assistantId, targetUrl, {
-        status: "done",
-        percent: 100,
-        etaSec: 0,
-        title: primary.title,
-        outPath: primary.outPath,
-        originalPath: primary.originalPath,
-        provider: primary.provider ?? res.provider,
-        kind: primary.kind,
-        packId: res.packId,
-        message:
-          res.results.length > 1 ? `${res.results.length} files saved` : "Saved",
-      });
       okCount += res.results.length;
+      if (isBatch) {
+        patchBatchJob(opts.assistantId, {
+          current: i + 1,
+          done: okCount,
+          failed: failCount,
+        });
+      } else {
+        patchDownloadCard(opts.assistantId, targetUrl, {
+          status: "done",
+          percent: 100,
+          etaSec: 0,
+          title: primary.title,
+          outPath: primary.outPath,
+          originalPath: primary.originalPath,
+          provider: primary.provider ?? res.provider,
+          kind: primary.kind,
+          packId: res.packId,
+          message:
+            res.results.length > 1 ? `${res.results.length} files saved` : "Saved",
+        });
+      }
     }
 
     progressTargetRef.current = null;
@@ -383,32 +434,35 @@ const DownloadPage: React.FC = () => {
       }
     }
 
-    if (okCount === 0) {
-      mapMessages((prev) =>
-        prev.map((m) =>
-          m.id === opts.assistantId
-            ? {
-                ...m,
-                text: "Download failed.",
-                status: "failed",
-              }
-            : m
-        )
-      );
-      return;
-    }
-
     mapMessages((prev) =>
       prev.map((m) => {
         if (m.id !== opts.assistantId) return m;
+        if (isBatch) {
+          const batchJob: ChatBatchJob = {
+            total: urls.length,
+            done: okCount,
+            failed: failCount,
+            current: urls.length,
+            label: opts.batchLabel || m.batchJob?.label,
+          };
+          const status = okCount === 0 ? "failed" : "done";
+          return {
+            ...m,
+            status,
+            results: [],
+            result: null,
+            batchJob,
+            text: formatBatchMessage({ ...m, status }, batchJob),
+          };
+        }
+        if (okCount === 0) {
+          return { ...m, text: "Download failed.", status: "failed" };
+        }
         const cards = m.results ?? [];
         const doneCards = cards.filter((c) => c.status === "done");
         return {
           ...m,
-          text:
-            urls.length > 1 || doneCards.length > 1
-              ? `Download complete — ${okCount} saved${failCount ? `, ${failCount} failed` : ""}.`
-              : "Download complete.",
+          text: "Download complete.",
           status: failCount && !okCount ? "failed" : "done",
           result: doneCards.length === 1 ? doneCards[0] : null,
           results: cards,
@@ -419,7 +473,7 @@ const DownloadPage: React.FC = () => {
 
   const handleExtract = async (raw: string) => {
     const parsed = parseMediaUrls(raw);
-    if (parsed.length === 0 || !settings.outDir || busy || extracting) return;
+    if (parsed.length === 0 || !settings.outDir || extracting) return;
 
     const preferPlaylist = getPlaylistList;
     const urls = parsed.map((u) => resolveYoutubeExtractUrl(u, preferPlaylist));
@@ -580,19 +634,25 @@ const DownloadPage: React.FC = () => {
         )
       );
       setExtracting(false);
-      void startDownload(downloadUrls, {
-        format: nextFormat,
-        enhance: settings.enhance,
-        assistantId,
-        youtube:
-          detected.id === "youtube"
-            ? {
-                quality: settings.youtube?.quality ?? "best",
-                audioContainer: settings.youtube?.audioContainer ?? "m4a",
-                subtitles: settings.youtube?.subtitles ?? "separate",
-              }
-            : undefined,
-      });
+      enqueueDownload(() =>
+        startDownload(downloadUrls, {
+          format: nextFormat,
+          enhance: settings.enhance,
+          assistantId,
+          asBatch: downloadUrls.length > 1 || selectable,
+          batchLabel: selectable
+            ? `${detected.label} · ${extractForMsg.mode}`
+            : detected.label,
+          youtube:
+            detected.id === "youtube"
+              ? {
+                  quality: settings.youtube?.quality ?? "best",
+                  audioContainer: settings.youtube?.audioContainer ?? "m4a",
+                  subtitles: settings.youtube?.subtitles ?? "separate",
+                }
+              : undefined,
+        })
+      );
       return;
     }
 
@@ -654,47 +714,60 @@ const DownloadPage: React.FC = () => {
             : [];
     if (batchUrls.length === 0) return;
 
-    const cards = selectable
-      ? makeDownloadCards(
-          batchUrls,
-          "queued",
-          selectedItems.map((i) => i.title),
-          selectedItems.map((i) => i.coverUrl || coverUrlFromMediaUrl(i.url))
-        )
-      : msg.results && msg.results.length > 0
-        ? msg.results.map((c) =>
-            batchUrls.some((u) => urlsEqual(u, c.sourceUrl))
-              ? { ...c, status: "queued" as const }
-              : c
-          )
-        : makeDownloadCards(batchUrls, "queued");
+    const asBatch = selectable || batchUrls.length > 1;
+    const batchLabel = `${msg.detected?.label || "Download"} · ${extract.mode}`;
+    const initialJob: ChatBatchJob | null = asBatch
+      ? {
+          total: batchUrls.length,
+          done: 0,
+          failed: 0,
+          current: 0,
+          label: batchLabel,
+        }
+      : null;
 
     mapMessages((prev) =>
       prev.map((m) =>
         m.id === msg.id
           ? {
               ...m,
-              text: `${describeExtract(m.extract!)}\nDownload started (${batchUrls.length}).`,
+              text: asBatch && initialJob
+                ? formatBatchMessage({ ...m, status: "started" }, initialJob)
+                : `${describeExtract(m.extract!)}\nDownload started.`,
               pendingConfirm: false,
               status: "started",
-              results: cards,
+              results: asBatch
+                ? []
+                : msg.results && msg.results.length > 0
+                  ? msg.results.map((c) =>
+                      batchUrls.some((u) => urlsEqual(u, c.sourceUrl))
+                        ? { ...c, status: "queued" as const }
+                        : c
+                    )
+                  : makeDownloadCards(batchUrls, "queued"),
+              result: null,
+              batchJob: initialJob,
             }
           : m
       )
     );
-    void startDownload(batchUrls, {
-      format: confirmFormat,
-      enhance: msg.detected?.id === "pinterest" ? confirmEnhance : false,
-      assistantId: msg.id,
-      youtube:
-        msg.detected?.id === "youtube"
-          ? {
-              quality: confirmYtQuality,
-              audioContainer: confirmAudio,
-              subtitles: confirmSubs,
-            }
-          : undefined,
-    });
+    enqueueDownload(() =>
+      startDownload(batchUrls, {
+        format: confirmFormat,
+        enhance: msg.detected?.id === "pinterest" ? confirmEnhance : false,
+        assistantId: msg.id,
+        asBatch,
+        batchLabel,
+        youtube:
+          msg.detected?.id === "youtube"
+            ? {
+                quality: confirmYtQuality,
+                audioContainer: confirmAudio,
+                subtitles: confirmSubs,
+              }
+            : undefined,
+      })
+    );
     if (msg.detected?.id === "youtube") {
       void updateSettings({
         format: confirmFormat,
@@ -820,9 +893,8 @@ const DownloadPage: React.FC = () => {
 
   const processingChip = showProcessing ? (
     <div className="home-processing">
-      <Spin size={14} />
       <span className="home-processing__text">
-        {extracting ? "Processing…" : "Downloading…"}
+        Processing…
         <span className="home-processing__elapsed">({elapsedSec}s)</span>
       </span>
     </div>
@@ -833,7 +905,7 @@ const DownloadPage: React.FC = () => {
   const actionRow = (
     <GuidHomeActionRow
       hasUrl={hasUrl}
-      loading={extracting || busy}
+      loading={extracting}
       disabled={!canSubmit}
       format={confirmFormat}
       enhance={confirmEnhance}
@@ -843,7 +915,7 @@ const DownloadPage: React.FC = () => {
           <label className="home-composer-playlist-opt">
             <Checkbox
               checked={getPlaylistList}
-              disabled={busy || extracting}
+              disabled={extracting}
               onChange={(checked) => setGetPlaylistList(checked)}
             />
             <span className="home-composer-playlist-opt__text">
@@ -892,7 +964,7 @@ const DownloadPage: React.FC = () => {
         onFocus={() => setInputFocused(true)}
         onBlur={() => setInputFocused(false)}
         isInputActive={inputFocused}
-        disabled={busy || extracting}
+        disabled={extracting}
         actionRow={actionRow}
         workspaceDir={settings.outDir || ""}
         onSelectWorkspace={(dir) => void updateSettings({ outDir: dir })}
@@ -973,20 +1045,29 @@ const DownloadPage: React.FC = () => {
                           )}
                           {(() => {
                             const cards: ChatDownloadCard[] =
-                              msg.results && msg.results.length > 0
-                                ? msg.results
-                                : msg.result
-                                  ? [msg.result]
-                                  : [];
+                              msg.batchJob
+                                ? []
+                                : msg.results && msg.results.length > 0
+                                  ? msg.results
+                                  : msg.result
+                                    ? [msg.result]
+                                    : [];
                             const showCards =
-                              msg.role === "assistant" && cards.length > 0;
+                              msg.role === "assistant" && cards.length > 0 && !msg.batchJob;
+                            const showBatch = Boolean(
+                              msg.role === "assistant" && msg.batchJob
+                            );
+                            // Batch: title + collapsible pipeline (no progress card).
                             const showText =
                               Boolean(msg.text) &&
+                              !showBatch &&
                               (msg.role === "user" ||
                                 msg.status === "ready" ||
                                 msg.status === "error" ||
                                 msg.status === "failed" ||
                                 msg.status === "detecting" ||
+                                msg.status === "started" ||
+                                msg.status === "done" ||
                                 (msg.status === "started" && cards.every((c) => !c.percent)));
                             return (
                               <>
@@ -994,6 +1075,14 @@ const DownloadPage: React.FC = () => {
                                   <div className="home-chat__text whitespace-pre-wrap">
                                     {msg.text}
                                   </div>
+                                )}
+                                {showBatch && msg.batchJob && (
+                                  <BatchPipeline
+                                    job={msg.batchJob}
+                                    status={msg.status}
+                                    title={msg.text}
+                                    onOpenTasks={() => navigate("/tasks")}
+                                  />
                                 )}
                                 {showCards && (
                                   <div className="home-result-list">
@@ -1014,7 +1103,9 @@ const DownloadPage: React.FC = () => {
                             isSelectableExtract(extract) &&
                             msg.status !== "detecting" &&
                             msg.status !== "started" &&
-                            msg.status !== "done" && (
+                            msg.status !== "done" &&
+                            msg.status !== "failed" &&
+                            !msg.batchJob && (
                             <ExtractPickTable
                               messageId={msg.id}
                               extract={extract}
@@ -1043,7 +1134,7 @@ const DownloadPage: React.FC = () => {
                               onListMaxChange={setListMax}
                               onReloadList={(max) => reloadExtractList(msg, max)}
                               listLoading={listReloadingId === msg.id}
-                              busy={busy}
+                              busy={false}
                               onDownloadSelected={() => beginSelectedDownload(msg)}
                               onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}
                             />
@@ -1149,7 +1240,6 @@ const DownloadPage: React.FC = () => {
                                 <Button
                                   type="primary"
                                   size="small"
-                                  loading={busy}
                                   onClick={confirmDownload}
                                 >
                                   Download
@@ -1216,6 +1306,67 @@ const DownloadPage: React.FC = () => {
     </div>
   );
 };
+
+function BatchPipeline({
+  job,
+  status,
+  title,
+  onOpenTasks,
+}: {
+  job: ChatBatchJob;
+  status?: ChatMessage["status"];
+  title?: string;
+  onOpenTasks: () => void;
+}) {
+  const running = status === "started";
+  const failed = status === "failed";
+  const [open, setOpen] = useState(running);
+
+  useEffect(() => {
+    if (running) setOpen(true);
+  }, [running]);
+
+  const cur = Math.min(Math.max(job.current, 0), job.total);
+  const summary = running
+    ? `Downloading ${cur} of ${job.total}`
+    : failed
+      ? `Failed — ${job.failed || job.total} item${(job.failed || job.total) === 1 ? "" : "s"}`
+      : `Finished — ${job.done} saved${job.failed ? `, ${job.failed} failed` : ""}`;
+
+  return (
+    <div className="home-pipeline">
+      {title ? <div className="home-pipeline__title">{title}</div> : null}
+      <button
+        type="button"
+        className="home-pipeline__toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <Right
+          theme="outline"
+          size="12"
+          fill="currentColor"
+          strokeWidth={3}
+          className={`home-pipeline__chevron${open ? " is-open" : ""}`}
+        />
+        <span className="home-pipeline__summary">{summary}</span>
+      </button>
+      {open ? (
+        <div className="home-pipeline__body">
+          {job.label ? <div className="home-pipeline__line">{job.label}</div> : null}
+          {running ? (
+            <div className="home-pipeline__line">Progress is on Tasks — paste more links anytime</div>
+          ) : (
+            <div className="home-pipeline__line">Files are listed on Tasks</div>
+          )}
+          <button type="button" className="home-pipeline__link" onClick={onOpenTasks}>
+            Open Tasks
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function platformMetaFor(id: string) {
   return PLATFORMS.find((p: (typeof PLATFORMS)[number]) => p.id === id) ?? null;

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell, protocol, net } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerIpc } from "./process/ipc";
@@ -34,6 +35,7 @@ protocol.registerSchemesAsPrivileged([
 function createWindow(): void {
   const store = getStore();
   const bounds = store.get("windowBounds");
+  const iconPath = join(__dirname, "../../resources/icon.png");
 
   const win = new BrowserWindow({
     width: bounds?.width ?? 1180,
@@ -45,7 +47,7 @@ function createWindow(): void {
     show: false,
     frame: false,
     title: "Pinforge",
-    icon: join(__dirname, "../../resources/icon.png"),
+    ...(existsSync(iconPath) ? { icon: iconPath } : {}),
     backgroundColor: "#0e0e0e",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: process.platform === "darwin" ? { x: 14, y: 14 } : undefined,
@@ -85,12 +87,30 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  protocol.handle("pinmedia", (request) => {
-    let raw = decodeURIComponent(request.url.replace(/^pinmedia:\/\//, ""));
-    raw = raw.replace(/^\/+/, "");
-    if (raw.startsWith("localhost/")) raw = raw.slice("localhost/".length);
-    const filePath = process.platform === "win32" ? raw.replace(/\//g, "\\") : `/${raw}`;
-    return net.fetch(pathToFileURL(filePath).href);
+  protocol.handle("pinmedia", async (request) => {
+    try {
+      let raw = decodeURIComponent(request.url.replace(/^pinmedia:\/\//i, ""));
+      raw = raw.replace(/^\/+/, "");
+      if (raw.startsWith("localhost/")) raw = raw.slice("localhost/".length);
+      // Windows: pinmedia://C:/path → host "C:" may be split; rebuild from URL parts
+      try {
+        const u = new URL(request.url);
+        if (/^[a-zA-Z]:$/.test(u.hostname)) {
+          raw = `${u.hostname}${u.pathname}`;
+        }
+      } catch {
+        /* keep raw */
+      }
+      const filePath =
+        process.platform === "win32" ? raw.replace(/\//g, "\\") : raw.startsWith("/") ? raw : `/${raw}`;
+
+      if (!existsSync(filePath)) {
+        return new Response("", { status: 404, statusText: "Not Found" });
+      }
+      return net.fetch(pathToFileURL(filePath).href);
+    } catch {
+      return new Response("", { status: 404, statusText: "Not Found" });
+    }
   });
 
   applyLoginItem(getStore().get("system"));

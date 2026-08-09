@@ -111,6 +111,8 @@ export interface DetectedProvider {
   live: boolean;
   formats: FormatPreset[];
   modes?: Array<"single" | "board" | "profile" | "playlist" | "story">;
+  disabled?: boolean;
+  message?: string;
 }
 
 export type DownloadMode = "single" | "board" | "profile" | "playlist" | "story";
@@ -175,6 +177,10 @@ export interface ProviderManifest {
   engine?: string;
   hosts?: string[];
   formats?: string[];
+  capabilities?: string[];
+  checksum?: string;
+  minAppVersion?: string;
+  category?: string;
   main?: string;
   author?: string;
   homepage?: string;
@@ -197,8 +203,51 @@ export interface CustomProviderConfig {
   format?: string;
   formatPlugins?: FormatPluginConfig[];
   builtin?: boolean;
+  origin?: "builtin-override" | "registry" | "local";
+  capabilities?: string[];
+  checksum?: string;
+  installedVersion?: string;
   version?: string;
   createdAt: number;
+  updatedAt?: number;
+}
+
+export interface ProviderPrefs {
+  disabledBuiltinIds: string[];
+}
+
+export interface RegistryListItem {
+  id: string;
+  label: string;
+  description: string;
+  hosts: string;
+  status: "official" | "community";
+  engine?: string;
+  version: string;
+  capabilities: string[];
+  category?: string;
+  verified?: boolean;
+  checksum?: string;
+  packageUrl?: string;
+  installed: boolean;
+  installedVersion?: string;
+  updateAvailable: boolean;
+}
+
+export interface InstalledProviderView {
+  id: string;
+  label: string;
+  hosts: string;
+  origin: "builtin" | "builtin-override" | "registry" | "local";
+  lifecycle: "installed" | "enabled" | "disabled" | "updateAvailable" | "incompatible";
+  enabled: boolean;
+  version?: string;
+  capabilities: string[];
+  checksum?: string;
+  builtin: boolean;
+  live: boolean;
+  sourcePath?: string;
+  updateAvailable?: boolean;
 }
 
 export interface AppSettings {
@@ -229,6 +278,7 @@ export interface AppSettings {
   >;
   providers: ProviderInfo[];
   customProviders: CustomProviderConfig[];
+  providerPrefs?: ProviderPrefs;
 }
 
 export type RemoteChannelId = string;
@@ -343,6 +393,32 @@ const api = {
     ipcRenderer.invoke("dialog:pickFormatPlugin"),
   listCustomProviders: (): Promise<CustomProviderConfig[]> =>
     ipcRenderer.invoke("providers:listCustom"),
+  listInstalledProviders: (): Promise<InstalledProviderView[]> =>
+    ipcRenderer.invoke("providers:listInstalled"),
+  registryList: (): Promise<RegistryListItem[]> =>
+    ipcRenderer.invoke("providers:registryList"),
+  setProviderEnabled: (
+    id: string,
+    enabled: boolean
+  ): Promise<{
+    providers: CustomProviderConfig[];
+    providerPrefs: ProviderPrefs;
+    installed: InstalledProviderView[];
+  }> => ipcRenderer.invoke("providers:setEnabled", { id, enabled }),
+  installFromRegistry: (
+    id: string
+  ): Promise<{
+    provider: CustomProviderConfig;
+    providers: CustomProviderConfig[];
+    registry: RegistryListItem[];
+  }> => ipcRenderer.invoke("providers:installFromRegistry", id),
+  uninstallProvider: (
+    id: string
+  ): Promise<{
+    providers: CustomProviderConfig[];
+    registry: RegistryListItem[];
+    installed: InstalledProviderView[];
+  }> => ipcRenderer.invoke("providers:uninstall", id),
   upsertCustomProvider: (provider: CustomProviderConfig): Promise<CustomProviderConfig[]> =>
     ipcRenderer.invoke("providers:upsertCustom", provider),
   removeCustomProvider: (id: string): Promise<CustomProviderConfig[]> =>

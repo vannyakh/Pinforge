@@ -7,6 +7,33 @@ export type ProviderEngineId =
   | "script"
   | "playwright";
 
+export type ProviderCapability =
+  | "video.download"
+  | "audio.download"
+  | "image.download"
+  | "playlist.download"
+  | "profile.download"
+  | "metadata.fetch"
+  | "batch.download"
+  | "login.required";
+
+export type ProviderOrigin = "builtin-override" | "registry" | "local";
+
+export type ProviderLifecycle =
+  | "installed"
+  | "enabled"
+  | "disabled"
+  | "updateAvailable"
+  | "incompatible";
+
+export type ProviderCategory =
+  | "video"
+  | "social"
+  | "music"
+  | "images"
+  | "streaming"
+  | "utilities";
+
 export interface ProviderEngineInfo {
   id: ProviderEngineId;
   label: string;
@@ -41,6 +68,17 @@ export const PROVIDER_ENGINES: ProviderEngineInfo[] = [
   },
 ];
 
+export const CAPABILITY_LABELS: Record<ProviderCapability, string> = {
+  "video.download": "Video",
+  "audio.download": "Audio",
+  "image.download": "Images",
+  "playlist.download": "Playlist",
+  "profile.download": "Profile",
+  "metadata.fetch": "Metadata",
+  "batch.download": "Batch",
+  "login.required": "Login",
+};
+
 /** pinforge.provider.json (or manifest.json) inside an uploaded package */
 export interface ProviderManifest {
   id: string;
@@ -51,6 +89,11 @@ export interface ProviderManifest {
   engine?: ProviderEngineId;
   hosts?: string[];
   formats?: string[];
+  capabilities?: ProviderCapability[];
+  /** SHA-256 hex of package payload (optional; verified on install when set) */
+  checksum?: string;
+  minAppVersion?: string;
+  category?: ProviderCategory;
   /** Entry file relative to package root (for engine=script) */
   main?: string;
   author?: string;
@@ -96,11 +139,25 @@ export interface CustomProviderConfig {
   formatPlugins?: FormatPluginConfig[];
   /** true when this overrides a built-in provider */
   builtin?: boolean;
+  origin?: ProviderOrigin;
+  capabilities?: ProviderCapability[];
+  checksum?: string;
+  installedVersion?: string;
   version?: string;
   createdAt: number;
+  updatedAt?: number;
 }
 
-/** Catalog entries shown in “Browse registry” (install = save config for now). */
+/** Persisted enable/disable for shipped built-ins (cannot be uninstalled). */
+export interface ProviderPrefs {
+  disabledBuiltinIds: string[];
+}
+
+export const DEFAULT_PROVIDER_PREFS: ProviderPrefs = {
+  disabledBuiltinIds: [],
+};
+
+/** Catalog entries shown in Registry browser. */
 export interface ProviderRegistryItem {
   id: string;
   label: string;
@@ -108,7 +165,52 @@ export interface ProviderRegistryItem {
   hosts: string;
   status: "official" | "community";
   engine?: ProviderEngineId;
+  version: string;
+  capabilities: ProviderCapability[];
+  category?: ProviderCategory;
+  verified?: boolean;
+  checksum?: string;
+  /** Reserved for remote package fetch */
+  packageUrl?: string;
 }
+
+export interface RegistryListItem extends ProviderRegistryItem {
+  installed: boolean;
+  installedVersion?: string;
+  updateAvailable: boolean;
+}
+
+export interface InstalledProviderView {
+  id: string;
+  label: string;
+  hosts: string;
+  origin: ProviderOrigin | "builtin";
+  lifecycle: ProviderLifecycle;
+  enabled: boolean;
+  version?: string;
+  capabilities: ProviderCapability[];
+  checksum?: string;
+  builtin: boolean;
+  live: boolean;
+  sourcePath?: string;
+  updateAvailable?: boolean;
+}
+
+const VIDEO_CAPS: ProviderCapability[] = [
+  "video.download",
+  "metadata.fetch",
+  "batch.download",
+];
+const SOCIAL_CAPS: ProviderCapability[] = [
+  "video.download",
+  "image.download",
+  "metadata.fetch",
+];
+const MUSIC_CAPS: ProviderCapability[] = [
+  "audio.download",
+  "metadata.fetch",
+  "playlist.download",
+];
 
 export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
   {
@@ -118,6 +220,10 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "facebook.com, fb.watch, fb.com",
     status: "official",
     engine: "http-meta",
+    version: "0.1.0",
+    capabilities: [...VIDEO_CAPS, "image.download"],
+    category: "social",
+    verified: true,
   },
   {
     id: "douyin",
@@ -126,6 +232,10 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "douyin.com",
     status: "official",
     engine: "playwright",
+    version: "0.1.0",
+    capabilities: [...VIDEO_CAPS],
+    category: "video",
+    verified: true,
   },
   {
     id: "spotify",
@@ -134,6 +244,10 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "spotify.com, open.spotify.com",
     status: "official",
     engine: "http-meta",
+    version: "0.1.0",
+    capabilities: [...MUSIC_CAPS],
+    category: "music",
+    verified: true,
   },
   {
     id: "apple-music",
@@ -142,6 +256,10 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "music.apple.com",
     status: "official",
     engine: "http-meta",
+    version: "0.1.0",
+    capabilities: [...MUSIC_CAPS],
+    category: "music",
+    verified: true,
   },
   {
     id: "capcut",
@@ -150,6 +268,9 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "capcut.com",
     status: "community",
     engine: "http-meta",
+    version: "0.1.0",
+    capabilities: ["video.download", "metadata.fetch"],
+    category: "video",
   },
   {
     id: "bluesky",
@@ -158,6 +279,9 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "bsky.app, bsky.social",
     status: "community",
     engine: "http-meta",
+    version: "0.1.0",
+    capabilities: [...SOCIAL_CAPS],
+    category: "social",
   },
   {
     id: "rednote",
@@ -166,6 +290,9 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "xiaohongshu.com, xhslink.com",
     status: "community",
     engine: "playwright",
+    version: "0.1.0",
+    capabilities: [...SOCIAL_CAPS, "login.required"],
+    category: "social",
   },
   {
     id: "threads",
@@ -174,6 +301,9 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "threads.net",
     status: "community",
     engine: "http-meta",
+    version: "0.1.0",
+    capabilities: [...SOCIAL_CAPS],
+    category: "social",
   },
   {
     id: "kuaishou",
@@ -182,6 +312,9 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "kuaishou.com",
     status: "community",
     engine: "playwright",
+    version: "0.1.0",
+    capabilities: [...VIDEO_CAPS],
+    category: "video",
   },
   {
     id: "weibo",
@@ -190,6 +323,9 @@ export const PROVIDER_REGISTRY: ProviderRegistryItem[] = [
     hosts: "weibo.com",
     status: "community",
     engine: "http-meta",
+    version: "0.1.0",
+    capabilities: [...SOCIAL_CAPS],
+    category: "social",
   },
 ];
 
@@ -201,6 +337,9 @@ export const BUILTIN_PROVIDER_META: Record<
     hosts: string;
     formats?: string[];
     engine: ProviderEngineId;
+    capabilities: ProviderCapability[];
+    category?: ProviderCategory;
+    version: string;
   }
 > = {
   youtube: {
@@ -208,25 +347,85 @@ export const BUILTIN_PROVIDER_META: Record<
     hosts: "youtube.com, youtu.be, m.youtube.com, music.youtube.com",
     formats: ["best", "mp4", "audio-only"],
     engine: "piped",
+    capabilities: [
+      "video.download",
+      "audio.download",
+      "playlist.download",
+      "profile.download",
+      "metadata.fetch",
+      "batch.download",
+    ],
+    category: "video",
+    version: "1.0.0",
   },
   instagram: {
     description: "Posts, reels, and stories media from Instagram.",
     hosts: "instagram.com, instagr.am",
     formats: ["best", "mp4"],
     engine: "http-meta",
+    capabilities: [
+      "video.download",
+      "image.download",
+      "profile.download",
+      "metadata.fetch",
+      "batch.download",
+    ],
+    category: "social",
+    version: "1.0.0",
   },
   tiktok: {
     description: "Videos from TikTok share links.",
     hosts: "tiktok.com, vm.tiktok.com, vt.tiktok.com",
     formats: ["best", "mp4"],
     engine: "http-meta",
+    capabilities: ["video.download", "metadata.fetch", "batch.download"],
+    category: "video",
+    version: "1.0.0",
   },
   pinterest: {
     description: "Pins and boards — images and videos.",
     hosts: "pinterest.com, pin.it",
     formats: ["best"],
     engine: "builtin",
+    capabilities: [
+      "image.download",
+      "video.download",
+      "playlist.download",
+      "profile.download",
+      "metadata.fetch",
+      "batch.download",
+    ],
+    category: "images",
+    version: "1.0.0",
   },
 };
 
 export const MANIFEST_FILENAMES = ["pinforge.provider.json", "manifest.json"] as const;
+
+/** Compare dotted versions; returns >0 if a>b, <0 if a<b, 0 if equal. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(/[.+-]/).map((x) => Number.parseInt(x, 10) || 0);
+  const pb = b.split(/[.+-]/).map((x) => Number.parseInt(x, 10) || 0);
+  const n = Math.max(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+export function hostListMatches(hostsCsv: string, url: string): boolean {
+  let hostname = "";
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  const parts = hostsCsv
+    .split(/[,;\s]+/)
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  return parts.some(
+    (h) => hostname === h || hostname.endsWith(`.${h}`) || hostname.includes(h)
+  );
+}

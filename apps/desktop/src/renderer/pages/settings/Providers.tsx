@@ -1,10 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Dropdown, Menu, Message, Modal, Tag } from "@arco-design/web-react";
-import { Down, Plus, Right } from "@icon-park/react";
+import { Button, Input, Message, Switch, Tabs, Tag } from "@arco-design/web-react";
+import { Plus, Right, Search } from "@icon-park/react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
-import { api, type CustomProviderConfig } from "@renderer/api";
-import { BUILTIN_PROVIDER_META, PROVIDER_REGISTRY } from "@common/providers/types";
+import {
+  api,
+  type InstalledProviderView,
+  type RegistryListItem,
+} from "@renderer/api";
+import {
+  BUILTIN_PROVIDER_META,
+  CAPABILITY_LABELS,
+  type ProviderCapability,
+} from "@common/providers/types";
 import { PROVIDER_LOGOS } from "./providerLogos";
 
 const ProviderLogo: React.FC<{ id: string; label: string }> = ({ id, label }) => {
@@ -19,48 +27,89 @@ const ProviderLogo: React.FC<{ id: string; label: string }> = ({ id, label }) =>
   );
 };
 
-function metaHosts(id: string): string {
-  const meta = BUILTIN_PROVIDER_META[id] ?? PROVIDER_REGISTRY.find((r) => r.id === id);
-  return meta?.hosts ?? "";
-}
+const CapBadges: React.FC<{ caps: string[] }> = ({ caps }) => {
+  if (!caps.length) return null;
+  return (
+    <div className="flex flex-wrap gap-4px mt-4px">
+      {caps.slice(0, 4).map((c) => (
+        <Tag key={c} size="small" color="gray">
+          {CAPABILITY_LABELS[c as ProviderCapability] ?? c}
+        </Tag>
+      ))}
+      {caps.length > 4 && (
+        <Tag size="small" color="gray">
+          +{caps.length - 4}
+        </Tag>
+      )}
+    </div>
+  );
+};
 
 const ProvidersSettings: React.FC = () => {
-  const { settings } = useApp();
+  const { settings, refresh } = useApp();
   const navigate = useNavigate();
-  const [custom, setCustom] = useState<CustomProviderConfig[]>([]);
-  const [registryOpen, setRegistryOpen] = useState(false);
+  const [tab, setTab] = useState("builtin");
+  const [installed, setInstalled] = useState<InstalledProviderView[]>([]);
+  const [registry, setRegistry] = useState<RegistryListItem[]>([]);
+  const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const loadCustom = useCallback(async () => {
-    setCustom(await api.listCustomProviders());
+  const reload = useCallback(async () => {
+    const [inst, reg] = await Promise.all([
+      api.listInstalledProviders(),
+      api.registryList(),
+    ]);
+    setInstalled(inst);
+    setRegistry(reg);
   }, []);
 
   useEffect(() => {
-    loadCustom().catch((e) => Message.error(e instanceof Error ? e.message : String(e)));
-  }, [loadCustom]);
+    reload().catch((e) => Message.error(e instanceof Error ? e.message : String(e)));
+  }, [reload]);
 
-  const configById = useMemo(() => {
-    const map = new Map<string, CustomProviderConfig>();
-    for (const c of custom) map.set(c.id, c);
-    return map;
-  }, [custom]);
+  const builtins = useMemo(
+    () => installed.filter((p) => p.builtin || p.origin === "builtin"),
+    [installed]
+  );
+  const added = useMemo(
+    () => installed.filter((p) => !p.builtin && p.origin !== "builtin"),
+    [installed]
+  );
+  const readyCount = useMemo(
+    () => builtins.filter((p) => p.live && p.enabled).length,
+    [builtins]
+  );
 
-  const installedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const p of settings?.providers ?? []) {
-      if (p.status === "live") ids.add(p.id);
-    }
-    for (const p of custom) ids.add(p.id);
-    return ids;
-  }, [settings?.providers, custom]);
+  const registryFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return registry;
+    return registry.filter(
+      (r) =>
+        r.label.toLowerCase().includes(q) ||
+        r.description.toLowerCase().includes(q) ||
+        r.hosts.toLowerCase().includes(q) ||
+        r.id.toLowerCase().includes(q)
+    );
+  }, [registry, search]);
 
   if (!settings) return null;
 
-  const live = settings.providers.filter((p) => p.status === "live").length;
-  const added = custom.filter((c) => !c.builtin && !settings.providers.some((p) => p.id === c.id));
-
   const openDetail = (id: string) => {
     void navigate(`/settings/providers/${encodeURIComponent(id)}`);
+  };
+
+  const toggleEnabled = async (id: string, enabled: boolean) => {
+    setSaving(true);
+    try {
+      const res = await api.setProviderEnabled(id, enabled);
+      setInstalled(res.installed);
+      await refresh();
+      Message.success(enabled ? "Provider enabled" : "Provider disabled");
+    } catch (err) {
+      Message.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const uploadSource = async () => {
@@ -70,6 +119,7 @@ const ProvidersSettings: React.FC = () => {
     try {
       const { provider } = await api.installProviderFromSource(path);
       Message.success(`Installed “${provider.label}” from package.`);
+      await reload();
       openDetail(provider.id);
     } catch (e) {
       Message.error(e instanceof Error ? e.message : String(e));
@@ -78,23 +128,14 @@ const ProvidersSettings: React.FC = () => {
     }
   };
 
-  const installFromRegistry = async (item: (typeof PROVIDER_REGISTRY)[number]) => {
+  const installFromRegistry = async (id: string) => {
     setSaving(true);
     try {
-      await api.upsertCustomProvider({
-        id: item.id,
-        label: item.label,
-        enabled: false,
-        hosts: item.hosts,
-        notes: item.description,
-        sourceUrl: `registry://${item.id}`,
-        engine: item.engine ?? "http-meta",
-        formatPlugins: [],
-        createdAt: Date.now(),
-      });
-      setRegistryOpen(false);
-      Message.success(`${item.label} added.`);
-      openDetail(item.id);
+      const res = await api.installFromRegistry(id);
+      setRegistry(res.registry);
+      await reload();
+      Message.success(`${res.provider.label} installed from registry.`);
+      openDetail(id);
     } catch (e) {
       Message.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -102,20 +143,92 @@ const ProvidersSettings: React.FC = () => {
     }
   };
 
-  const actionMenu = (
-    <Menu
-      onClickMenuItem={(key) => {
-        if (key === "registry") setRegistryOpen(true);
-        else if (key === "upload") void uploadSource();
-        else if (key === "add") openDetail("new");
-      }}
-    >
-      <Menu.Item key="registry">Browse registry</Menu.Item>
-      <Menu.Item key="upload" disabled={saving}>
-        Upload extension
-      </Menu.Item>
-      <Menu.Item key="add">Add provider</Menu.Item>
-    </Menu>
+  const uninstall = async (id: string) => {
+    setSaving(true);
+    try {
+      const res = await api.uninstallProvider(id);
+      setRegistry(res.registry);
+      setInstalled(res.installed);
+      Message.success("Provider uninstalled");
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderBuiltinRow = (item: InstalledProviderView) => (
+    <div key={item.id} className="provider-row provider-row--clickable">
+      <button type="button" className="provider-row__main" onClick={() => openDetail(item.id)}>
+        <ProviderLogo id={item.id} label={item.label} />
+        <div className="min-w-0 text-left">
+          <div className="text-14px font-500 text-t-primary truncate">{item.label}</div>
+          <div className="text-12px text-t-tertiary mt-2px truncate">
+            {item.hosts || BUILTIN_PROVIDER_META[item.id]?.hosts || "Open to configure"}
+            {item.version ? ` · v${item.version}` : ""}
+          </div>
+          <CapBadges caps={item.capabilities} />
+        </div>
+      </button>
+      <div className="flex items-center gap-8px shrink-0" onClick={(e) => e.stopPropagation()}>
+        {item.updateAvailable && (
+          <Tag size="small" color="orangered">
+            Update
+          </Tag>
+        )}
+        <Tag color={item.live ? (item.enabled ? "green" : "gray") : "orangered"} size="small">
+          {!item.live ? "Coming soon" : item.enabled ? "Available" : "Disabled"}
+        </Tag>
+        {item.live && (
+          <Switch
+            size="small"
+            checked={item.enabled}
+            disabled={saving}
+            onChange={(v) => void toggleEnabled(item.id, v)}
+          />
+        )}
+        <button type="button" className="provider-row__chevron" onClick={() => openDetail(item.id)}>
+          <Right theme="outline" size="16" fill="currentColor" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderInstalledRow = (item: InstalledProviderView) => (
+    <div key={item.id} className="provider-row">
+      <button type="button" className="provider-row__main" onClick={() => openDetail(item.id)}>
+        <ProviderLogo id={item.id} label={item.label} />
+        <div className="min-w-0 text-left">
+          <div className="flex items-center gap-8px flex-wrap">
+            <span className="text-14px font-500 text-t-primary truncate">{item.label}</span>
+            <Tag size="small" color="gray">
+              {item.origin}
+            </Tag>
+            {item.updateAvailable && (
+              <Tag size="small" color="orangered">
+                Update
+              </Tag>
+            )}
+          </div>
+          <div className="text-12px text-t-tertiary mt-2px truncate">
+            {item.hosts || "No hosts"}
+            {item.version ? ` · v${item.version}` : ""}
+          </div>
+          <CapBadges caps={item.capabilities} />
+        </div>
+      </button>
+      <div className="flex items-center gap-8px shrink-0">
+        <Switch
+          size="small"
+          checked={item.enabled}
+          disabled={saving}
+          onChange={(v) => void toggleEnabled(item.id, v)}
+        />
+        <Button size="mini" status="danger" disabled={saving} onClick={() => void uninstall(item.id)}>
+          Uninstall
+        </Button>
+      </div>
+    </div>
   );
 
   return (
@@ -124,132 +237,112 @@ const ProvidersSettings: React.FC = () => {
         <div className="flex items-center gap-10px min-w-0">
           <div className="text-22px font-600 text-t-primary">Providers</div>
           <Tag color="green" size="small" className="shrink-0">
-            {live} ready
+            {readyCount} ready
           </Tag>
         </div>
-        <Dropdown droplist={actionMenu} position="br" trigger="click">
-          <Button type="primary" loading={saving} icon={<Plus theme="outline" size="14" />}>
-            Add
-            <Down theme="outline" size="12" className="ml-4px" />
+        <div className="flex items-center gap-8px">
+          <Button loading={saving} onClick={() => void uploadSource()}>
+            Install package
           </Button>
-        </Dropdown>
+          <Button
+            type="primary"
+            loading={saving}
+            icon={<Plus theme="outline" size="14" />}
+            onClick={() => setTab("registry")}
+          >
+            Browse registry
+          </Button>
+        </div>
       </div>
       <div className="text-t-secondary text-14px mb-18px">
-        Open a provider to configure it, or use Add to install from registry or a package.
+        Built-in extractors ship with the app. Registry and local packages install separately and can
+        be enabled, updated, or removed.
       </div>
 
       <div className="max-w-720px mx-auto w-full">
-      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-        Built-in
-      </div>
-      <div className="provider-list flex flex-col gap-10px mb-24px">
-        {settings.providers.map((item) => {
-          const cfg = configById.get(item.id);
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className="provider-row provider-row--clickable"
-              onClick={() => openDetail(item.id)}
-            >
-              <div className="provider-row__main">
-                <ProviderLogo id={item.id} label={item.label} />
-                <div className="min-w-0 text-left">
-                  <div className="text-14px font-500 text-t-primary truncate">{item.label}</div>
-                  <div className="text-12px text-t-tertiary mt-2px truncate">
-                    {cfg?.hosts || metaHosts(item.id) || "Open to configure"}
-                  </div>
+        <Tabs activeTab={tab} onChange={setTab}>
+          <Tabs.TabPane key="builtin" title={`Built-in (${builtins.length})`}>
+            <div className="provider-list flex flex-col gap-10px pt-12px">
+              {builtins.map(renderBuiltinRow)}
+            </div>
+          </Tabs.TabPane>
+          <Tabs.TabPane key="installed" title={`Installed (${added.length})`}>
+            <div className="provider-list flex flex-col gap-10px pt-12px">
+              {added.length === 0 ? (
+                <div className="text-13px text-t-tertiary py-24px text-center">
+                  No registry or local packages yet. Browse the registry or install a ZIP.
                 </div>
-              </div>
-              <div className="flex items-center gap-8px shrink-0">
-                <Tag color={item.status === "live" ? "green" : "orangered"} size="small">
-                  {item.status === "live" ? "Available" : "Coming soon"}
-                </Tag>
-                <Right theme="outline" size="16" fill="currentColor" />
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {added.length > 0 && (
-        <>
-          <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-            Added
-          </div>
-          <div className="provider-list flex flex-col gap-10px">
-            {added.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="provider-row provider-row--clickable"
-                onClick={() => openDetail(item.id)}
-              >
-                <div className="provider-row__main">
-                  <ProviderLogo id={item.id} label={item.label} />
-                  <div className="min-w-0 text-left">
-                    <div className="text-14px font-500 text-t-primary truncate">{item.label}</div>
-                    <div className="text-12px text-t-tertiary mt-2px truncate">
-                      {item.hosts || "No hosts set"}
-                      {item.engine ? ` · ${item.engine}` : ""}
-                      {item.sourcePath ? " · extension" : ""}
-                      {item.sourceUrl?.startsWith("registry://") ? " · registry" : ""}
+              ) : (
+                added.map(renderInstalledRow)
+              )}
+            </div>
+          </Tabs.TabPane>
+          <Tabs.TabPane key="registry" title="Registry">
+            <div className="pt-12px flex flex-col gap-12px">
+              <Input
+                allowClear
+                prefix={<Search theme="outline" size="14" />}
+                placeholder="Search providers…"
+                value={search}
+                onChange={setSearch}
+              />
+              <div className="provider-list flex flex-col gap-10px max-h-520px overflow-y-auto">
+                {registryFiltered.map((item) => (
+                  <div key={item.id} className="provider-row">
+                    <div className="provider-row__main">
+                      <ProviderLogo id={item.id} label={item.label} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-8px flex-wrap">
+                          <span className="text-14px font-500 text-t-primary">{item.label}</span>
+                          <Tag
+                            size="small"
+                            color={item.status === "official" ? "arcoblue" : "gray"}
+                          >
+                            {item.status}
+                          </Tag>
+                          {item.verified && (
+                            <Tag size="small" color="green">
+                              verified
+                            </Tag>
+                          )}
+                          {item.updateAvailable && (
+                            <Tag size="small" color="orangered">
+                              Update
+                            </Tag>
+                          )}
+                        </div>
+                        <div className="text-12px text-t-tertiary mt-2px">{item.description}</div>
+                        <div className="text-11px text-t-tertiary mt-2px tabular-nums">
+                          v{item.version}
+                          {item.installedVersion ? ` · installed ${item.installedVersion}` : ""}
+                        </div>
+                        <CapBadges caps={item.capabilities} />
+                      </div>
                     </div>
+                    <Button
+                      size="small"
+                      type={item.installed ? "secondary" : "primary"}
+                      disabled={saving || (item.installed && !item.updateAvailable)}
+                      onClick={() => void installFromRegistry(item.id)}
+                    >
+                      {item.installed
+                        ? item.updateAvailable
+                          ? "Update"
+                          : "Installed"
+                        : "Install"}
+                    </Button>
                   </div>
-                </div>
-                <div className="flex items-center gap-8px shrink-0">
-                  <Tag color={item.enabled ? "green" : "gray"} size="small">
-                    {item.enabled ? "Enabled" : "Disabled"}
-                  </Tag>
-                  <Right theme="outline" size="16" fill="currentColor" />
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      </div>
-
-      <Modal
-        title="Provider registry"
-        visible={registryOpen}
-        onCancel={() => setRegistryOpen(false)}
-        footer={null}
-        style={{ width: 560 }}
-      >
-        <div className="text-13px text-t-secondary mb-14px">
-          Add a provider, then open its page to finish configuration.
-        </div>
-        <div className="flex flex-col gap-10px max-h-420px overflow-y-auto">
-          {PROVIDER_REGISTRY.map((item) => {
-            const installed = installedIds.has(item.id);
-            return (
-              <div key={item.id} className="provider-row">
-                <div className="provider-row__main">
-                  <ProviderLogo id={item.id} label={item.label} />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-8px">
-                      <span className="text-14px font-500 text-t-primary">{item.label}</span>
-                      <Tag size="small" color={item.status === "official" ? "arcoblue" : "gray"}>
-                        {item.status}
-                      </Tag>
-                    </div>
-                    <div className="text-12px text-t-tertiary mt-2px">{item.description}</div>
+                ))}
+                {registryFiltered.length === 0 && (
+                  <div className="text-13px text-t-tertiary py-16px text-center">
+                    No providers match “{search}”.
                   </div>
-                </div>
-                <Button
-                  size="small"
-                  type={installed ? "secondary" : "primary"}
-                  disabled={installed || saving}
-                  onClick={() => void installFromRegistry(item)}
-                >
-                  {installed ? "Added" : "Add"}
-                </Button>
+                )}
               </div>
-            );
-          })}
-        </div>
-      </Modal>
+            </div>
+          </Tabs.TabPane>
+        </Tabs>
+      </div>
     </div>
   );
 };

@@ -2,7 +2,6 @@ import { ipcMain, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from "
 import {
   processMedia,
   listProviders,
-  detectProvider,
   extractMediaPreview,
   PRESETS,
   DEFAULT_ENHANCE_FEATURES,
@@ -32,7 +31,17 @@ import {
   installFormatPlugin,
   installProviderFromSource,
   readProviderManifest,
+  uninstallProviderFiles,
 } from "./providerInstall";
+import {
+  ProviderDisabledError,
+  buildInstalledViews,
+  buildRegistryList,
+  getProviderPrefs,
+  resolveProviderForUrl,
+  setProviderEnabled,
+} from "./providerResolve";
+import { PROVIDER_REGISTRY } from "../common/providers/types";
 import { getFfmpegStatus, installFfmpeg, resolveConfiguredFfmpeg } from "./ffmpegInstall";
 
 /** Active download abort — Tasks Stop cancels the current job. */
@@ -124,12 +133,17 @@ async function runProcess(
   };
   configurePinterestCookies(pinterest.cookies);
 
-  // Provider extension overrides (engine / format / extractor / plugins)
+  // Provider extension overrides (engine / format / extractor / plugins) + enable gate
   let providerCfg: CustomProviderConfig | undefined;
   try {
-    const detected = detectProvider(url);
-    providerCfg = (store.get("customProviders") ?? []).find((p) => p.id === detected.id);
-  } catch {
+    const hit = resolveProviderForUrl(url);
+    if (!hit) {
+      throw new Error("No provider matches this URL");
+    }
+    providerCfg = hit.config;
+  } catch (err) {
+    if (err instanceof ProviderDisabledError) throw err;
+    if (err instanceof Error && err.message === "No provider matches this URL") throw err;
     providerCfg = undefined;
   }
 
@@ -355,15 +369,27 @@ export function registerIpc(): void {
 
   ipcMain.handle("media:detect", async (_e, url: string) => {
     try {
-      const p = detectProvider(url);
+      const hit = resolveProviderForUrl(url);
+      if (!hit) return null;
       return {
-        id: p.id,
-        label: p.label,
-        live: p.live,
-        formats: p.formats ?? [],
-        modes: p.modes ?? ["single"],
+        id: hit.id,
+        label: hit.label,
+        live: hit.live,
+        formats: hit.formats,
+        modes: hit.modes,
       };
-    } catch {
+    } catch (err) {
+      if (err instanceof ProviderDisabledError) {
+        return {
+          id: err.providerId,
+          label: err.providerLabel,
+          live: false,
+          formats: [],
+          modes: [],
+          disabled: true,
+          message: err.message,
+        };
+      }
       return null;
     }
   });
@@ -382,6 +408,23 @@ export function registerIpc(): void {
     ) => {
     try {
       const store = getStore();
+      try {
+        resolveProviderForUrl(url);
+      } catch (err) {
+        if (err instanceof ProviderDisabledError) {
+          return {
+            sourceUrl: typeof url === "string" ? url : "",
+            provider: { id: err.providerId, label: err.providerLabel, live: false },
+            mode: "single",
+            modeSupported: false,
+            formats: [],
+            supportedModes: [],
+            items: [],
+            itemCount: 0,
+            message: err.message,
+          };
+        }
+      }
       const youtube = {
         ...DEFAULT_YOUTUBE_OPTIONS,
         ...store.get("youtube"),
@@ -487,6 +530,7 @@ export function registerIpc(): void {
       remote: store.get("remote"),
       system: resolveSystemPaths(store.get("system")),
       customProviders: store.get("customProviders") ?? [],
+      providerPrefs: getProviderPrefs(),
       presets: PRESETS,
       providers: listProviders(),
     };
@@ -698,12 +742,81 @@ export function registerIpc(): void {
 
   ipcMain.handle("providers:listCustom", async () => getStore().get("customProviders") ?? []);
 
+  ipcMain.handle("providers:listInstalled", async () => buildInstalledViews(listProviders()));
+
+  ipcMain.handle("providers:registryList", async () => buildRegistryList());
+
+  ipcMain.handle("providers:setEnabled", async (_e, payload: { id: string; enabled: boolean }) => {
+    setProviderEnabled(payload.id, payload.enabled);
+    return {
+      providers: getStore().get("customProviders") ?? [],
+      providerPrefs: getProviderPrefs(),
+      installed: buildInstalledViews(listProviders()),
+    };
+  });
+
+  ipcMain.handle("providers:installFromRegistry", async (_e, id: string) => {
+    const item = PROVIDER_REGISTRY.find((r) => r.id === id);
+    if (!item) throw new Error(`Registry provider not found: ${id}`);
+    const store = getStore();
+    const list = [...(store.get("customProviders") ?? [])];
+    const now = Date.now();
+    const next: CustomProviderConfig = {
+      id: item.id,
+      label: item.label,
+      enabled: false,
+      hosts: item.hosts,
+      notes: item.description,
+      sourceUrl: `registry://${item.id}`,
+      engine: item.engine ?? "http-meta",
+      origin: "registry",
+      capabilities: item.capabilities,
+      installedVersion: item.version,
+      version: item.version,
+      checksum: item.checksum,
+      formatPlugins: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    const idx = list.findIndex((p) => p.id === next.id);
+    if (idx >= 0) {
+      list[idx] = {
+        ...list[idx]!,
+        ...next,
+        createdAt: list[idx]!.createdAt,
+        enabled: list[idx]!.enabled,
+        sourcePath: list[idx]!.sourcePath,
+        manifestPath: list[idx]!.manifestPath,
+        manifest: list[idx]!.manifest,
+      };
+    } else list.push(next);
+    store.set("customProviders", list);
+    return { provider: list.find((p) => p.id === id)!, providers: list, registry: buildRegistryList() };
+  });
+
+  ipcMain.handle("providers:uninstall", async (_e, id: string) => {
+    const liveBuiltin = listProviders().find((p) => p.id === id && p.status === "live");
+    if (liveBuiltin) {
+      throw new Error("Built-in providers cannot be uninstalled. Disable them instead.");
+    }
+    const store = getStore();
+    const list = (store.get("customProviders") ?? []).filter((p) => p.id !== id);
+    store.set("customProviders", list);
+    uninstallProviderFiles(id);
+    return {
+      providers: list,
+      registry: buildRegistryList(),
+      installed: buildInstalledViews(listProviders()),
+    };
+  });
+
   ipcMain.handle("providers:upsertCustom", async (_e, provider: CustomProviderConfig) => {
     const store = getStore();
     const list = [...(store.get("customProviders") ?? [])];
     const idx = list.findIndex((p) => p.id === provider.id);
-    if (idx >= 0) list[idx] = { ...list[idx]!, ...provider };
-    else list.push(provider);
+    const next = { ...provider, updatedAt: Date.now() };
+    if (idx >= 0) list[idx] = { ...list[idx]!, ...next };
+    else list.push(next);
     store.set("customProviders", list);
     return list;
   });
@@ -712,17 +825,19 @@ export function registerIpc(): void {
     const store = getStore();
     const list = (store.get("customProviders") ?? []).filter((p) => p.id !== id);
     store.set("customProviders", list);
+    uninstallProviderFiles(id);
     return list;
   });
 
   ipcMain.handle("providers:installFromSource", async (_e, sourcePath: string) => {
-    const installed = installProviderFromSource(sourcePath);
+    const installed = await installProviderFromSource(sourcePath);
     const store = getStore();
     const list = [...(store.get("customProviders") ?? [])];
+    const now = Date.now();
     const next: CustomProviderConfig = {
       id: installed.manifest.id,
       label: installed.manifest.name,
-      enabled: false,
+      enabled: true,
       hosts: (installed.manifest.hosts ?? []).join(", "),
       sourcePath: installed.installDir,
       manifestPath: installed.manifestPath,
@@ -731,8 +846,13 @@ export function registerIpc(): void {
       format: installed.manifest.formats?.[0],
       notes: installed.manifest.description,
       version: installed.manifest.version,
+      installedVersion: installed.manifest.version,
+      origin: "local",
+      capabilities: installed.manifest.capabilities,
+      checksum: installed.checksum,
       formatPlugins: [],
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
     const idx = list.findIndex((p) => p.id === next.id);
     if (idx >= 0) list[idx] = { ...list[idx]!, ...next, createdAt: list[idx]!.createdAt };
