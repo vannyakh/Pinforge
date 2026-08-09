@@ -33,6 +33,11 @@ export interface DownloadTask {
   title?: string;
   message?: string;
   updatedAt: number;
+  percent?: number;
+  downloaded?: number;
+  totalBytes?: number | null;
+  phase?: string;
+  etaSec?: number | null;
 }
 
 interface AppContextValue {
@@ -43,8 +48,11 @@ interface AppContextValue {
   busy: boolean;
   refresh: () => Promise<void>;
   processUrl: (url: string, opts?: ProcessOpts) => Promise<ProcessResponse | null>;
+  cancelDownload: () => Promise<boolean>;
   updateSettings: (partial: SettingsPartial) => Promise<void>;
   clearHistory: () => Promise<void>;
+  clearPacks: () => Promise<void>;
+  removePacks: (ids: string[]) => Promise<void>;
   itemsForPack: (packId: string) => HistoryItem[];
 }
 
@@ -80,6 +88,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           title: ev.title,
           message: ev.message,
           updatedAt: Date.now(),
+          percent: ev.percent,
+          downloaded: ev.downloaded,
+          totalBytes: ev.totalBytes,
+          phase: ev.phase,
+          etaSec: ev.etaSec,
         };
         const rest = prev.filter((t) => t.packId !== ev.packId);
         return [next, ...rest].slice(0, 30);
@@ -101,7 +114,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           features: opts?.features ?? settings.enhanceFeatures,
           youtube: opts?.youtube ?? settings.youtube,
         });
+        const stopped = res.errors.some((e) => /stopped/i.test(e.error));
         if (
+          !stopped &&
           settings.system?.notifications &&
           settings.system.notifyOnDownloadComplete &&
           typeof Notification !== "undefined"
@@ -121,7 +136,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await refresh();
         return res;
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!/abort|stopped/i.test(msg)) {
+          Message.error(msg);
+        }
         await refresh();
         return null;
       } finally {
@@ -130,6 +148,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     [settings, refresh]
   );
+
+  const cancelDownload = useCallback(async () => {
+    const res = await api.cancelMedia();
+    return res.ok;
+  }, []);
 
   const updateSettings = useCallback(async (partial: SettingsPartial) => {
     const next = await api.setSettings(partial);
@@ -156,6 +179,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTasks([]);
   }, []);
 
+  const clearPacks = useCallback(async () => {
+    await api.clearPacks();
+    setPacks([]);
+    setTasks([]);
+  }, []);
+
+  const removePacks = useCallback(async (ids: string[]) => {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return;
+    await api.removePacks(unique);
+    const idSet = new Set(unique);
+    setPacks((prev) => prev.filter((p) => !idSet.has(p.id)));
+    setTasks((prev) => prev.filter((t) => !idSet.has(t.packId)));
+  }, []);
+
   const itemsForPack = useCallback(
     (packId: string) => history.filter((h) => h.packId === packId),
     [history]
@@ -170,8 +208,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       busy,
       refresh,
       processUrl,
+      cancelDownload,
       updateSettings,
       clearHistory,
+      clearPacks,
+      removePacks,
       itemsForPack,
     }),
     [
@@ -182,8 +223,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       busy,
       refresh,
       processUrl,
+      cancelDownload,
       updateSettings,
       clearHistory,
+      clearPacks,
+      removePacks,
       itemsForPack,
     ]
   );

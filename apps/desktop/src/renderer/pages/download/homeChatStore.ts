@@ -23,6 +23,8 @@ export type ChatDownloadCard = {
   id: string;
   sourceUrl: string;
   title?: string;
+  /** Remote or local preview image. */
+  coverUrl?: string;
   status: ChatDownloadCardStatus;
   percent?: number;
   etaSec?: number | null;
@@ -157,12 +159,37 @@ export function selectPendingConfirm(messages: ChatMessage[]) {
 export function makeDownloadCards(
   urls: string[],
   status: ChatDownloadCardStatus = "queued",
-  titles?: Array<string | undefined>
+  titles?: Array<string | undefined>,
+  covers?: Array<string | undefined>
 ): ChatDownloadCard[] {
   return urls.map((sourceUrl, i) => ({
     id: `${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`,
     sourceUrl,
     title: titles?.[i],
+    coverUrl: covers?.[i] || coverUrlFromMediaUrl(sourceUrl),
     status,
   }));
+}
+
+/** Best-effort YouTube (and similar) cover from a media URL. */
+export function coverUrlFromMediaUrl(url: string): string | undefined {
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      if (id) return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      const v = u.searchParams.get("v");
+      if (v) return `https://i.ytimg.com/vi/${v}/hqdefault.jpg`;
+      const shorts = u.pathname.match(/\/shorts\/([\w-]+)/i)?.[1];
+      if (shorts) return `https://i.ytimg.com/vi/${shorts}/hqdefault.jpg`;
+      const embed = u.pathname.match(/\/embed\/([\w-]+)/i)?.[1];
+      if (embed) return `https://i.ytimg.com/vi/${embed}/hqdefault.jpg`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
 }

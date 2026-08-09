@@ -17,6 +17,7 @@ import { PlatformIcon, PLATFORMS, type PlatformId } from "./platforms";
 import PlatformSelectionBar from "./PlatformSelectionBar";
 import {
   makeDownloadCards,
+  coverUrlFromMediaUrl,
   selectPendingConfirm,
   useHomeChatStore,
   type ChatDownloadCard,
@@ -156,26 +157,24 @@ const DownloadPage: React.FC = () => {
           : ev.total > 0
             ? Math.round((ev.current / ev.total) * 100)
             : undefined;
-      patchDownloadCard(target.assistantId, matchUrl, {
-        status: "downloading",
+      const coverUrl =
+        coverUrlFromMediaUrl(ev.url || "") ||
+        coverUrlFromMediaUrl(matchUrl) ||
+        undefined;
+      const patch = {
+        status: "downloading" as const,
         ...(ev.title ? { title: ev.title } : {}),
+        ...(coverUrl ? { coverUrl } : {}),
         ...(typeof percent === "number" ? { percent } : {}),
         ...(ev.etaSec !== undefined ? { etaSec: ev.etaSec } : {}),
         ...(ev.phase ? { phase: ev.phase } : {}),
         ...(ev.message ? { message: ev.message } : {}),
         packId: ev.packId,
-      });
+      };
+      patchDownloadCard(target.assistantId, matchUrl, patch);
       // Also patch by activeUrl when IPC url differs slightly
       if (matchUrl !== target.activeUrl) {
-        patchDownloadCard(target.assistantId, target.activeUrl, {
-          status: "downloading",
-          ...(ev.title ? { title: ev.title } : {}),
-          ...(typeof percent === "number" ? { percent } : {}),
-          ...(ev.etaSec !== undefined ? { etaSec: ev.etaSec } : {}),
-          ...(ev.phase ? { phase: ev.phase } : {}),
-          ...(ev.message ? { message: ev.message } : {}),
-          packId: ev.packId,
-        });
+        patchDownloadCard(target.assistantId, target.activeUrl, patch);
       }
     });
   }, [patchDownloadCard]);
@@ -458,7 +457,10 @@ const DownloadPage: React.FC = () => {
     const infoCards = makeDownloadCards(
       downloadUrls,
       "ready",
-      downloadable.map((e) => e.title)
+      downloadable.map((e) => e.title ?? e.items[0]?.title),
+      downloadable.map(
+        (e) => e.items.find((i) => i.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl)
+      )
     );
 
     if (shouldAuto) {
@@ -869,14 +871,30 @@ const DownloadPage: React.FC = () => {
                                       <thead>
                                         <tr>
                                           <th style={{ width: 44 }}>#</th>
+                                          <th style={{ width: 52 }} />
                                           <th>Title</th>
                                           <th>URL</th>
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {extract.items.slice(0, 50).map((item) => (
+                                        {extract.items.slice(0, 50).map((item) => {
+                                          const cover =
+                                            item.coverUrl || coverUrlFromMediaUrl(item.url);
+                                          return (
                                           <tr key={`${item.index}-${item.url}`}>
                                             <td>{item.index}</td>
+                                            <td>
+                                              {cover ? (
+                                                <img
+                                                  className="home-extract__cover"
+                                                  src={cover}
+                                                  alt=""
+                                                  referrerPolicy="no-referrer"
+                                                />
+                                              ) : (
+                                                <span className="home-extract__cover home-extract__cover--empty" />
+                                              )}
+                                            </td>
                                             <td>{item.title || `Item ${item.index}`}</td>
                                             <td>
                                               <button
@@ -889,7 +907,8 @@ const DownloadPage: React.FC = () => {
                                               </button>
                                             </td>
                                           </tr>
-                                        ))}
+                                          );
+                                        })}
                                       </tbody>
                                     </table>
                                   </div>
@@ -1127,6 +1146,7 @@ function cardStatusLabel(card: ChatDownloadCard): string {
 }
 
 const DownloadCard: React.FC<{ card: ChatDownloadCard }> = ({ card }) => {
+  const [coverFailed, setCoverFailed] = useState(false);
   const title =
     card.title ||
     (card.outPath ? fileNameFromPath(card.outPath) : shortHostPath(card.sourceUrl));
@@ -1142,12 +1162,25 @@ const DownloadCard: React.FC<{ card: ChatDownloadCard }> = ({ card }) => {
         : card.status === "extracting"
           ? undefined
           : 0;
+  const thumbSrc =
+    (card.outPath && isImagePath(card.outPath) ? toMediaUrl(card.outPath) : undefined) ||
+    card.coverUrl ||
+    coverUrlFromMediaUrl(card.sourceUrl);
+
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [thumbSrc]);
 
   return (
     <div className={`home-result-card home-result-card--${card.status}`}>
       <div className="home-result-card__thumb">
-        {card.outPath && isImagePath(card.outPath) ? (
-          <img src={toMediaUrl(card.outPath)} alt="" />
+        {thumbSrc && !coverFailed ? (
+          <img
+            src={thumbSrc}
+            alt=""
+            referrerPolicy="no-referrer"
+            onError={() => setCoverFailed(true)}
+          />
         ) : (
           <span className="home-result-card__kind">
             {(card.kind || (card.status === "done" ? "file" : "url")).toUpperCase()}

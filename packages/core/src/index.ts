@@ -2,9 +2,18 @@ import "./providers";
 
 export { processPin, processBoard, processUrl, processMedia, detectMediaProvider } from "./process";
 export type { ProcessBoardOptions } from "./process";
-export { extractMediaPreview } from "./extractPreview";
-export type { ExtractPreview, ExtractPreviewItem } from "./extractPreview";
+export { extractMediaPreview, coverUrlFromMediaUrl } from "./extractPreview";
+export type {
+  ExtractPreview,
+  ExtractPreviewItem,
+  ExtractPreviewOptions,
+} from "./extractPreview";
 export { resolvePin, resolveBoard, isBoardUrl, isPinUrl, isPinterestUrl } from "./providers";
+export {
+  isYouTubeChannelUrl,
+  resolveYouTubeChannel,
+} from "./providers";
+export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./providers";
 export {
   listProviders,
   getProvider,

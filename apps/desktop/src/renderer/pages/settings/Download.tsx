@@ -113,6 +113,33 @@ const DownloadSettings: React.FC = () => {
             <Select.Option value="audio-only">audio-only</Select.Option>
           </Select>
         </div>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">YouTube channel max videos</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            How many uploads to pull from a channel or @handle URL (1–500).
+          </div>
+          <InputNumber
+            className="w-full"
+            min={1}
+            max={500}
+            step={10}
+            value={settings.youtube?.channelMaxVideos ?? 50}
+            onChange={(v) =>
+              void updateSettings({
+                youtube: { channelMaxVideos: Math.max(1, Math.min(500, Number(v) || 50)) },
+              })
+            }
+          />
+        </div>
+        <Row
+          title="Organize by channel"
+          description="Save YouTube downloads under outDir / channel name."
+        >
+          <Switch
+            checked={settings.youtube?.organizeByChannel !== false}
+            onChange={(v) => void updateSettings({ youtube: { organizeByChannel: v } })}
+          />
+        </Row>
         <div className="py-14px">
           <div className="text-14px text-t-primary mb-4px">Board delay (ms)</div>
           <div className="text-12px text-t-tertiary mb-8px">

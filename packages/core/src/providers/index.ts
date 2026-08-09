@@ -10,6 +10,11 @@ export { extractYouTubeViaPiped as extractYouTube } from "./extractors/youtube";
 export { extractInstagram } from "./extractors/instagram";
 export { extractTikTok } from "./extractors/tiktok";
 export {
+  isYouTubeChannelUrl,
+  resolveYouTubeChannel,
+} from "./youtube/channel";
+export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./youtube/channel";
+export {
   scrapePageMeta,
   fetchHtmlOrPlaywrightMeta,
   closePlaywrightBrowser,

@@ -1,11 +1,14 @@
 import type { DownloadMode, FormatPreset, ProviderId } from "./types";
 import { detectProvider, ProviderNotFoundError } from "./providers";
-import { isBoardUrl, resolveBoard } from "./providers";
+import { isBoardUrl, resolveBoard, isYouTubeChannelUrl, resolveYouTubeChannel } from "./providers";
+import { DEFAULT_YOUTUBE_OPTIONS } from "./types";
 
 export interface ExtractPreviewItem {
   index: number;
   url: string;
   title?: string;
+  /** Remote cover / thumbnail for UI previews when scraped or derived. */
+  coverUrl?: string;
 }
 
 export interface ExtractPreview {
@@ -84,12 +87,43 @@ function shortTitleFromUrl(url: string): string | undefined {
   }
 }
 
+/** Best-effort cover for known hosts (YouTube watch / shorts / youtu.be). */
+export function coverUrlFromMediaUrl(url: string): string | undefined {
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      if (id) return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      const v = u.searchParams.get("v");
+      if (v) return `https://i.ytimg.com/vi/${v}/hqdefault.jpg`;
+      const shorts = u.pathname.match(/\/shorts\/([\w-]+)/i)?.[1];
+      if (shorts) return `https://i.ytimg.com/vi/${shorts}/hqdefault.jpg`;
+      const embed = u.pathname.match(/\/embed\/([\w-]+)/i)?.[1];
+      if (embed) return `https://i.ytimg.com/vi/${embed}/hqdefault.jpg`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
+export interface ExtractPreviewOptions {
+  /** Cap channel / profile listing (YouTube). Defaults to `DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos`. */
+  channelMaxVideos?: number;
+}
+
 /**
  * Detect provider, classify mode, and list extractable items for bulk/board URLs.
  * Single-item URLs return a one-row list. Unsupported bulk modes return an empty list
  * with `modeSupported: false` so the UI can show a capability table.
  */
-export async function extractMediaPreview(url: string): Promise<ExtractPreview> {
+export async function extractMediaPreview(
+  url: string,
+  opts: ExtractPreviewOptions = {}
+): Promise<ExtractPreview> {
   const sourceUrl = url.trim();
   if (!sourceUrl) {
     throw new Error("URL is required");
@@ -170,6 +204,47 @@ export async function extractMediaPreview(url: string): Promise<ExtractPreview> 
     }
   }
 
+  // YouTube channel / @handle / profile → uploads list
+  if (provider.id === "youtube" && (mode === "profile" || isYouTubeChannelUrl(sourceUrl))) {
+    try {
+      const channel = await resolveYouTubeChannel(sourceUrl, {
+        maxVideos:
+          opts.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos,
+      });
+      const items: ExtractPreviewItem[] = channel.videos.map((v, index) => ({
+        index: index + 1,
+        url: v.url,
+        title: v.title,
+        coverUrl: v.coverUrl || coverUrlFromMediaUrl(v.url),
+      }));
+      const more = channel.truncated ? " (truncated)" : "";
+      return {
+        ...base,
+        mode: "profile",
+        modeSupported: true,
+        title: channel.channelTitle,
+        items,
+        itemCount: items.length,
+        truncated: channel.truncated,
+        message:
+          items.length === 0
+            ? `No videos found on ${channel.channelTitle ?? "this channel"}.`
+            : `Found ${items.length} video${items.length === 1 ? "" : "s"} on ${
+                channel.channelTitle ?? "channel"
+              }${more}.`,
+      };
+    } catch (err) {
+      return {
+        ...base,
+        mode: "profile",
+        modeSupported: true,
+        items: [],
+        itemCount: 0,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   if (!modeSupported && mode !== "single") {
     return {
       ...base,
@@ -185,7 +260,14 @@ export async function extractMediaPreview(url: string): Promise<ExtractPreview> 
     mode: "single",
     modeSupported: true,
     title: shortTitleFromUrl(sourceUrl),
-    items: [{ index: 1, url: sourceUrl, title: shortTitleFromUrl(sourceUrl) }],
+    items: [
+      {
+        index: 1,
+        url: sourceUrl,
+        title: shortTitleFromUrl(sourceUrl),
+        coverUrl: coverUrlFromMediaUrl(sourceUrl),
+      },
+    ],
     itemCount: 1,
     message: `Ready to download 1 item from ${provider.label}.`,
   };

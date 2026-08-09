@@ -15,6 +15,8 @@ export interface YoutubeDownloadOptions {
   organizeByChannel?: boolean;
   tagMetadata?: boolean;
   resume?: boolean;
+  /** Max videos from a channel / profile URL (default 50). */
+  channelMaxVideos?: number;
 }
 
 export interface EnhanceFeatures {
@@ -109,6 +111,8 @@ export interface ExtractPreviewItem {
   index: number;
   url: string;
   title?: string;
+  /** Remote cover / thumbnail for UI previews when scraped or derived. */
+  coverUrl?: string;
 }
 
 export interface ExtractPreview {
@@ -291,6 +295,8 @@ const api = {
     features?: Partial<EnhanceFeatures>;
     youtube?: Partial<YoutubeDownloadOptions>;
   }): Promise<ProcessResponse> => ipcRenderer.invoke("media:process", payload),
+  cancelMedia: (): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke("media:cancel"),
   processPin: (url: string, preset: PresetName, outDir: string): Promise<ProcessResponse> =>
     ipcRenderer.invoke("pin:process", { url, preset, outDir }),
   detectProvider: (url: string): Promise<DetectedProvider | null> =>
@@ -340,6 +346,8 @@ const api = {
     >
   > => ipcRenderer.invoke("settings:set", partial),
   clearHistory: (): Promise<boolean> => ipcRenderer.invoke("history:clear"),
+  clearPacks: (): Promise<boolean> => ipcRenderer.invoke("packs:clear"),
+  removePacks: (ids: string[]): Promise<boolean> => ipcRenderer.invoke("packs:remove", ids),
   getRemote: (): Promise<RemoteConfig> => ipcRenderer.invoke("remote:get"),
   setRemote: (partial: {
     channels?: RemoteChannelConfig[];
@@ -358,6 +366,10 @@ const api = {
     ipcRenderer.invoke("shell:openPath", filePath),
   openExternal: (url: string): Promise<boolean> =>
     ipcRenderer.invoke("shell:openExternal", url),
+  diskSpace: (dirPath?: string): Promise<DiskSpaceInfo | null> =>
+    ipcRenderer.invoke("fs:diskSpace", dirPath),
+  fileSizes: (paths: string[]): Promise<Record<string, number>> =>
+    ipcRenderer.invoke("fs:fileSizes", paths),
 
   onMediaProgress: (cb: (event: MediaProgressEvent) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, payload: MediaProgressEvent) => cb(payload);

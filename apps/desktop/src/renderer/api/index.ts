@@ -25,6 +25,7 @@ import type {
   YoutubeQuality,
   AudioContainer,
   SubtitleMode,
+  DiskSpaceInfo,
 } from "../../preload/index";
 
 export type {
@@ -54,6 +55,7 @@ export type {
   YoutubeQuality,
   AudioContainer,
   SubtitleMode,
+  DiskSpaceInfo,
 };
 
 export const api = {
@@ -66,6 +68,7 @@ export const api = {
     features?: Partial<EnhanceFeatures>;
     youtube?: Partial<YoutubeDownloadOptions>;
   }) => window.api.processMedia(payload),
+  cancelMedia: () => window.api.cancelMedia(),
   processPin: (url: string, preset: PresetName, outDir: string) =>
     window.api.processPin(url, preset, outDir),
   detectProvider: (url: string) => window.api.detectProvider(url),
@@ -84,6 +87,8 @@ export const api = {
   getSettings: () => window.api.getSettings(),
   setSettings: (partial: SettingsPartial) => window.api.setSettings(partial),
   clearHistory: () => window.api.clearHistory(),
+  clearPacks: () => window.api.clearPacks(),
+  removePacks: (ids: string[]) => window.api.removePacks(ids),
   getRemote: () => window.api.getRemote(),
   setRemote: (partial: {
     channels?: RemoteChannelConfig[];
@@ -96,6 +101,8 @@ export const api = {
   showItemInFolder: (filePath: string) => window.api.showItemInFolder(filePath),
   openPath: (filePath: string) => window.api.openPath(filePath),
   openExternal: (url: string) => window.api.openExternal(url),
+  diskSpace: (dirPath?: string) => window.api.diskSpace(dirPath),
+  fileSizes: (paths: string[]) => window.api.fileSizes(paths),
   onMediaProgress: (cb: (event: MediaProgressEvent) => void) => window.api.onMediaProgress(cb),
   ffmpegStatus: () => window.api.ffmpegStatus(),
   ffmpegInstall: () => window.api.ffmpegInstall(),

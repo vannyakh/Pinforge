@@ -10,7 +10,7 @@ export const youtubeProvider: MediaProvider = {
   label: "YouTube",
   live: true,
   formats: ["best", "mp4", "audio-only"],
-  modes: ["single"],
+  modes: ["single", "profile"],
   match: (url) =>
     hostMatches(url, /^(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)$/i),
   resolve: (url, ctx) =>

@@ -31,6 +31,9 @@ import {
 } from "./providerInstall";
 import { getFfmpegStatus, installFfmpeg, resolveConfiguredFfmpeg } from "./ffmpegInstall";
 
+/** Active download abort — Tasks Stop cancels the current job. */
+let activeAbort: AbortController | null = null;
+
 function emitProgress(
   e: IpcMainInvokeEvent,
   payload: {
@@ -160,6 +163,10 @@ async function runProcess(
     message: `Starting${providerCfg?.engine ? ` (${providerCfg.engine})` : ""}${pluginHint}…`,
   });
 
+  const abort = new AbortController();
+  activeAbort?.abort();
+  activeAbort = abort;
+
   try {
     const { configureFfmpeg } = await import("@pinterest-desktop/core");
     const ffPath = await resolveConfiguredFfmpeg();
@@ -183,7 +190,9 @@ async function runProcess(
       delayMs: store.get("delayMs"),
       itemConcurrency: 3,
       fragmentConcurrency: 4,
+      signal: abort.signal,
       onProgress: (info) => {
+        if (abort.signal.aborted) return;
         const percent =
           typeof info.percent === "number"
             ? info.percent
@@ -226,6 +235,12 @@ async function runProcess(
         });
       },
     });
+
+    if (abort.signal.aborted) {
+      const stopErr = new Error("Download stopped");
+      stopErr.name = "AbortError";
+      throw stopErr;
+    }
 
     const items = toHistory(url, preset, packId, res.results);
     pushHistory(items);
@@ -271,11 +286,18 @@ async function runProcess(
       errors: res.errors,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const aborted =
+      abort.signal.aborted ||
+      (err instanceof Error && (err.name === "AbortError" || /aborted|stopped/i.test(err.message)));
+    const message = aborted
+      ? "Stopped"
+      : err instanceof Error
+        ? err.message
+        : String(err);
     const pack: DownloadPack = {
       ...runningPack,
-      status: "failed",
-      errorCount: 1,
+      status: aborted ? "partial" : "failed",
+      errorCount: aborted ? 0 : 1,
       updatedAt: Date.now(),
     };
     upsertPack(pack);
@@ -284,16 +306,33 @@ async function runProcess(
       url,
       current: 0,
       total: 1,
-      status: "failed",
+      status: pack.status,
       message,
     });
+    if (aborted) {
+      return {
+        kind: "pin" as const,
+        provider: undefined,
+        packId,
+        pack,
+        results: [],
+        errors: [{ url, error: "Stopped" }],
+      };
+    }
     throw err;
+  } finally {
+    if (activeAbort === abort) activeAbort = null;
   }
 }
 
 export function registerIpc(): void {
   ipcMain.handle("media:process", async (e, payload) => runProcess(e, payload));
   ipcMain.handle("pin:process", async (e, payload) => runProcess(e, payload));
+  ipcMain.handle("media:cancel", async () => {
+    if (!activeAbort) return { ok: false, message: "No active download" };
+    activeAbort.abort();
+    return { ok: true, message: "Stopping…" };
+  });
 
   ipcMain.handle("media:detect", async (_e, url: string) => {
     try {
@@ -312,7 +351,14 @@ export function registerIpc(): void {
 
   ipcMain.handle("media:extract", async (_e, url: string) => {
     try {
-      return await extractMediaPreview(url);
+      const store = getStore();
+      const youtube = {
+        ...DEFAULT_YOUTUBE_OPTIONS,
+        ...store.get("youtube"),
+      };
+      return await extractMediaPreview(url, {
+        channelMaxVideos: youtube.channelMaxVideos,
+      });
     } catch (err) {
       return {
         sourceUrl: typeof url === "string" ? url : "",
@@ -480,6 +526,23 @@ export function registerIpc(): void {
     const store = getStore();
     store.set("history", []);
     store.set("packs", []);
+    return true;
+  });
+
+  ipcMain.handle("packs:clear", async () => {
+    getStore().set("packs", []);
+    return true;
+  });
+
+  ipcMain.handle("packs:remove", async (_e, ids: string[]) => {
+    const list = Array.isArray(ids) ? ids.filter(Boolean) : [];
+    if (list.length === 0) return true;
+    const idSet = new Set(list);
+    const store = getStore();
+    store.set(
+      "packs",
+      store.get("packs").filter((p) => !idSet.has(p.id))
+    );
     return true;
   });
 

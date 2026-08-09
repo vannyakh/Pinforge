@@ -13,12 +13,16 @@ import { DEFAULT_ENHANCE_FEATURES } from "./types";
 import {
   detectProvider,
   isBoardUrl,
+  isYouTubeChannelUrl,
   resolveBoard,
   resolvePin,
+  resolveYouTubeChannel,
   type MediaProvider,
 } from "./providers";
+import { resolveYouTubeVideo } from "./providers/youtube/service";
 import { sanitizeFilename, sleep } from "./utils";
 import { mapPool } from "./download/pool";
+import { DEFAULT_YOUTUBE_OPTIONS } from "./types";
 
 export interface ProcessBoardOptions extends ProcessOptions {
   onProgress?: (info: {
@@ -128,6 +132,10 @@ export async function processMedia(
 
   if (provider.id === "pinterest" && isBoardUrl(url)) {
     return processPinterestBoard(url, opts, provider.id);
+  }
+
+  if (provider.id === "youtube" && isYouTubeChannelUrl(url)) {
+    return processYouTubeChannel(url, opts);
   }
 
   const resolved = await provider.resolve(url, {
@@ -258,6 +266,101 @@ async function processPinterestBoard(
   }
 
   return { results, errors, provider: providerId, kind: "batch" };
+}
+
+async function processYouTubeChannel(
+  url: string,
+  opts: ProcessBoardOptions
+): Promise<DownloadResult> {
+  const ytOpts = { ...DEFAULT_YOUTUBE_OPTIONS, ...opts.youtube };
+  const maxVideos = ytOpts.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos;
+  const channel = await resolveYouTubeChannel(url, {
+    maxVideos,
+    signal: opts.signal,
+  });
+
+  if (channel.videos.length === 0) {
+    throw new Error(
+      channel.channelTitle
+        ? `No videos found on channel “${channel.channelTitle}”.`
+        : "No videos found on this YouTube channel."
+    );
+  }
+
+  opts.onProgress?.({
+    current: 0,
+    total: channel.videos.length,
+    url,
+    title: channel.channelTitle,
+    phase: "resolved",
+    percent: 0,
+  });
+
+  const delayMs = opts.delayMs ?? 400;
+  const itemConcurrency = Math.max(1, Math.min(2, opts.itemConcurrency ?? 2));
+  const outDir =
+    ytOpts.organizeByChannel && channel.channelTitle
+      ? path.join(opts.outDir, sanitizeFilename(channel.channelTitle))
+      : opts.outDir;
+
+  const outcomes = await mapPool(channel.videos, itemConcurrency, async (video, i) => {
+    if (i > 0 && delayMs > 0) await sleep(Math.min(delayMs, 400));
+    opts.signal?.throwIfAborted?.();
+    try {
+      const media = await resolveYouTubeVideo(video.url, {
+        format: opts.format ?? "best",
+        youtube: opts.youtube,
+        outDir,
+        extractorUrl: opts.extractorUrl,
+        fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+        signal: opts.signal,
+        onByteProgress: (p) => {
+          const percent =
+            p.total && p.total > 0
+              ? Math.min(99, Math.round((p.downloaded / p.total) * 100))
+              : undefined;
+          opts.onProgress?.({
+            current: i,
+            total: channel.videos.length,
+            url: video.url,
+            title: video.title ?? channel.channelTitle,
+            percent,
+            downloaded: p.downloaded,
+            totalBytes: p.total,
+            phase: p.phase ?? "download",
+          });
+        },
+      });
+      const result = await writeResolved(media, { ...opts, outDir });
+      opts.onProgress?.({
+        current: i + 1,
+        total: channel.videos.length,
+        url: video.url,
+        title: result.title ?? video.title,
+        result,
+        percent: Math.round(((i + 1) / channel.videos.length) * 100),
+      });
+      return { ok: true as const, index: i, result, url: video.url };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      opts.onProgress?.({
+        current: i + 1,
+        total: channel.videos.length,
+        url: video.url,
+        error: message,
+      });
+      return { ok: false as const, index: i, error: message, url: video.url };
+    }
+  });
+
+  const results: ProcessResult[] = [];
+  const errors: { url: string; error: string }[] = [];
+  for (const o of outcomes) {
+    if (o.ok) results.push(o.result);
+    else errors.push({ url: o.url, error: o.error });
+  }
+
+  return { results, errors, provider: "youtube", kind: "batch" };
 }
 
 /** @deprecated Prefer processMedia — kept for desktop IPC compatibility. */
