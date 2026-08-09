@@ -11,6 +11,16 @@ import type { PlatformFilter } from "./PlatformSelectionBar";
 
 export type ChatRole = "user" | "assistant";
 
+export type ChatDownloadResult = {
+  outPath: string;
+  originalPath?: string;
+  title?: string;
+  sourceUrl: string;
+  provider?: string;
+  kind?: string;
+  packId?: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -18,8 +28,12 @@ export type ChatMessage = {
   url?: string;
   detected?: DetectedProvider | null;
   extract?: ExtractPreview | null;
-  status?: "detecting" | "ready" | "error" | "started";
+  status?: "detecting" | "ready" | "error" | "started" | "done" | "failed";
   pendingConfirm?: boolean;
+  /** Single-item download result card (shown when done). */
+  result?: ChatDownloadResult | null;
+  /** Batch download result cards. */
+  results?: ChatDownloadResult[];
 };
 
 type HomeChatState = {

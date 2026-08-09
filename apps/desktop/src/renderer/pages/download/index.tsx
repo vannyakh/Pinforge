@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Select, Spin, Switch, Tooltip } from "@arco-design/web-react";
-import { ArrowUp, FolderOpen, Plus, Clear } from "@icon-park/react";
+import { Button, Select, Spin, Switch } from "@arco-design/web-react";
+import { ArrowRightUp } from "@icon-park/react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import {
   api,
@@ -17,8 +18,13 @@ import PlatformSelectionBar from "./PlatformSelectionBar";
 import {
   selectPendingConfirm,
   useHomeChatStore,
+  type ChatDownloadResult,
   type ChatMessage,
 } from "./homeChatStore";
+import GuidHomeInputCard from "./guid/GuidHomeInputCard";
+import GuidHomeActionRow from "./guid/GuidHomeActionRow";
+import styles from "./guid/guid.module.css";
+import "./guid/guid-sendbox.css";
 
 const SUGGESTIONS = [
   {
@@ -45,6 +51,13 @@ function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Pull one or more http(s) links from pasted text (newline / space separated). */
+function parseMediaUrls(raw: string): string[] {
+  const matches = raw.match(/https?:\/\/[^\s<>"'`]+/gi) ?? [];
+  const cleaned = matches.map((u) => u.replace(/[),.;]+$/g, "").trim()).filter(Boolean);
+  return [...new Set(cleaned)];
+}
+
 function toDetected(extract: ExtractPreview): DetectedProvider {
   return {
     id: extract.provider.id,
@@ -69,6 +82,7 @@ function describeExtract(extract: ExtractPreview): string {
 }
 
 const DownloadPage: React.FC = () => {
+  const navigate = useNavigate();
   const { settings, busy, processUrl, updateSettings } = useApp();
 
   const url = useHomeChatStore((s) => s.url);
@@ -151,65 +165,167 @@ const DownloadPage: React.FC = () => {
   const showYoutubeConfirm = pendingConfirmMsg?.detected?.id === "youtube";
 
   const startDownload = async (
-    targetUrl: string,
-    opts: { format: FormatPreset; enhance: boolean; youtube?: Partial<YoutubeDownloadOptions> }
+    targetUrls: string | string[],
+    opts: {
+      format: FormatPreset;
+      enhance: boolean;
+      youtube?: Partial<YoutubeDownloadOptions>;
+      assistantId: string;
+    }
   ) => {
-    await processUrl(targetUrl, {
-      enhance: opts.enhance,
-      format: opts.format,
-      youtube: opts.youtube,
-    });
+    const urls = Array.isArray(targetUrls) ? targetUrls : [targetUrls];
+    const collected: ChatDownloadResult[] = [];
+    let failCount = 0;
+
+    for (let i = 0; i < urls.length; i++) {
+      const targetUrl = urls[i];
+      mapMessages((prev) =>
+        prev.map((m) =>
+          m.id === opts.assistantId
+            ? {
+                ...m,
+                text:
+                  urls.length > 1
+                    ? `Downloading ${i + 1} of ${urls.length}…`
+                    : `${(m.text || "").split("\n")[0]}\nStarting download…`,
+                status: "started",
+                results: collected.length ? [...collected] : m.results,
+              }
+            : m
+        )
+      );
+
+      const res = await processUrl(targetUrl, {
+        enhance: opts.enhance,
+        format: opts.format,
+        youtube: opts.youtube,
+      });
+
+      if (!res || res.results.length === 0) {
+        failCount += 1;
+        continue;
+      }
+
+      for (const item of res.results) {
+        collected.push({
+          outPath: item.outPath,
+          originalPath: item.originalPath,
+          title: item.title,
+          sourceUrl: item.sourceUrl || targetUrl,
+          provider: item.provider ?? res.provider,
+          kind: item.kind,
+          packId: res.packId,
+        });
+      }
+
+      // Progressive cards while batch runs
+      if (urls.length > 1) {
+        mapMessages((prev) =>
+          prev.map((m) =>
+            m.id === opts.assistantId
+              ? {
+                  ...m,
+                  results: [...collected],
+                  result: collected.length === 1 ? collected[0] : null,
+                }
+              : m
+          )
+        );
+      }
+    }
+
+    const ok = collected.length;
+    if (ok === 0) {
+      mapMessages((prev) =>
+        prev.map((m) =>
+          m.id === opts.assistantId
+            ? {
+                ...m,
+                text: "Download failed.",
+                status: "failed",
+                result: null,
+                results: [],
+              }
+            : m
+        )
+      );
+      return;
+    }
+
+    mapMessages((prev) =>
+      prev.map((m) =>
+        m.id === opts.assistantId
+          ? {
+              ...m,
+              text:
+                urls.length > 1
+                  ? `Download complete — ${ok} saved${failCount ? `, ${failCount} failed` : ""}.`
+                  : "Download complete.",
+              status: failCount && !ok ? "failed" : "done",
+              result: ok === 1 ? collected[0] : null,
+              results: collected,
+            }
+          : m
+      )
+    );
   };
 
   const handleExtract = async (raw: string) => {
-    const target = raw.trim();
-    if (!target || !settings.outDir || busy || extracting) return;
+    const urls = parseMediaUrls(raw);
+    if (urls.length === 0 || !settings.outDir || busy || extracting) return;
 
+    const displayText = raw.trim();
     setUrl("");
     setExtracting(true);
 
     const userMsg: ChatMessage = {
       id: uid(),
       role: "user",
-      text: target,
-      url: target,
+      text: displayText,
+      url: urls[0],
     };
     const assistantId = uid();
     const detectingMsg: ChatMessage = {
       id: assistantId,
       role: "assistant",
-      text: "Extracting source…",
-      url: target,
+      text:
+        urls.length > 1
+          ? `Found ${urls.length} links. Extracting…`
+          : "Extracting source…",
+      url: urls[0],
       status: "detecting",
     };
     appendMessages([userMsg, detectingMsg]);
 
-    let extract: ExtractPreview | null = null;
-    try {
-      extract = await api.extractPreview(target);
-    } catch (err) {
-      extract = {
-        sourceUrl: target,
-        provider: { id: "unknown", label: "Unknown", live: false },
-        mode: "single",
-        modeSupported: false,
-        formats: [],
-        supportedModes: [],
-        items: [],
-        itemCount: 0,
-        message: err instanceof Error ? err.message : String(err),
-      };
+    // Batch: probe first URL for formats/provider defaults, download all live singles
+    const extracts: ExtractPreview[] = [];
+    for (const u of urls) {
+      try {
+        extracts.push(await api.extractPreview(u));
+      } catch (err) {
+        extracts.push({
+          sourceUrl: u,
+          provider: { id: "unknown", label: "Unknown", live: false },
+          mode: "single",
+          modeSupported: false,
+          formats: [],
+          supportedModes: [],
+          items: [],
+          itemCount: 0,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
-    const detected = toDetected(extract);
-    const replyText = describeExtract(extract);
-    const canDownload = Boolean(
-      extract.modeSupported && extract.provider.live && extract.itemCount > 0
+    const downloadable = extracts.filter(
+      (e) => e.modeSupported && e.provider.live && e.itemCount > 0
     );
-    const shouldAuto = autoDownload && canDownload;
+    const primary = downloadable[0] ?? extracts[0];
+    const detected = toDetected(primary);
+    const isBatch = urls.length > 1;
 
-    const formats = extract.formats?.length
-      ? extract.formats
+    const formats = primary.formats?.length
+      ? primary.formats
       : (["best", "mp4", "audio-only"] as FormatPreset[]);
     const nextFormat = (
       formats.includes(settings.format) ? settings.format : formats[0]
@@ -220,6 +336,47 @@ const DownloadPage: React.FC = () => {
     setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
     setConfirmSubs(settings.youtube?.subtitles ?? "separate");
 
+    if (downloadable.length === 0) {
+      mapMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                text: isBatch
+                  ? `None of the ${urls.length} links can be downloaded yet.`
+                  : describeExtract(primary),
+                detected,
+                extract: primary,
+                status: "error",
+                pendingConfirm: false,
+              }
+            : m
+        )
+      );
+      setExtracting(false);
+      return;
+    }
+
+    const replyText = isBatch
+      ? `Ready to download ${downloadable.length} of ${urls.length} links.`
+      : describeExtract(primary);
+    const shouldAuto = autoDownload;
+    const downloadUrls = downloadable.map((e) => e.sourceUrl);
+    // Prefer first extract as message extract meta (mode chip)
+    const extractForMsg: ExtractPreview = isBatch
+      ? {
+          ...primary,
+          mode: "single",
+          itemCount: downloadable.length,
+          items: downloadable.map((e, i) => ({
+            index: i + 1,
+            url: e.sourceUrl,
+            title: e.title,
+          })),
+          message: replyText,
+        }
+      : primary;
+
     if (shouldAuto) {
       mapMessages((prev) =>
         prev.map((m) =>
@@ -228,7 +385,7 @@ const DownloadPage: React.FC = () => {
                 ...m,
                 text: `${replyText}\nStarting download…`,
                 detected,
-                extract,
+                extract: extractForMsg,
                 status: "started",
                 pendingConfirm: false,
               }
@@ -236,9 +393,10 @@ const DownloadPage: React.FC = () => {
         )
       );
       setExtracting(false);
-      void startDownload(target, {
+      void startDownload(downloadUrls, {
         format: nextFormat,
         enhance: settings.enhance,
+        assistantId,
         youtube:
           detected.id === "youtube"
             ? {
@@ -256,13 +414,12 @@ const DownloadPage: React.FC = () => {
         m.id === assistantId
           ? {
               ...m,
-              text: canDownload
-                ? `${replyText}\nConfirm options below to start the download.`
-                : replyText,
+              text: `${replyText}\nConfirm options below to start the download.`,
               detected,
-              extract,
-              status: canDownload ? "ready" : "error",
-              pendingConfirm: canDownload,
+              extract: extractForMsg,
+              status: "ready",
+              pendingConfirm: true,
+              // stash all downloadable URLs on extract items for confirm
             }
           : { ...m, pendingConfirm: false }
       )
@@ -272,7 +429,18 @@ const DownloadPage: React.FC = () => {
 
   const confirmDownload = () => {
     const msg = pendingConfirmMsg;
-    if (!msg?.url || !msg.detected?.live || !msg.extract?.modeSupported) return;
+    if (!msg?.detected?.live || !msg.extract) return;
+
+    const batchUrls =
+      msg.extract.itemCount > 1 && msg.extract.items.length > 0
+        ? [...new Set(msg.extract.items.map((i) => i.url))]
+        : msg.url
+          ? [msg.url]
+          : msg.extract.sourceUrl
+            ? [msg.extract.sourceUrl]
+            : [];
+    if (batchUrls.length === 0) return;
+
     mapMessages((prev) =>
       prev.map((m) =>
         m.id === msg.id
@@ -285,9 +453,10 @@ const DownloadPage: React.FC = () => {
           : m
       )
     );
-    void startDownload(msg.url, {
+    void startDownload(batchUrls, {
       format: confirmFormat,
       enhance: showEnhanceConfirm ? confirmEnhance : false,
+      assistantId: msg.id,
       youtube:
         msg.detected?.id === "youtube"
           ? {
@@ -362,134 +531,68 @@ const DownloadPage: React.FC = () => {
     </div>
   ) : null;
 
+  const showEnhanceToolbar = filter === "auto" || filter === "pinterest";
+
+  const actionRow = (
+    <GuidHomeActionRow
+      hasUrl={hasUrl}
+      loading={extracting || busy}
+      disabled={!canSubmit}
+      format={confirmFormat}
+      enhance={confirmEnhance}
+      showEnhance={showEnhanceToolbar}
+      onPasteOrClear={() => {
+        if (hasUrl) clearUrl();
+        else void pasteFromClipboard();
+      }}
+      onFormatChange={(f) => {
+        setConfirmFormat(f);
+        void updateSettings({ format: f });
+      }}
+      onEnhanceChange={(v) => {
+        setConfirmEnhance(v);
+        void updateSettings({ enhance: v });
+      }}
+      onOpenSettings={() => void navigate("/settings/download")}
+      onSend={() => void handleExtract(url)}
+    />
+  );
+
   const composer = (
     <div className="home-composer-stack">
       {hasChat && processingChip}
-      <div className={`home-composer-shell ${inputFocused ? "is-active" : ""}`}>
-        <div className="home-composer-card">
-          <div className="home-composer-card__body">
-            <textarea
-              ref={textareaRef}
-              className="home-composer-card__textarea home-composer-card__textarea--chat"
-              placeholder="Paste a media URL, or type a link to download…"
-              value={url}
-              disabled={busy || extracting}
-              rows={2}
-              onFocus={() => setInputFocused(true)}
-              onBlur={() => setInputFocused(false)}
-              onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void handleExtract(url);
-                }
-              }}
-            />
-
-            <div className="home-composer-card__toolbar">
-              <div className="flex items-center gap-8px min-w-0">
-                <Tooltip content={hasUrl ? "Clear" : "Paste from clipboard"}>
-                  <button
-                    type="button"
-                    className="home-icon-btn"
-                    disabled={busy || extracting}
-                    aria-label={hasUrl ? "Clear" : "Paste from clipboard"}
-                    onClick={() => {
-                      if (hasUrl) clearUrl();
-                      else void pasteFromClipboard();
-                    }}
-                  >
-                    {hasUrl ? (
-                      <Clear theme="outline" size="16" fill="currentColor" strokeWidth={3} />
-                    ) : (
-                      <Plus theme="outline" size="16" fill="currentColor" strokeWidth={3} />
-                    )}
-                  </button>
-                </Tooltip>
-              </div>
-
-              <div className="flex items-center gap-6px shrink-0">
-                <button
-                  type="button"
-                  className="home-send-btn"
-                  disabled={!canSubmit}
-                  aria-label="Send"
-                  onClick={() => void handleExtract(url)}
-                >
-                  {extracting || busy ? (
-                    <span className="home-send-btn__spin" />
-                  ) : (
-                    <ArrowUp theme="filled" size="18" fill="currentColor" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        className="home-workspace-footnote"
-        onClick={async () => {
-          const dir = await api.pickFolder();
-          if (dir) await updateSettings({ outDir: dir });
+      <GuidHomeInputCard
+        input={url}
+        onInputChange={setUrl}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void handleExtract(url);
+          }
         }}
-      >
-        <FolderOpen theme="outline" size="14" fill="currentColor" strokeWidth={3} />
-        <span className="truncate max-w-280px">
-          {settings.outDir ? settings.outDir : "Work in a folder"}
-        </span>
-      </button>
+        onFocus={() => setInputFocused(true)}
+        onBlur={() => setInputFocused(false)}
+        isInputActive={inputFocused}
+        disabled={busy || extracting}
+        actionRow={actionRow}
+        workspaceDir={settings.outDir || ""}
+        onSelectWorkspace={(dir) => void updateSettings({ outDir: dir })}
+        textareaRef={textareaRef}
+      />
     </div>
   );
 
   return (
-    <div className="home-hero flex flex-col h-full min-h-0 -m-24px">
-      <div
-        className={`home-hero__stage flex-1 min-h-0 flex flex-col ${
-          hasChat
-            ? "home-hero__stage--chat justify-start"
-            : "items-center justify-center px-16px pb-40px"
-        }`}
-      >
-        <div
-          className={`home-guid-layout w-full ${
-            hasChat ? "home-guid-layout--chat flex flex-col flex-1 min-h-0" : ""
-          }`}
-        >
-          {!hasChat && (
-            <>
-              <div className="home-hero__header">
-                <h1 className="home-hero__greeting m-0 text-t-primary text-center">
-                  Hi, what do you want to download?
-                </h1>
-              </div>
-
-              <PlatformSelectionBar value={filter} onChange={(id) => setFilter(id)} />
-
-              {composer}
-
-              <div className="home-suggest mt-18px w-full">
-                <div className="home-suggest__title">Try these</div>
-                <ul className="home-suggest__list">
-                  {SUGGESTIONS.map((s) => (
-                    <li key={s.label}>
-                      <button
-                        type="button"
-                        className="home-suggest__item"
-                        onClick={() => applySuggestion(s)}
-                      >
-                        {s.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </>
-          )}
-
-          {hasChat && (
+    <div
+      className={
+        hasChat
+          ? "home-hero flex flex-col h-full min-h-0 -m-24px"
+          : styles.guidContainer
+      }
+    >
+      {hasChat ? (
+        <div className="home-hero__stage home-hero__stage--chat flex-1 min-h-0 flex flex-col justify-start">
+          <div className="home-guid-layout home-guid-layout--chat w-full flex flex-col flex-1 min-h-0">
             <div className="home-chat-layout flex flex-col flex-1 min-h-0 w-full chat-surface-container px-20px">
               <div className="home-chat flex-1 min-h-0 overflow-y-auto -mx-20px px-20px pb-10px box-border">
                 <div className="home-chat__thread chat-surface-fluid">
@@ -519,22 +622,103 @@ const DownloadPage: React.FC = () => {
                                 {msg.detected.label}
                               </span>
                               {extract && (
-                                <span className="home-chat__mode-chip">{extract.mode}</span>
+                                <span className="home-chat__mode-chip">
+                                  {extract.itemCount > 1 && extract.mode === "single"
+                                    ? `batch · ${extract.itemCount}`
+                                    : extract.mode}
+                                </span>
                               )}
                               <span className="home-chat__status">
                                 {msg.status === "detecting"
                                   ? "Extracting"
                                   : msg.status === "started"
                                     ? "Downloading"
-                                    : extract?.modeSupported
-                                      ? "Ready"
-                                      : "Unsupported"}
+                                    : msg.status === "done"
+                                      ? "Done"
+                                      : msg.status === "failed"
+                                        ? "Failed"
+                                        : extract?.modeSupported
+                                          ? "Ready"
+                                          : "Unsupported"}
                               </span>
                             </div>
                           )}
-                          <div className="home-chat__text whitespace-pre-wrap">{msg.text}</div>
+                          {(() => {
+                            const cards: ChatDownloadResult[] =
+                              msg.results && msg.results.length > 0
+                                ? msg.results
+                                : msg.result
+                                  ? [msg.result]
+                                  : [];
+                            const showCards =
+                              msg.role === "assistant" &&
+                              cards.length > 0 &&
+                              (msg.status === "done" || msg.status === "started");
+                            const hideText = showCards && msg.status === "done" && cards.length >= 1;
+                            return (
+                              <>
+                                {!hideText && (
+                                  <div className="home-chat__text whitespace-pre-wrap">{msg.text}</div>
+                                )}
+                                {showCards && (
+                                  <div className="home-result-list">
+                                    {cards.map((card) => (
+                                      <div
+                                        key={`${card.outPath}-${card.sourceUrl}`}
+                                        className="home-result-card"
+                                      >
+                                        <div className="home-result-card__thumb">
+                                          {isImagePath(card.outPath) ? (
+                                            <img src={toMediaUrl(card.outPath)} alt="" />
+                                          ) : (
+                                            <span className="home-result-card__kind">
+                                              {(card.kind || "file").toUpperCase()}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="home-result-card__body">
+                                          <div className="home-result-card__title">
+                                            {card.title || fileNameFromPath(card.outPath)}
+                                          </div>
+                                          <div className="home-result-card__meta">
+                                            Saved
+                                            {card.kind ? ` · ${card.kind}` : ""}
+                                            {card.provider ? ` · ${card.provider}` : ""}
+                                          </div>
+                                          <div className="home-result-card__actions">
+                                            <Button
+                                              size="mini"
+                                              type="secondary"
+                                              onClick={() =>
+                                                void api.showItemInFolder(card.outPath)
+                                              }
+                                            >
+                                              Show in folder
+                                            </Button>
+                                            <Button
+                                              size="mini"
+                                              type="text"
+                                              onClick={() => void api.openPath(card.outPath)}
+                                            >
+                                              Open
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
 
-                          {msg.role === "assistant" && extract && msg.status !== "detecting" && (
+                          {msg.role === "assistant" &&
+                            extract &&
+                            msg.status !== "detecting" &&
+                            msg.status !== "done" &&
+                            msg.status !== "started" &&
+                            (extract.mode !== "single" || extract.itemCount > 1) &&
+                            !(msg.results && msg.results.length > 0) && (
                             <div className="home-extract">
                               <div className="home-extract__section">
                                 <div className="home-extract__label">Source</div>
@@ -688,7 +872,15 @@ const DownloadPage: React.FC = () => {
                                     onChange={(v) => setConfirmYtQuality(v as YoutubeQuality)}
                                   >
                                     {(
-                                      ["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]
+                                      [
+                                        "best",
+                                        "2160",
+                                        "1440",
+                                        "1080",
+                                        "720",
+                                        "480",
+                                        "360",
+                                      ] as YoutubeQuality[]
                                     ).map((q) => (
                                       <Select.Option key={q} value={q}>
                                         {q === "best" ? "Best" : `${q}p`}
@@ -764,20 +956,65 @@ const DownloadPage: React.FC = () => {
               </div>
 
               <div className="home-chat__sendbox shrink-0">
-                <div className="chat-surface-fluid home-chat__sendbox-inner">
-                  {composer}
-                </div>
+                <div className="chat-surface-fluid home-chat__sendbox-inner">{composer}</div>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className={styles.guidLayout}>
+          <div className={styles.heroHeader}>
+            <p className="text-2xl font-semibold mb-0 text-t-primary text-center">
+              Hi, what do you want to download?
+            </p>
+          </div>
+
+          <PlatformSelectionBar value={filter} onChange={(id) => setFilter(id)} />
+
+          {composer}
+
+          <div className="mt-18px w-full pl-20px">
+            <div className={`${styles.assistantPromptHint} mb-10px text-left`}>
+              Try these example links:
+            </div>
+            <div className="flex flex-col gap-9px">
+              {SUGGESTIONS.map((s) => (
+                <Button
+                  key={s.label}
+                  type="text"
+                  className="group !h-auto !w-full !border-none !bg-transparent !px-0 !py-6px !text-left !text-12.5px !text-t-secondary !whitespace-normal !break-words transition-colors hover:!bg-transparent hover:!text-t-primary"
+                  onClick={() => applySuggestion(s)}
+                >
+                  <span>{s.label}</span>
+                  <ArrowRightUp
+                    theme="outline"
+                    size="13"
+                    className="ml-6px inline-flex flex-shrink-0 align-[-1px] text-t-primary opacity-0 transition-opacity group-hover:opacity-100"
+                  />
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 function platformMetaFor(id: string) {
   return PLATFORMS.find((p: (typeof PLATFORMS)[number]) => p.id === id) ?? null;
+}
+
+function toMediaUrl(p: string): string {
+  return `pinmedia://${p.replace(/\\/g, "/")}`;
+}
+
+function isImagePath(p: string): boolean {
+  return /\.(png|jpe?g|webp|gif)$/i.test(p);
+}
+
+function fileNameFromPath(p: string): string {
+  return p.split(/[/\\]/).filter(Boolean).pop() || p;
 }
 
 export default DownloadPage;

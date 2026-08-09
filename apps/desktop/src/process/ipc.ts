@@ -29,6 +29,7 @@ import {
   installProviderFromSource,
   readProviderManifest,
 } from "./providerInstall";
+import { getFfmpegStatus, installFfmpeg, resolveConfiguredFfmpeg } from "./ffmpegInstall";
 
 function emitProgress(
   e: IpcMainInvokeEvent,
@@ -153,6 +154,14 @@ async function runProcess(
   });
 
   try {
+    const { configureFfmpeg } = await import("@pinterest-desktop/core");
+    const ffPath = await resolveConfiguredFfmpeg();
+    const system = store.get("system");
+    configureFfmpeg({
+      path: ffPath ?? system.ffmpegPath ?? undefined,
+      enabled: Boolean(system.ffmpegEnabled) && Boolean(ffPath),
+    });
+
     const res = await processMedia(url, {
       preset,
       outDir,
@@ -398,6 +407,13 @@ export function registerIpc(): void {
       if (partial.system !== undefined) {
         const next = { ...store.get("system"), ...partial.system };
         store.set("system", next);
+        if (next.ffmpegEnabled) {
+          const check = await getFfmpegStatus();
+          if (!check.available) {
+            next.ffmpegEnabled = false;
+            store.set("system", next);
+          }
+        }
         applySystemPrefs(next);
       }
       return {
@@ -625,5 +641,35 @@ export function registerIpc(): void {
 
   ipcMain.handle("window:isMaximized", (e) => {
     return BrowserWindow.fromWebContents(e.sender)?.isMaximized() ?? false;
+  });
+
+  ipcMain.handle("tools:ffmpegStatus", async () => getFfmpegStatus());
+
+  ipcMain.handle("tools:ffmpegInstall", async (e) => {
+    const send = (payload: {
+      phase: string;
+      percent: number;
+      message: string;
+    }) => {
+      e.sender.send("tools:ffmpegProgress", payload);
+    };
+    return installFfmpeg((ev) => send(ev));
+  });
+
+  ipcMain.handle("tools:ffmpegPick", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters:
+        process.platform === "win32"
+          ? [{ name: "ffmpeg", extensions: ["exe"] }]
+          : [{ name: "ffmpeg", extensions: ["*"] }],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const bin = res.filePaths[0];
+    const store = getStore();
+    const system = store.get("system");
+    store.set("system", { ...system, ffmpegPath: bin });
+    const status = await getFfmpegStatus();
+    return status;
   });
 }

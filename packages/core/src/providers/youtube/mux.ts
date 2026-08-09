@@ -3,12 +3,33 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 let ffmpegPathCache: string | null | undefined;
+let configuredPath: string | undefined;
+let configuredEnabled = true;
+
+/** Desktop main calls this so System settings control mux/convert/tag. */
+export function configureFfmpeg(opts: { path?: string; enabled?: boolean }): void {
+  configuredPath = opts.path?.trim() || undefined;
+  if (opts.enabled !== undefined) configuredEnabled = opts.enabled;
+  ffmpegPathCache = undefined;
+}
+
+export function clearFfmpegCache(): void {
+  ffmpegPathCache = undefined;
+}
 
 export async function resolveFfmpeg(): Promise<string | null> {
+  if (!configuredEnabled) return null;
   if (ffmpegPathCache !== undefined) return ffmpegPathCache;
-  const candidates = ["ffmpeg", "ffmpeg.exe"];
+
+  const candidates = [
+    configuredPath,
+    process.platform === "win32" ? "ffmpeg.exe" : undefined,
+    "ffmpeg",
+  ].filter(Boolean) as string[];
+
   for (const bin of candidates) {
     try {
+      if (path.isAbsolute(bin)) await fs.access(bin);
       await runFfmpeg(bin, ["-version"]);
       ffmpegPathCache = bin;
       return bin;
@@ -21,7 +42,7 @@ export async function resolveFfmpeg(): Promise<string | null> {
 }
 
 export function requireFfmpegMessage(): string {
-  return "ffmpeg not found on PATH. Install ffmpeg to merge DASH streams, convert audio, or embed metadata/subtitles.";
+  return "ffmpeg is not available. Install it in Settings → System, then enable ffmpeg tools.";
 }
 
 async function runFfmpeg(bin: string, args: string[]): Promise<void> {
@@ -98,12 +119,8 @@ export async function embedMetadata(opts: {
   await fs.mkdir(path.dirname(opts.outPath), { recursive: true });
 
   const args = ["-y", "-i", opts.inputPath];
-  if (opts.thumbnailPath) {
-    args.push("-i", opts.thumbnailPath);
-  }
-  if (opts.subtitlePath) {
-    args.push("-i", opts.subtitlePath);
-  }
+  if (opts.thumbnailPath) args.push("-i", opts.thumbnailPath);
+  if (opts.subtitlePath) args.push("-i", opts.subtitlePath);
 
   args.push("-map", "0");
   if (opts.thumbnailPath) {

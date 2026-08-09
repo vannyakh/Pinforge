@@ -97,4 +97,10 @@ export const api = {
   openPath: (filePath: string) => window.api.openPath(filePath),
   openExternal: (url: string) => window.api.openExternal(url),
   onMediaProgress: (cb: (event: MediaProgressEvent) => void) => window.api.onMediaProgress(cb),
+  ffmpegStatus: () => window.api.ffmpegStatus(),
+  ffmpegInstall: () => window.api.ffmpegInstall(),
+  ffmpegPick: () => window.api.ffmpegPick(),
+  onFfmpegProgress: (
+    cb: (event: { phase: string; percent: number; message: string }) => void
+  ) => window.api.onFfmpegProgress(cb),
 };

@@ -1,8 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Button, Tooltip } from "@arco-design/web-react";
-import { Down, SettingTwo } from "@icon-park/react";
-import { useNavigate } from "react-router-dom";
+import { Button } from "@arco-design/web-react";
+import { Down } from "@icon-park/react";
 import { PlatformIcon, PLATFORMS, type PlatformId } from "./platforms";
+import styles from "./guid/guid.module.css";
 
 export type PlatformFilter = PlatformId | "auto";
 
@@ -38,13 +38,13 @@ interface PlatformSelectionBarProps {
   maxVisible?: number;
 }
 
+/** AionUI AssistantSelectionArea layout — platform pills. */
 const PlatformSelectionBar: React.FC<PlatformSelectionBarProps> = ({
   value,
   detectedId = null,
   onChange,
   maxVisible = 4,
 }) => {
-  const navigate = useNavigate();
   const [moreVisible, setMoreVisible] = useState(false);
   const [availableWidth, setAvailableWidth] = useState(() =>
     typeof window === "undefined" ? 800 : window.innerWidth
@@ -155,48 +155,57 @@ const PlatformSelectionBar: React.FC<PlatformSelectionBarProps> = ({
   const renderPill = (option: PlatformOption, fullWidth = false) => {
     const isSelected = selectedId === option.id;
     return (
-      <button
+      <Button
         key={option.id}
-        type="button"
+        type="text"
         data-platform-id={option.id}
         data-platform-selected={isSelected ? "true" : "false"}
-        className={`home-platform-pill ${isSelected ? "is-active" : "is-inactive"} ${
-          fullWidth ? "home-platform-pill--full" : ""
+        className={`!inline-flex !min-w-0 !h-auto !items-center !gap-6px !rounded-999px !border-none !px-12px !py-8px !text-13px transition-all ${
+          fullWidth ? "!w-full !justify-start" : ""
+        } ${
+          isSelected
+            ? "font-600 text-t-primary shadow-sm"
+            : `text-t-secondary opacity-75 hover:opacity-100 ${styles.assistantSelectorInactive}`
         }`}
+        style={isSelected ? { background: "var(--bg-base, #fff)" } : { background: "transparent" }}
         onClick={() => {
           onChange(option.id);
           setMoreVisible(false);
         }}
       >
-        <span className="home-platform-pill__avatar">
+        <span className="inline-flex h-20px w-20px items-center justify-center overflow-hidden rounded-999px bg-fill-2">
           {option.id === "auto" ? (
-            <span className="home-platform-pill__dot home-platform-pill__dot--auto" />
+            <span
+              className="inline-block h-8px w-8px rounded-999px"
+              style={{ background: "var(--text-secondary)" }}
+            />
           ) : (
             <PlatformIcon id={option.id} size={14} />
           )}
         </span>
-        <span data-platform-label="true" className="home-platform-pill__label">
+        <span data-platform-label="true" className="min-w-0 max-w-180px truncate whitespace-nowrap">
           {option.label}
         </span>
-      </button>
+      </Button>
     );
   };
 
   return (
-    <div ref={containerRef} className="home-platform-bar-wrap">
-      <div className="home-platform-bar-center">
+    <div ref={containerRef} className="mt-18px mb-16px w-full">
+      <div className="flex w-full justify-center">
         <div
           ref={barRef}
-          className="home-platform-bar"
-          onMouseEnter={handleBarMouseEnter}
-          onMouseLeave={handleBarMouseLeave}
+          className="relative inline-flex max-w-full items-center rounded-999px px-6px py-6px"
+          style={{ background: "var(--color-guid-agent-bar, var(--aou-2))" }}
+          onMouseEnter={hasOverflow ? handleBarMouseEnter : undefined}
+          onMouseLeave={hasOverflow ? handleBarMouseLeave : undefined}
         >
-          <div className="home-platform-bar__row">
+          <div className="flex min-w-0 max-w-full items-center gap-6px">
             {visibleOptions.map((option) => renderPill(option))}
             {hasOverflow ? (
               <Button
                 type="text"
-                className="home-platform-more"
+                className={`!ml-6px !inline-flex !h-34px !shrink-0 !items-center !gap-4px !rounded-999px !border-none !px-12px !py-8px !text-13px !text-t-secondary opacity-75 transition-opacity hover:opacity-100 ${styles.assistantSelectorInactive}`}
                 onClick={() => setMoreVisible((v) => !v)}
               >
                 <span>More</span>
@@ -207,8 +216,13 @@ const PlatformSelectionBar: React.FC<PlatformSelectionBarProps> = ({
 
           {hasOverflow && moreVisible ? (
             <div
-              className="home-platform-overflow"
-              style={{ gridTemplateColumns: `repeat(${overflowColumns}, minmax(0, 1fr))` }}
+              className={`absolute left-0 top-[calc(100%+8px)] z-100 w-full rounded-12px border border-border-2 p-8px shadow-lg ${styles.assistantOverflowPanel}`}
+              style={{
+                background: "var(--bg-base, #fff)",
+                gridTemplateColumns: `repeat(${overflowColumns}, minmax(0, 1fr))`,
+                display: "grid",
+                gap: 6,
+              }}
             >
               {overflowOptions.map((option) => (
                 <div key={option.id} className="min-w-0">
@@ -218,17 +232,6 @@ const PlatformSelectionBar: React.FC<PlatformSelectionBarProps> = ({
             </div>
           ) : null}
         </div>
-
-        <Tooltip content="Download settings">
-          <button
-            type="button"
-            className="home-platform-config"
-            aria-label="Download settings"
-            onClick={() => void navigate("/settings/download")}
-          >
-            <SettingTwo theme="outline" size="16" fill="currentColor" strokeWidth={3} />
-          </button>
-        </Tooltip>
       </div>
     </div>
   );

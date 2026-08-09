@@ -54,6 +54,10 @@ export interface SystemConfig {
   tempDir: string;
   /** Empty = userData/logs */
   logDir: string;
+  /** Absolute path to ffmpeg binary (optional). */
+  ffmpegPath: string;
+  /** When true and available, YouTube mux/convert/tag tools use ffmpeg. */
+  ffmpegEnabled: boolean;
 }
 
 export const DEFAULT_SYSTEM: SystemConfig = {
@@ -65,6 +69,8 @@ export const DEFAULT_SYSTEM: SystemConfig = {
   notifyOnDownloadComplete: true,
   tempDir: "",
   logDir: "",
+  ffmpegPath: "",
+  ffmpegEnabled: false,
 };
 
 export interface AppStoreSchema {

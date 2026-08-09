@@ -133,6 +133,8 @@ export interface SystemConfig {
   notifyOnDownloadComplete: boolean;
   tempDir: string;
   logDir: string;
+  ffmpegPath: string;
+  ffmpegEnabled: boolean;
 }
 
 export interface FormatPluginConfig {
@@ -316,6 +318,7 @@ const api = {
       | "enhanceFeatures"
       | "autoDownload"
       | "format"
+      | "youtube"
       | "extractorUrl"
       | "system"
     >
@@ -344,6 +347,41 @@ const api = {
     const listener = (_e: Electron.IpcRendererEvent, payload: MediaProgressEvent) => cb(payload);
     ipcRenderer.on("media:progress", listener);
     return () => ipcRenderer.removeListener("media:progress", listener);
+  },
+
+  ffmpegStatus: (): Promise<{
+    available: boolean;
+    enabled: boolean;
+    path: string;
+    version?: string;
+    source: "custom" | "bundled" | "path" | "none";
+    installing: boolean;
+  }> => ipcRenderer.invoke("tools:ffmpegStatus"),
+  ffmpegInstall: (): Promise<{
+    available: boolean;
+    enabled: boolean;
+    path: string;
+    version?: string;
+    source: "custom" | "bundled" | "path" | "none";
+    installing: boolean;
+  }> => ipcRenderer.invoke("tools:ffmpegInstall"),
+  ffmpegPick: (): Promise<{
+    available: boolean;
+    enabled: boolean;
+    path: string;
+    version?: string;
+    source: "custom" | "bundled" | "path" | "none";
+    installing: boolean;
+  } | null> => ipcRenderer.invoke("tools:ffmpegPick"),
+  onFfmpegProgress: (
+    cb: (event: { phase: string; percent: number; message: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      payload: { phase: string; percent: number; message: string }
+    ) => cb(payload);
+    ipcRenderer.on("tools:ffmpegProgress", listener);
+    return () => ipcRenderer.removeListener("tools:ffmpegProgress", listener);
   },
 
   windowMinimize: (): Promise<void> => ipcRenderer.invoke("window:minimize"),

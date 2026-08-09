@@ -21,6 +21,7 @@ export { runPipeline } from "./pipeline/runPipeline";
 export { mapPool, runPool, downloadToFile, downloadToBuffer } from "./download";
 export type { FragmentDownloadOptions, FragmentDownloadResult, MapPoolOptions } from "./download";
 export { resolveWorkerBinary, rustPing, rustEnhance, rustDownload } from "./worker/rustWorker";
+export { configureFfmpeg, clearFfmpegCache, resolveFfmpeg } from "./providers/youtube/mux";
 export { PRESETS, DEFAULT_ENHANCE_FEATURES, DEFAULT_YOUTUBE_OPTIONS } from "./types";
 export type {
   PresetName,

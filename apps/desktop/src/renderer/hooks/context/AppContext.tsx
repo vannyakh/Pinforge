@@ -12,6 +12,7 @@ import {
   type SettingsPartial,
   type MediaProgressEvent,
   type PackStatus,
+  type ProcessResponse,
 } from "@renderer/api";
 
 interface ProcessOpts {
@@ -41,7 +42,7 @@ interface AppContextValue {
   tasks: DownloadTask[];
   busy: boolean;
   refresh: () => Promise<void>;
-  processUrl: (url: string, opts?: ProcessOpts) => Promise<void>;
+  processUrl: (url: string, opts?: ProcessOpts) => Promise<ProcessResponse | null>;
   updateSettings: (partial: SettingsPartial) => Promise<void>;
   clearHistory: () => Promise<void>;
   itemsForPack: (packId: string) => HistoryItem[];
@@ -87,10 +88,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const processUrl = useCallback(
-    async (url: string, opts?: ProcessOpts) => {
-      if (!settings) return;
+    async (url: string, opts?: ProcessOpts): Promise<ProcessResponse | null> => {
+      if (!settings) return null;
       setBusy(true);
-      Message.loading({ id: "pin-process", content: "Downloading…", duration: 0 });
       try {
         const res = await api.processMedia({
           url,
@@ -101,20 +101,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           features: opts?.features ?? settings.enhanceFeatures,
           youtube: opts?.youtube ?? settings.youtube,
         });
-        Message.clear();
-        const ok = res.results.length;
-        const fail = res.errors.length;
-        Message.success(
-          res.kind === "board"
-            ? `Done — ${ok} saved${fail ? `, ${fail} failed` : ""}`
-            : `Saved${res.provider ? ` (${res.provider})` : ""}`
-        );
         if (
           settings.system?.notifications &&
           settings.system.notifyOnDownloadComplete &&
           typeof Notification !== "undefined"
         ) {
           try {
+            const ok = res.results.length;
             new Notification("Pinforge", {
               body:
                 res.kind === "board"
@@ -126,10 +119,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
         await refresh();
+        return res;
       } catch (e) {
-        Message.clear();
         Message.error(e instanceof Error ? e.message : String(e));
         await refresh();
+        return null;
       } finally {
         setBusy(false);
       }

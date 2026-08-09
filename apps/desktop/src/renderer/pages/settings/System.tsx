@@ -1,5 +1,5 @@
-import React from "react";
-import { Button, Input, Message, Select, Switch } from "@arco-design/web-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Button, Input, Message, Progress, Select, Switch, Tag } from "@arco-design/web-react";
 import { FolderOpen } from "@icon-park/react";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import { api, type SystemConfig } from "@renderer/api";
@@ -43,16 +43,62 @@ const PathField: React.FC<{
   </div>
 );
 
+type FfmpegStatus = Awaited<ReturnType<typeof api.ffmpegStatus>>;
+
 const SystemSettings: React.FC = () => {
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings, refresh } = useApp();
+  const [ffStatus, setFfStatus] = useState<FfmpegStatus | null>(null);
+  const [ffProgress, setFfProgress] = useState<{
+    phase: string;
+    percent: number;
+    message: string;
+  } | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  const loadFfmpeg = useCallback(async () => {
+    try {
+      setFfStatus(await api.ffmpegStatus());
+    } catch {
+      setFfStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadFfmpeg();
+  }, [loadFfmpeg, settings?.system?.ffmpegPath, settings?.system?.ffmpegEnabled]);
+
+  useEffect(() => {
+    return api.onFfmpegProgress((ev) => setFfProgress(ev));
+  }, []);
+
   if (!settings?.system) return null;
 
   const system = settings.system;
+  const available = Boolean(ffStatus?.available);
+  const canEnable = available && !installing;
 
   const patchSystem = async (partial: Partial<SystemConfig>) => {
     await updateSettings({ system: partial });
     if (partial.hardwareAcceleration !== undefined) {
       Message.info("Restart Pinforge for hardware acceleration changes to apply.");
+    }
+    await loadFfmpeg();
+  };
+
+  const installFfmpegTool = async () => {
+    setInstalling(true);
+    setFfProgress({ phase: "download", percent: 0, message: "Starting…" });
+    try {
+      const status = await api.ffmpegInstall();
+      setFfStatus(status);
+      await refresh();
+      Message.success("ffmpeg installed and enabled for tools.");
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setInstalling(false);
+      setFfProgress(null);
+      await loadFfmpeg();
     }
   };
 
@@ -60,7 +106,7 @@ const SystemSettings: React.FC = () => {
     <div className="max-w-640px w-full">
       <div className="text-22px font-600 text-t-primary mb-6px">System</div>
       <div className="text-t-secondary text-14px mb-24px">
-        App behavior and environment paths.
+        App behavior, tools, and environment paths.
       </div>
 
       <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
@@ -111,6 +157,84 @@ const SystemSettings: React.FC = () => {
             />
           </Row>
         )}
+      </div>
+
+      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
+        Tools
+      </div>
+      <div className="bg-2 rd-12px border border-b-base px-18px mb-28px">
+        <div className="py-14px border-b border-b-base">
+          <div className="flex items-start justify-between gap-16px mb-10px">
+            <div className="min-w-0">
+              <div className="text-14px text-t-primary">ffmpeg</div>
+              <div className="text-12px text-t-tertiary mt-4px leading-relaxed">
+                Required for YouTube DASH merge, audio convert (MP3/FLAC), subtitles embed, and
+                metadata tagging. Progressive downloads still work without it.
+              </div>
+            </div>
+            <Tag color={available ? "green" : "gray"} size="small" className="shrink-0">
+              {installing ? "Installing…" : available ? "Installed" : "Not found"}
+            </Tag>
+          </div>
+
+          {ffStatus?.version && (
+            <div className="text-12px text-t-secondary mb-10px truncate" title={ffStatus.path}>
+              {ffStatus.version}
+              {ffStatus.path ? ` · ${ffStatus.path}` : ""}
+            </div>
+          )}
+
+          {installing && ffProgress && (
+            <div className="mb-12px">
+              <div className="text-12px text-t-secondary mb-6px">{ffProgress.message}</div>
+              <Progress percent={ffProgress.percent} showText />
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-8px">
+            {!available && (
+              <Button
+                type="primary"
+                loading={installing}
+                disabled={installing}
+                onClick={() => void installFfmpegTool()}
+              >
+                Download & install
+              </Button>
+            )}
+            <Button
+              disabled={installing}
+              onClick={async () => {
+                const status = await api.ffmpegPick();
+                if (status) {
+                  setFfStatus(status);
+                  await refresh();
+                  Message.success("ffmpeg path updated.");
+                }
+              }}
+            >
+              Browse binary…
+            </Button>
+            <Button disabled={installing} onClick={() => void loadFfmpeg()}>
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        <Row
+          title="Enable ffmpeg tools"
+          description={
+            canEnable
+              ? "Use ffmpeg for merge, convert, embed, and metadata."
+              : "Install ffmpeg first. Enable unlocks after install finishes."
+          }
+        >
+          <Switch
+            checked={Boolean(system.ffmpegEnabled) && available}
+            disabled={!canEnable}
+            onChange={(v) => void patchSystem({ ffmpegEnabled: v })}
+          />
+        </Row>
       </div>
 
       <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
