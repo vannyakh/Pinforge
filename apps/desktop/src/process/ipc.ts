@@ -358,6 +358,7 @@ export function registerIpc(): void {
       };
       return await extractMediaPreview(url, {
         channelMaxVideos: youtube.channelMaxVideos,
+        playlistMaxVideos: youtube.playlistMaxVideos,
       });
     } catch (err) {
       return {

@@ -18,6 +18,7 @@ import PlatformSelectionBar from "./PlatformSelectionBar";
 import {
   makeDownloadCards,
   coverUrlFromMediaUrl,
+  isSelectableExtract,
   selectPendingConfirm,
   useHomeChatStore,
   type ChatDownloadCard,
@@ -25,6 +26,7 @@ import {
 } from "./homeChatStore";
 import GuidHomeInputCard from "./guid/GuidHomeInputCard";
 import GuidHomeActionRow from "./guid/GuidHomeActionRow";
+import ExtractPickTable from "./ExtractPickTable";
 import styles from "./guid/guid.module.css";
 import "./guid/guid-sendbox.css";
 
@@ -46,8 +48,6 @@ const SUGGESTIONS = [
     format: "audio-only" as FormatPreset,
   },
 ];
-
-const ALL_MODES = ["single", "board", "playlist", "profile", "story"] as const;
 
 function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -437,8 +437,6 @@ const DownloadPage: React.FC = () => {
     const replyText = isBatch
       ? `Ready to download ${downloadable.length} of ${urls.length} links.`
       : describeExtract(primary);
-    const shouldAuto = autoDownload;
-    const downloadUrls = downloadable.map((e) => e.sourceUrl);
     // Prefer first extract as message extract meta (mode chip)
     const extractForMsg: ExtractPreview = isBatch
       ? {
@@ -448,20 +446,37 @@ const DownloadPage: React.FC = () => {
           items: downloadable.map((e, i) => ({
             index: i + 1,
             url: e.sourceUrl,
-            title: e.title,
+            title: e.title ?? e.items[0]?.title,
+            coverUrl:
+              e.items.find((it) => it.coverUrl)?.coverUrl ||
+              coverUrlFromMediaUrl(e.sourceUrl),
           })),
           message: replyText,
         }
       : primary;
 
-    const infoCards = makeDownloadCards(
-      downloadUrls,
-      "ready",
-      downloadable.map((e) => e.title ?? e.items[0]?.title),
-      downloadable.map(
-        (e) => e.items.find((i) => i.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl)
-      )
-    );
+    const selectable = isSelectableExtract(extractForMsg);
+    const selectedItemUrls = selectable
+      ? extractForMsg.items.map((i) => i.url)
+      : undefined;
+    // Profile / bulk: always pick from the list (skip auto-start of whole channel).
+    const shouldAuto = autoDownload && !selectable;
+
+    const downloadUrls = selectable
+      ? extractForMsg.items.map((i) => i.url)
+      : downloadable.map((e) => e.sourceUrl);
+
+    const infoCards = selectable
+      ? []
+      : makeDownloadCards(
+          downloadUrls,
+          "ready",
+          downloadable.map((e) => e.title ?? e.items[0]?.title),
+          downloadable.map(
+            (e) =>
+              e.items.find((i) => i.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl)
+          )
+        );
 
     if (shouldAuto) {
       mapMessages((prev) =>
@@ -474,6 +489,7 @@ const DownloadPage: React.FC = () => {
                 extract: extractForMsg,
                 status: "started",
                 pendingConfirm: false,
+                selectedItemUrls,
                 results: infoCards,
               }
             : m
@@ -501,11 +517,14 @@ const DownloadPage: React.FC = () => {
         m.id === assistantId
           ? {
               ...m,
-              text: `${replyText}\nConfirm options below to start the download.`,
+              text: selectable
+                ? `${replyText}\nSelect items below, then download.`
+                : `${replyText}\nConfirm options below to start the download.`,
               detected,
               extract: extractForMsg,
               status: "ready",
               pendingConfirm: true,
+              selectedItemUrls,
               results: infoCards,
             }
           : { ...m, pendingConfirm: false }
@@ -517,40 +536,71 @@ const DownloadPage: React.FC = () => {
   const confirmDownload = () => {
     const msg = pendingConfirmMsg;
     if (!msg?.detected?.live || !msg.extract) return;
+    void beginSelectedDownload(msg);
+  };
 
-    const batchUrls =
-      msg.extract.itemCount > 1 && msg.extract.items.length > 0
-        ? [...new Set(msg.extract.items.map((i) => i.url))]
+  const beginSelectedDownload = (
+    msg: ChatMessage,
+    onlyUrls?: string[]
+  ) => {
+    if (!msg.detected?.live || !msg.extract) return;
+
+    const extract = msg.extract;
+    const selectable = isSelectableExtract(extract);
+    const selectedSet = new Set(
+      (onlyUrls?.length
+        ? onlyUrls
+        : msg.selectedItemUrls?.length
+          ? msg.selectedItemUrls
+          : extract.items.map((i) => i.url)
+      ).map((u) => u.trim())
+    );
+    const selectedItems = selectable
+      ? extract.items.filter((i) => selectedSet.has(i.url.trim()))
+      : [];
+
+    const batchUrls = selectable
+      ? [...new Set(selectedItems.map((i) => i.url))]
+      : extract.itemCount > 1 && extract.items.length > 0
+        ? [...new Set(extract.items.map((i) => i.url))]
         : msg.url
           ? [msg.url]
-          : msg.extract.sourceUrl
-            ? [msg.extract.sourceUrl]
+          : extract.sourceUrl
+            ? [extract.sourceUrl]
             : [];
     if (batchUrls.length === 0) return;
+
+    const cards = selectable
+      ? makeDownloadCards(
+          batchUrls,
+          "queued",
+          selectedItems.map((i) => i.title),
+          selectedItems.map((i) => i.coverUrl || coverUrlFromMediaUrl(i.url))
+        )
+      : msg.results && msg.results.length > 0
+        ? msg.results.map((c) =>
+            batchUrls.some((u) => urlsEqual(u, c.sourceUrl))
+              ? { ...c, status: "queued" as const }
+              : c
+          )
+        : makeDownloadCards(batchUrls, "queued");
 
     mapMessages((prev) =>
       prev.map((m) =>
         m.id === msg.id
           ? {
               ...m,
-              text: `${describeExtract(m.extract!)}\nDownload started.`,
+              text: `${describeExtract(m.extract!)}\nDownload started (${batchUrls.length}).`,
               pendingConfirm: false,
               status: "started",
-              results:
-                m.results && m.results.length > 0
-                  ? m.results.map((c) =>
-                      batchUrls.some((u) => urlsEqual(u, c.sourceUrl))
-                        ? { ...c, status: "queued" as const }
-                        : c
-                    )
-                  : makeDownloadCards(batchUrls, "queued"),
+              results: cards,
             }
           : m
       )
     );
     void startDownload(batchUrls, {
       format: confirmFormat,
-      enhance: showEnhanceConfirm ? confirmEnhance : false,
+      enhance: msg.detected?.id === "pinterest" ? confirmEnhance : false,
       assistantId: msg.id,
       youtube:
         msg.detected?.id === "youtube"
@@ -585,6 +635,24 @@ const DownloadPage: React.FC = () => {
             }
           : m
       )
+    );
+  };
+
+  const setMessageSelection = (messageId: string, urls: string[]) => {
+    mapMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, selectedItemUrls: urls } : m))
+    );
+  };
+
+  const toggleMessageItem = (messageId: string, url: string) => {
+    mapMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const cur = new Set(m.selectedItemUrls ?? []);
+        if (cur.has(url)) cur.delete(url);
+        else cur.add(url);
+        return { ...m, selectedItemUrls: [...cur] };
+      })
     );
   };
 
@@ -688,9 +756,9 @@ const DownloadPage: React.FC = () => {
       {hasChat ? (
         <div className="home-hero__stage home-hero__stage--chat flex-1 min-h-0 flex flex-col justify-start">
           <div className="home-guid-layout home-guid-layout--chat w-full flex flex-col flex-1 min-h-0">
-            <div className="home-chat-layout flex flex-col flex-1 min-h-0 w-full chat-surface-container px-20px">
-              <div className="home-chat flex-1 min-h-0 overflow-y-auto -mx-20px px-20px pb-10px box-border">
-                <div className="home-chat__thread chat-surface-fluid">
+            <div className="home-chat-layout flex flex-col flex-1 min-h-0 w-full max-w-full min-w-0 chat-surface-container px-16px overflow-x-hidden">
+              <div className="home-chat flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-10px box-border">
+                <div className="home-chat__thread chat-surface-fluid min-w-0 max-w-full">
                   <div className="h-10px" />
                   {messages.map((msg) => {
                     const meta = msg.detected ? platformMetaFor(msg.detected.id) : null;
@@ -778,151 +846,36 @@ const DownloadPage: React.FC = () => {
 
                           {msg.role === "assistant" &&
                             extract &&
+                            isSelectableExtract(extract) &&
                             msg.status !== "detecting" &&
-                            msg.status !== "done" &&
                             msg.status !== "started" &&
-                            (extract.mode !== "single" || extract.itemCount > 1) &&
-                            !(msg.results && msg.results.length > 0) && (
-                            <div className="home-extract">
-                              <div className="home-extract__section">
-                                <div className="home-extract__label">Source</div>
-                                <div className="home-extract__source">
-                                  {extract.title && (
-                                    <div className="home-extract__title">{extract.title}</div>
-                                  )}
-                                  <a
-                                    className="home-extract__url"
-                                    href={extract.sourceUrl}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      void api.openExternal(extract.sourceUrl);
-                                    }}
-                                  >
-                                    {extract.sourceUrl}
-                                  </a>
-                                  <div className="home-extract__stats">
-                                    <span>
-                                      {extract.itemCount} item
-                                      {extract.itemCount === 1 ? "" : "s"}
-                                    </span>
-                                    <span>·</span>
-                                    <span>{extract.mode}</span>
-                                    <span>·</span>
-                                    <span>
-                                      {extract.modeSupported ? "supported" : "not supported"}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="home-extract__section">
-                                <div className="home-extract__label">Support</div>
-                                <div className="home-extract-table-wrap">
-                                  <table className="home-extract-table">
-                                    <thead>
-                                      <tr>
-                                        <th>Mode</th>
-                                        <th>Status</th>
-                                        <th>Formats</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {ALL_MODES.map((mode) => {
-                                        const advertised = extract.supportedModes.includes(mode);
-                                        const active = extract.mode === mode;
-                                        const ok = advertised && extract.provider.live;
-                                        return (
-                                          <tr
-                                            key={mode}
-                                            className={active ? "is-active" : undefined}
-                                          >
-                                            <td>
-                                              {mode}
-                                              {active ? " · current" : ""}
-                                            </td>
-                                            <td>
-                                              {!extract.provider.live
-                                                ? "coming soon"
-                                                : ok
-                                                  ? "supported"
-                                                  : "—"}
-                                            </td>
-                                            <td>
-                                              {ok
-                                                ? extract.formats.join(", ") || "—"
-                                                : "—"}
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-
-                              {extract.items.length > 0 && (
-                                <div className="home-extract__section">
-                                  <div className="home-extract__label">
-                                    Extract list
-                                    {extract.itemCount > 1 ? ` (${extract.itemCount})` : ""}
-                                  </div>
-                                  <div className="home-extract-table-wrap home-extract-table-wrap--list">
-                                    <table className="home-extract-table">
-                                      <thead>
-                                        <tr>
-                                          <th style={{ width: 44 }}>#</th>
-                                          <th style={{ width: 52 }} />
-                                          <th>Title</th>
-                                          <th>URL</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {extract.items.slice(0, 50).map((item) => {
-                                          const cover =
-                                            item.coverUrl || coverUrlFromMediaUrl(item.url);
-                                          return (
-                                          <tr key={`${item.index}-${item.url}`}>
-                                            <td>{item.index}</td>
-                                            <td>
-                                              {cover ? (
-                                                <img
-                                                  className="home-extract__cover"
-                                                  src={cover}
-                                                  alt=""
-                                                  referrerPolicy="no-referrer"
-                                                />
-                                              ) : (
-                                                <span className="home-extract__cover home-extract__cover--empty" />
-                                              )}
-                                            </td>
-                                            <td>{item.title || `Item ${item.index}`}</td>
-                                            <td>
-                                              <button
-                                                type="button"
-                                                className="home-extract__link-btn"
-                                                title={item.url}
-                                                onClick={() => void api.openExternal(item.url)}
-                                              >
-                                                {item.url}
-                                              </button>
-                                            </td>
-                                          </tr>
-                                          );
-                                        })}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                  {extract.itemCount > 50 && (
-                                    <div className="home-extract__more">
-                                      Showing first 50 of {extract.itemCount} items
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
+                            msg.status !== "done" && (
+                            <ExtractPickTable
+                              messageId={msg.id}
+                              extract={extract}
+                              selectedUrls={msg.selectedItemUrls ?? []}
+                              onSelectionChange={(urls) => setMessageSelection(msg.id, urls)}
+                              onToggleUrl={(u) => toggleMessageItem(msg.id, u)}
+                              format={confirmFormat}
+                              formats={extract.formats?.length ? extract.formats : ["best", "mp4", "audio-only"]}
+                              onFormatChange={setConfirmFormat}
+                              showYoutube={msg.detected?.id === "youtube"}
+                              ytQuality={confirmYtQuality}
+                              onYtQualityChange={setConfirmYtQuality}
+                              audio={confirmAudio}
+                              onAudioChange={setConfirmAudio}
+                              subs={confirmSubs}
+                              onSubsChange={setConfirmSubs}
+                              busy={busy}
+                              onDownloadSelected={() => beginSelectedDownload(msg)}
+                              onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}
+                            />
                           )}
 
-                          {msg.pendingConfirm && msg.detected?.live && extract?.modeSupported && (
+                          {msg.pendingConfirm &&
+                            msg.detected?.live &&
+                            extract?.modeSupported &&
+                            !isSelectableExtract(extract) && (
                             <div className="home-chat-confirm">
                               <div className="home-chat-confirm__title">Download options</div>
                               <div className="home-chat-confirm__row">
@@ -1022,7 +975,7 @@ const DownloadPage: React.FC = () => {
                                   loading={busy}
                                   onClick={confirmDownload}
                                 >
-                                  Download{extract.itemCount > 1 ? ` ${extract.itemCount}` : ""}
+                                  Download
                                 </Button>
                               </div>
                             </div>

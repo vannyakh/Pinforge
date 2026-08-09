@@ -17,6 +17,8 @@ export interface YoutubeDownloadOptions {
   resume?: boolean;
   /** Max videos from a channel / profile URL (default 50). */
   channelMaxVideos?: number;
+  /** Max videos from a playlist / mix URL (default 50). */
+  playlistMaxVideos?: number;
 }
 
 export interface EnhanceFeatures {
@@ -113,6 +115,8 @@ export interface ExtractPreviewItem {
   title?: string;
   /** Remote cover / thumbnail for UI previews when scraped or derived. */
   coverUrl?: string;
+  durationText?: string;
+  durationSec?: number;
 }
 
 export interface ExtractPreview {

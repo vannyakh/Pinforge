@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
+  Checkbox,
   Empty,
   Input,
   Message,
@@ -14,7 +15,18 @@ import {
   Tooltip,
 } from "@arco-design/web-react";
 import type { ColumnProps, SorterInfo } from "@arco-design/web-react/es/Table/interface";
-import { Clear, Close, Delete, FolderOpen, Pause, PlayOne, Plus, Redo, Remind } from "@icon-park/react";
+import {
+  Clear,
+  Close,
+  Delete,
+  FolderClose,
+  FolderOpen,
+  Pause,
+  PlayOne,
+  Plus,
+  Redo,
+  Remind,
+} from "@icon-park/react";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import { api, type FormatPreset, type PackStatus, type PresetName, type YoutubeQuality, type AudioContainer, type SubtitleMode } from "@renderer/api";
 
@@ -301,6 +313,7 @@ const TasksPage: React.FC = () => {
   const cardRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(360);
   const [selectedKeys, setSelectedKeys] = useState<(string | number)[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<(string | number)[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [addText, setAddText] = useState("");
   const [addOutDir, setAddOutDir] = useState("");
@@ -912,50 +925,144 @@ const TasksPage: React.FC = () => {
     setDisk(info);
   };
 
+  const selectableParentIds = useMemo(
+    () => rows.filter((r) => r.id !== "pending").map((r) => r.id),
+    [rows]
+  );
+  const allParentsSelected =
+    selectableParentIds.length > 0 &&
+    selectableParentIds.every((id) => selectedKeys.includes(id));
+  const someParentsSelected =
+    !allParentsSelected && selectableParentIds.some((id) => selectedKeys.includes(id));
+
+  const toggleExpand = (id: string) => {
+    setExpandedKeys((prev) =>
+      prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]
+    );
+  };
+
+  const toggleRowSelected = (id: string, checked: boolean) => {
+    setSelectedKeys((prev) => {
+      if (checked) return prev.includes(id) ? prev : [...prev, id];
+      return prev.filter((k) => k !== id);
+    });
+  };
+
   const columns: ColumnProps<TaskRow>[] = [
     {
-      title: "#",
-      width: 52,
+      title: "No.",
+      width: 44,
       align: "center",
       fixed: "left",
-      render: (_col, _row, index) => (
-        <span className="tasks-table__index tabular-nums">{index + 1}</span>
+      className: "tasks-table__col-no",
+      headerCellStyle: { padding: "10px 6px" },
+      bodyCellStyle: { padding: "10px 6px" },
+      render: (_col, row) => {
+        if (row.isChild) {
+          return <span className="tasks-table__index tasks-table__index--child">·</span>;
+        }
+        const n = rows.findIndex((r) => r.id === row.id) + 1;
+        return <span className="tasks-table__index tabular-nums">{n > 0 ? n : "—"}</span>;
+      },
+    },
+    {
+      title: (
+        <Checkbox
+          checked={allParentsSelected}
+          indeterminate={someParentsSelected}
+          disabled={selectableParentIds.length === 0}
+          onChange={(checked) => {
+            setSelectedKeys(checked ? [...selectableParentIds] : []);
+          }}
+        />
+      ),
+      width: 40,
+      align: "center",
+      fixed: "left",
+      className: "tasks-table__col-check",
+      headerCellStyle: { padding: "10px 4px" },
+      bodyCellStyle: { padding: "10px 4px" },
+      render: (_col, row) => (
+        <Checkbox
+          checked={selectedKeys.includes(row.id)}
+          disabled={row.id === "pending"}
+          onChange={(checked) => toggleRowSelected(row.id, checked)}
+          onClick={(e) => e.stopPropagation()}
+        />
       ),
     },
     {
       title: "Task",
       dataIndex: "url",
+      width: 320,
       fixed: "left",
-      width: 360,
       sorter: true,
       ellipsis: true,
-      render: (_col, row) => (
-        <div className="min-w-0 py-2px tasks-table__task">
-          <Tooltip content={row.url}>
-            <div className="text-13px font-500 text-t-primary truncate flex items-center gap-6px">
-              <span className="truncate">{row.title?.trim() || row.url}</span>
-              {!row.isChild && row.collection && (
-                <Tag size="small" color="arcoblue" className="tasks-table__collection shrink-0">
-                  {collectionLabel(row.collection)}
-                  {row.files > 1 ? ` · ${row.files}` : row.children && row.children.length > 1
-                    ? ` · ${row.children.length}`
-                    : ""}
-                </Tag>
-              )}
-              {row.isChild && (
-                <span className="tasks-table__child-mark text-11px text-t-tertiary shrink-0">
-                  item
-                </span>
-              )}
+      className: "tasks-table__col-task",
+      headerCellStyle: { padding: "10px 10px" },
+      bodyCellStyle: { padding: "10px 10px" },
+      render: (_col, row) => {
+        const hasTree = Boolean(row.children?.length);
+        const expanded = expandedKeys.includes(row.id);
+        const showFolder = hasTree || (Boolean(row.collection) && !row.isChild);
+        return (
+          <div className={`tasks-table__task${row.isChild ? " is-child" : ""}`}>
+            <div className="tasks-table__task-main">
+              <span className="tasks-table__icon-slot" aria-hidden={!showFolder}>
+                {hasTree ? (
+                  <button
+                    type="button"
+                    className={`tasks-table__expand-btn tasks-table__expand-btn--folder${
+                      expanded ? " is-open" : ""
+                    }`}
+                    aria-label={expanded ? "Collapse" : "Expand"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleExpand(row.id);
+                    }}
+                  >
+                    {expanded ? (
+                      <FolderOpen theme="filled" size="15" />
+                    ) : (
+                      <FolderClose theme="outline" size="15" />
+                    )}
+                  </button>
+                ) : showFolder ? (
+                  <span className="tasks-table__folder-static">
+                    <FolderClose theme="outline" size="15" />
+                  </span>
+                ) : null}
+              </span>
+              <div className="tasks-table__task-body min-w-0">
+                <Tooltip content={row.url}>
+                  <div className="tasks-table__task-line">
+                    <span className="tasks-table__task-title text-13px font-500 text-t-primary">
+                      {row.title?.trim() || row.url}
+                    </span>
+                    {!row.isChild && row.collection && (
+                      <Tag size="small" color="arcoblue" className="tasks-table__collection shrink-0">
+                        {collectionLabel(row.collection)}
+                        {row.children && row.children.length > 0
+                          ? ` · ${row.children.length}`
+                          : row.files > 1
+                            ? ` · ${row.files}`
+                            : ""}
+                      </Tag>
+                    )}
+                  </div>
+                </Tooltip>
+                {row.message && row.status !== "done" && (
+                  <Tooltip content={row.message}>
+                    <div className="tasks-table__task-msg text-12px text-t-tertiary">
+                      {row.message}
+                    </div>
+                  </Tooltip>
+                )}
+              </div>
             </div>
-          </Tooltip>
-          {row.message && row.status !== "done" && (
-            <Tooltip content={row.message}>
-              <div className="text-12px text-t-tertiary mt-2px truncate">{row.message}</div>
-            </Tooltip>
-          )}
-        </div>
-      ),
+          </div>
+        );
+      },
     },
     {
       title: "Source",
@@ -992,13 +1099,15 @@ const TasksPage: React.FC = () => {
             status={row.status === "failed" ? "error" : undefined}
           />
           <div className="text-11px text-t-secondary mt-2px tabular-nums">
-            {row.status === "running"
-              ? `${row.current}/${row.total}${
-                  typeof row.etaSec === "number" && row.etaSec > 0
-                    ? ` · ${row.etaSec < 60 ? `${row.etaSec}s` : `${Math.ceil(row.etaSec / 60)}m`}`
-                    : ""
-                }`
-              : `${row.percent}% · ${row.current}/${row.total}`}
+            {row.isChild
+              ? `${row.percent}%`
+              : row.status === "running"
+                ? `${row.current}/${row.total}${
+                    typeof row.etaSec === "number" && row.etaSec > 0
+                      ? ` · ${row.etaSec < 60 ? `${row.etaSec}s` : `${Math.ceil(row.etaSec / 60)}m`}`
+                      : ""
+                  }`
+                : `${row.percent}% · ${row.current}/${row.total}`}
           </div>
         </div>
       ),
@@ -1014,7 +1123,13 @@ const TasksPage: React.FC = () => {
             {formatBytes(row.downloadedBytes)}
           </div>
           <div className="text-11px text-t-tertiary">
-            {row.status === "running" ? "so far" : row.status === "done" ? "saved" : "—"}
+            {row.isChild
+              ? "file"
+              : row.status === "running"
+                ? "so far"
+                : row.status === "done"
+                  ? "saved"
+                  : "—"}
           </div>
         </div>
       ),
@@ -1030,11 +1145,13 @@ const TasksPage: React.FC = () => {
             {formatBytes(row.estimateBytes)}
           </div>
           <div className="text-11px text-t-tertiary">
-            {row.status === "running" && row.estimateBytes
-              ? "selected"
-              : row.estimateBytes
-                ? "total"
-                : "unknown"}
+            {row.isChild
+              ? "—"
+              : row.status === "running" && row.estimateBytes
+                ? "selected"
+                : row.estimateBytes
+                  ? "total"
+                  : "unknown"}
           </div>
         </div>
       ),
@@ -1057,24 +1174,30 @@ const TasksPage: React.FC = () => {
       width: 88,
       align: "center",
       sorter: true,
-      render: (_col, row) => (
-        <div className="text-12px tabular-nums leading-tight">
-          <div className="text-t-primary font-500">{row.files}</div>
-          <div className="text-11px text-t-tertiary">
-            {row.errors > 0 ? <span className="text-danger">{row.errors} err</span> : "saved"}
+      render: (_col, row) =>
+        row.isChild ? (
+          <span className="text-12px text-t-tertiary">—</span>
+        ) : (
+          <div className="text-12px tabular-nums leading-tight">
+            <div className="text-t-primary font-500">{row.files}</div>
+            <div className="text-11px text-t-tertiary">
+              {row.errors > 0 ? <span className="text-danger">{row.errors} err</span> : "saved"}
+            </div>
           </div>
-        </div>
-      ),
+        ),
     },
     {
       title: "Preset",
       dataIndex: "preset",
       width: 100,
-      render: (_col, row) => (
-        <span className="text-12px text-t-secondary truncate block">
-          {row.preset || settings?.preset || "—"}
-        </span>
-      ),
+      render: (_col, row) =>
+        row.isChild ? (
+          <span className="text-12px text-t-tertiary">—</span>
+        ) : (
+          <span className="text-12px text-t-secondary truncate block">
+            {row.preset || settings?.preset || "—"}
+          </span>
+        ),
     },
     {
       title: "Updated",
@@ -1101,8 +1224,7 @@ const TasksPage: React.FC = () => {
       fixed: "right",
       render: (_col, row) => {
         if (row.id === "pending") return null;
-        const canOpen =
-          (row.files > 0 || row.isChild) && row.status !== "running";
+        const canOpen = (row.files > 0 || row.isChild) && row.status !== "running";
         const canRetry =
           !row.isChild &&
           (row.status === "failed" || row.status === "partial" || row.status === "done");
@@ -1154,7 +1276,12 @@ const TasksPage: React.FC = () => {
   };
 
   const onRow = (record: TaskRow) => ({
-    className: selectedKeys.includes(record.id) ? "tasks-row-selected" : undefined,
+    className: [
+      selectedKeys.includes(record.id) ? "tasks-row-selected" : "",
+      record.isChild ? "tasks-row-child" : "",
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined,
     onMouseDown: (e: React.MouseEvent) => {
       if (e.button !== 0 || record.id === "pending" || record.isChild) return;
       const target = e.target as HTMLElement;
@@ -1367,18 +1494,13 @@ const TasksPage: React.FC = () => {
           scroll={{ x: 1280, y: scrollY }}
           onRow={onRow}
           childrenColumnName="children"
-          indentSize={18}
-          defaultExpandAllRows={false}
-          rowSelection={{
-            type: "checkbox",
-            selectedRowKeys: selectedKeys,
-            onChange: (keys) => setSelectedKeys(keys),
-            checkStrictly: true,
-            checkboxProps: (record) => ({
-              disabled: record.id === "pending",
-            }),
-            fixed: true,
-            columnWidth: 44,
+          indentSize={0}
+          expandedRowKeys={expandedKeys}
+          onExpandedRowsChange={(keys) => setExpandedKeys(keys)}
+          expandProps={{
+            icon: () => null,
+            width: 0,
+            strictTreeData: true,
           }}
           onChange={(_pagination, sorter) => {
             const next = Array.isArray(sorter) ? sorter[0] : sorter;

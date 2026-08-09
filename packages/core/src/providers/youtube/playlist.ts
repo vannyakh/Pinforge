@@ -1,5 +1,5 @@
 /**
- * YouTube channel / profile listing via Innertube (+ HTML fallback for @handles).
+ * YouTube playlist listing via Innertube.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,39 +14,52 @@ async function getInnertube() {
   return innertubeMod as typeof import("youtubei.js");
 }
 
-export interface YoutubeChannelVideo {
+export interface YoutubePlaylistVideo {
   id: string;
   url: string;
   title?: string;
-  /** Cover / thumbnail URL when scraped or derived from video id. */
   coverUrl?: string;
-  /** Display duration from listing (e.g. "12:34"). */
   durationText?: string;
-  /** Duration in seconds when parseable. */
   durationSec?: number;
 }
 
-export interface YoutubeChannelResolveResult {
-  channelId: string;
-  channelTitle?: string;
-  videos: YoutubeChannelVideo[];
+export interface YoutubePlaylistResolveResult {
+  playlistId: string;
+  playlistTitle?: string;
+  videos: YoutubePlaylistVideo[];
   truncated?: boolean;
 }
 
 const DEFAULT_MAX = 50;
 
-/** Channel / @handle / /c/ /user/ — not a single watch/shorts URL. */
-export function isYouTubeChannelUrl(url: string): boolean {
+/** Pure playlist URL (not a watch URL with optional &list=). */
+export function isYouTubePlaylistUrl(url: string): boolean {
   try {
     const u = new URL(url.trim());
-    if (!/^(www\.)?(youtube\.com|m\.youtube\.com)$/i.test(u.hostname)) return false;
+    if (!/^(www\.)?(youtube\.com|m\.youtube\.com|music\.youtube\.com)$/i.test(u.hostname)) {
+      return false;
+    }
+    // Watch / shorts with a video id stay single even if list= is present.
     if (u.searchParams.has("v")) return false;
-    if (/\/(watch|shorts|embed|live|playlist)\b/i.test(u.pathname)) return false;
-    if (/^\/(channel|c|user)\//i.test(u.pathname)) return true;
-    if (/^\/@/.test(u.pathname)) return true;
+    if (/\/(shorts|embed|live)\b/i.test(u.pathname)) return false;
+    if (/\/playlist\/?/i.test(u.pathname)) return true;
+    if (u.searchParams.has("list")) return true;
     return false;
   } catch {
     return false;
+  }
+}
+
+export function extractYouTubePlaylistId(url: string): string | null {
+  try {
+    const u = new URL(url.trim());
+    const list = u.searchParams.get("list");
+    if (list && list.trim()) return list.trim();
+    const fromPath = u.pathname.match(/\/playlist\/([^/?#]+)/i);
+    if (fromPath?.[1]) return fromPath[1];
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -60,6 +73,9 @@ function youtubeThumbUrl(id: string): string {
 
 function pickVideoId(node: AnyYt): string | null {
   if (!node || typeof node !== "object") return null;
+  if (node.content_type && String(node.content_type).toUpperCase() === "PLAYLIST") {
+    return null;
+  }
   const id =
     node.content_id ||
     node.id ||
@@ -124,7 +140,6 @@ function pickDuration(node: AnyYt): { text?: string; sec?: number } {
     node?.duration,
     node?.length_text,
     node?.thumbnail_overlays?.find?.((o: AnyYt) => o?.text)?.text,
-    node?.overlays?.find?.((o: AnyYt) => typeof o?.text === "string")?.text,
     node?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text?.text,
     node?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text,
   ];
@@ -136,10 +151,9 @@ function pickDuration(node: AnyYt): { text?: string; sec?: number } {
           ? String(c)
           : "";
     if (!raw || raw === "[object Object]") continue;
-    if (!/\d/.test(raw) || !/[:\d]/.test(raw)) continue;
-    // Prefer clock-like strings
-    if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw.trim()) && !/^\d+\s*(s|sec|min)/i.test(raw)) {
-      if (!/^\d{1,2}:\d{2}/.test(raw.trim())) continue;
+    if (!/\d/.test(raw)) continue;
+    if (!/^\d{1,2}:\d{2}/.test(raw.trim()) && !/^\d+\s*(s|sec|min)/i.test(raw)) {
+      continue;
     }
     const parsed = parseDurationText(raw);
     if (parsed) return { text: parsed.text, sec: parsed.sec };
@@ -147,94 +161,39 @@ function pickDuration(node: AnyYt): { text?: string; sec?: number } {
   return {};
 }
 
-async function resolveChannelIdFromHtml(url: string, signal?: AbortSignal): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      signal,
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "accept-language": "en-US,en;q=0.9",
-      },
-      redirect: "follow",
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    // Prefer canonical / owner ids — bare "channelId" often matches related channels first.
-    const patterns = [
-      /"externalId":"(UC[\w-]+)"/,
-      /"browseId":"(UC[\w-]+)"/,
-      /"canonicalBaseUrl":"\/channel\/(UC[\w-]+)"/,
-      /channel_id=(UC[\w-]+)/,
-      /"channelId":"(UC[\w-]+)"/,
-      /\/channel\/(UC[\w-]+)/,
-      /browse_id":"(UC[\w-]+)"/,
-    ];
-    for (const re of patterns) {
-      const m = html.match(re);
-      if (m?.[1]) return m[1];
-    }
-  } catch {
-    /* ignore */
+function playlistTitleOf(pl: AnyYt): string | undefined {
+  const raw =
+    pl?.info?.title?.text ??
+    pl?.info?.title ??
+    pl?.header?.title?.text ??
+    pl?.header?.title ??
+    pl?.title?.text ??
+    pl?.title;
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  if (raw && typeof raw.toString === "function") {
+    const s = String(raw).trim();
+    if (s && s !== "[object Object]") return s;
   }
-  return null;
-}
-
-async function resolveChannelId(url: string, yt: AnyYt, signal?: AbortSignal): Promise<string> {
-  const u = new URL(url.trim());
-  const fromPath = u.pathname.match(/\/channel\/(UC[\w-]+)/i);
-  if (fromPath?.[1]) return fromPath[1];
-
-  try {
-    const endpoint = await yt.resolveURL(url.trim());
-    const browseId =
-      endpoint?.payload?.browseId ??
-      endpoint?.metadata?.browseId ??
-      endpoint?.browseId;
-    if (typeof browseId === "string" && /^UC[\w-]+$/.test(browseId)) {
-      return browseId;
-    }
-  } catch {
-    /* fall through */
-  }
-
-  const fromHtml = await resolveChannelIdFromHtml(url, signal);
-  if (fromHtml) return fromHtml;
-
-  // Last resort: search by @handle / path segment
-  const handle = u.pathname.match(/^\/@([^/]+)/)?.[1];
-  if (handle) {
-    try {
-      const results = await yt.search(`@${handle}`, { type: "channel" });
-      const nodes = (results?.results ?? results?.channels ?? []) as AnyYt[];
-      for (const node of nodes) {
-        const id =
-          node?.id ||
-          node?.author?.id ||
-          node?.endpoint?.payload?.browseId ||
-          node?.navigation_endpoint?.payload?.browseId;
-        if (typeof id === "string" && /^UC[\w-]+$/.test(id)) return id;
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  throw new Error(
-    "Could not resolve YouTube channel id from this URL. Use a /channel/UC… link or a public @handle."
-  );
+  return undefined;
 }
 
 /**
- * List uploads from a YouTube channel / profile URL.
+ * List videos from a YouTube playlist / mix URL.
  * Caps at `maxVideos` (default 50) and sets `truncated` when more exist.
  */
-export async function resolveYouTubeChannel(
+export async function resolveYouTubePlaylist(
   url: string,
   opts: { maxVideos?: number; signal?: AbortSignal } = {}
-): Promise<YoutubeChannelResolveResult> {
+): Promise<YoutubePlaylistResolveResult> {
   const maxVideos = Math.max(1, Math.min(500, opts.maxVideos ?? DEFAULT_MAX));
   opts.signal?.throwIfAborted?.();
+
+  const playlistId = extractYouTubePlaylistId(url);
+  if (!playlistId) {
+    throw new Error(
+      "Could not find a playlist id in this URL. Use a /playlist?list=… link."
+    );
+  }
 
   const { Innertube, ClientType, UniversalCache } = await getInnertube();
   const yt = await Innertube.create({
@@ -242,29 +201,12 @@ export async function resolveYouTubeChannel(
     client_type: ClientType.WEB,
   });
 
-  const channelId = await resolveChannelId(url, yt, opts.signal);
   opts.signal?.throwIfAborted?.();
+  let page: AnyYt = await yt.getPlaylist(playlistId);
+  const playlistTitle = playlistTitleOf(page);
 
-  const channel = await yt.getChannel(channelId);
-  const header = channel.header as AnyYt;
-  const channelTitleRaw =
-    channel.metadata?.title ||
-    header?.author?.name ||
-    header?.title?.toString?.() ||
-    header?.title ||
-    undefined;
-  const channelTitle =
-    typeof channelTitleRaw === "string" && channelTitleRaw.trim()
-      ? channelTitleRaw.trim()
-      : undefined;
-
-  if (!channel.has_videos) {
-    return { channelId, channelTitle, videos: [] };
-  }
-
-  let page: AnyYt = await channel.getVideos();
   const seen = new Set<string>();
-  const videos: YoutubeChannelVideo[] = [];
+  const videos: YoutubePlaylistVideo[] = [];
 
   const consume = (nodes: AnyYt[]) => {
     for (const node of nodes) {
@@ -284,19 +226,19 @@ export async function resolveYouTubeChannel(
     }
   };
 
-  consume([...(page.videos ?? [])]);
+  consume([...(page.items ?? page.videos ?? [])]);
 
   let pages = 0;
-  while (page.has_continuation && videos.length < maxVideos && pages < 20) {
+  while (page.has_continuation && videos.length < maxVideos && pages < 30) {
     opts.signal?.throwIfAborted?.();
     page = await page.getContinuation();
-    consume([...(page.videos ?? [])]);
+    consume([...(page.items ?? page.videos ?? [])]);
     pages += 1;
   }
 
   return {
-    channelId,
-    channelTitle,
+    playlistId,
+    playlistTitle,
     videos,
     truncated: Boolean(page.has_continuation) || videos.length >= maxVideos,
   };

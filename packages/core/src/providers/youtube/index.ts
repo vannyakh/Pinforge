@@ -8,3 +8,9 @@ export {
   resolveYouTubeChannel,
 } from "./channel";
 export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./channel";
+export {
+  isYouTubePlaylistUrl,
+  extractYouTubePlaylistId,
+  resolveYouTubePlaylist,
+} from "./playlist";
+export type { YoutubePlaylistVideo, YoutubePlaylistResolveResult } from "./playlist";

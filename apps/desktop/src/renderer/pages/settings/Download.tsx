@@ -131,6 +131,24 @@ const DownloadSettings: React.FC = () => {
             }
           />
         </div>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">YouTube playlist max videos</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            How many videos to pull from a playlist or mix URL (1–500).
+          </div>
+          <InputNumber
+            className="w-full"
+            min={1}
+            max={500}
+            step={10}
+            value={settings.youtube?.playlistMaxVideos ?? 50}
+            onChange={(v) =>
+              void updateSettings({
+                youtube: { playlistMaxVideos: Math.max(1, Math.min(500, Number(v) || 50)) },
+              })
+            }
+          />
+        </div>
         <Row
           title="Organize by channel"
           description="Save YouTube downloads under outDir / channel name."

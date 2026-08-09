@@ -1,6 +1,6 @@
 import type { DownloadMode, FormatPreset, ProviderId } from "./types";
 import { detectProvider, ProviderNotFoundError } from "./providers";
-import { isBoardUrl, resolveBoard, isYouTubeChannelUrl, resolveYouTubeChannel } from "./providers";
+import { isBoardUrl, resolveBoard, isYouTubeChannelUrl, resolveYouTubeChannel, isYouTubePlaylistUrl, resolveYouTubePlaylist } from "./providers";
 import { DEFAULT_YOUTUBE_OPTIONS } from "./types";
 
 export interface ExtractPreviewItem {
@@ -9,6 +9,9 @@ export interface ExtractPreviewItem {
   title?: string;
   /** Remote cover / thumbnail for UI previews when scraped or derived. */
   coverUrl?: string;
+  /** Listing duration label (e.g. 12:34). */
+  durationText?: string;
+  durationSec?: number;
 }
 
 export interface ExtractPreview {
@@ -113,6 +116,8 @@ export function coverUrlFromMediaUrl(url: string): string | undefined {
 export interface ExtractPreviewOptions {
   /** Cap channel / profile listing (YouTube). Defaults to `DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos`. */
   channelMaxVideos?: number;
+  /** Cap playlist listing (YouTube). Defaults to `DEFAULT_YOUTUBE_OPTIONS.playlistMaxVideos`. */
+  playlistMaxVideos?: number;
 }
 
 /**
@@ -216,6 +221,8 @@ export async function extractMediaPreview(
         url: v.url,
         title: v.title,
         coverUrl: v.coverUrl || coverUrlFromMediaUrl(v.url),
+        durationText: v.durationText,
+        durationSec: v.durationSec,
       }));
       const more = channel.truncated ? " (truncated)" : "";
       return {
@@ -237,6 +244,49 @@ export async function extractMediaPreview(
       return {
         ...base,
         mode: "profile",
+        modeSupported: true,
+        items: [],
+        itemCount: 0,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  // YouTube playlist / mix → video list (same pick-download UX as profile)
+  if (provider.id === "youtube" && (mode === "playlist" || isYouTubePlaylistUrl(sourceUrl))) {
+    try {
+      const playlist = await resolveYouTubePlaylist(sourceUrl, {
+        maxVideos:
+          opts.playlistMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.playlistMaxVideos,
+      });
+      const items: ExtractPreviewItem[] = playlist.videos.map((v, index) => ({
+        index: index + 1,
+        url: v.url,
+        title: v.title,
+        coverUrl: v.coverUrl || coverUrlFromMediaUrl(v.url),
+        durationText: v.durationText,
+        durationSec: v.durationSec,
+      }));
+      const more = playlist.truncated ? " (truncated)" : "";
+      return {
+        ...base,
+        mode: "playlist",
+        modeSupported: true,
+        title: playlist.playlistTitle,
+        items,
+        itemCount: items.length,
+        truncated: playlist.truncated,
+        message:
+          items.length === 0
+            ? `No videos found in ${playlist.playlistTitle ?? "this playlist"}.`
+            : `Found ${items.length} video${items.length === 1 ? "" : "s"} in ${
+                playlist.playlistTitle ?? "playlist"
+              }${more}.`,
+      };
+    } catch (err) {
+      return {
+        ...base,
+        mode: "playlist",
         modeSupported: true,
         items: [],
         itemCount: 0,

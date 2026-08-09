@@ -62,6 +62,8 @@ export interface YoutubeDownloadOptions {
   resume?: boolean;
   /** Max videos to pull from a channel / profile (default 50, max 500). */
   channelMaxVideos?: number;
+  /** Max videos to pull from a playlist / mix (default 50, max 500). */
+  playlistMaxVideos?: number;
 }
 
 export const DEFAULT_YOUTUBE_OPTIONS: Required<YoutubeDownloadOptions> = {
@@ -73,6 +75,7 @@ export const DEFAULT_YOUTUBE_OPTIONS: Required<YoutubeDownloadOptions> = {
   tagMetadata: true,
   resume: true,
   channelMaxVideos: 50,
+  playlistMaxVideos: 50,
 };
 
 /** What kinds of URLs / jobs a provider can handle. */

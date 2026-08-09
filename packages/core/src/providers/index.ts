@@ -15,6 +15,12 @@ export {
 } from "./youtube/channel";
 export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./youtube/channel";
 export {
+  isYouTubePlaylistUrl,
+  resolveYouTubePlaylist,
+  extractYouTubePlaylistId,
+} from "./youtube/playlist";
+export type { YoutubePlaylistVideo, YoutubePlaylistResolveResult } from "./youtube/playlist";
+export {
   scrapePageMeta,
   fetchHtmlOrPlaywrightMeta,
   closePlaywrightBrowser,

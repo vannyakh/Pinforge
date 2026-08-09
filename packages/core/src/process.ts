@@ -14,9 +14,11 @@ import {
   detectProvider,
   isBoardUrl,
   isYouTubeChannelUrl,
+  isYouTubePlaylistUrl,
   resolveBoard,
   resolvePin,
   resolveYouTubeChannel,
+  resolveYouTubePlaylist,
   type MediaProvider,
 } from "./providers";
 import { resolveYouTubeVideo } from "./providers/youtube/service";
@@ -136,6 +138,10 @@ export async function processMedia(
 
   if (provider.id === "youtube" && isYouTubeChannelUrl(url)) {
     return processYouTubeChannel(url, opts);
+  }
+
+  if (provider.id === "youtube" && isYouTubePlaylistUrl(url)) {
+    return processYouTubePlaylist(url, opts);
   }
 
   const resolved = await provider.resolve(url, {
@@ -346,6 +352,101 @@ async function processYouTubeChannel(
       opts.onProgress?.({
         current: i + 1,
         total: channel.videos.length,
+        url: video.url,
+        error: message,
+      });
+      return { ok: false as const, index: i, error: message, url: video.url };
+    }
+  });
+
+  const results: ProcessResult[] = [];
+  const errors: { url: string; error: string }[] = [];
+  for (const o of outcomes) {
+    if (o.ok) results.push(o.result);
+    else errors.push({ url: o.url, error: o.error });
+  }
+
+  return { results, errors, provider: "youtube", kind: "batch" };
+}
+
+async function processYouTubePlaylist(
+  url: string,
+  opts: ProcessBoardOptions
+): Promise<DownloadResult> {
+  const ytOpts = { ...DEFAULT_YOUTUBE_OPTIONS, ...opts.youtube };
+  const maxVideos = ytOpts.playlistMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.playlistMaxVideos;
+  const playlist = await resolveYouTubePlaylist(url, {
+    maxVideos,
+    signal: opts.signal,
+  });
+
+  if (playlist.videos.length === 0) {
+    throw new Error(
+      playlist.playlistTitle
+        ? `No videos found in playlist “${playlist.playlistTitle}”.`
+        : "No videos found in this YouTube playlist."
+    );
+  }
+
+  opts.onProgress?.({
+    current: 0,
+    total: playlist.videos.length,
+    url,
+    title: playlist.playlistTitle,
+    phase: "resolved",
+    percent: 0,
+  });
+
+  const delayMs = opts.delayMs ?? 400;
+  const itemConcurrency = Math.max(1, Math.min(2, opts.itemConcurrency ?? 2));
+  const outDir =
+    ytOpts.organizeByChannel && playlist.playlistTitle
+      ? path.join(opts.outDir, sanitizeFilename(playlist.playlistTitle))
+      : opts.outDir;
+
+  const outcomes = await mapPool(playlist.videos, itemConcurrency, async (video, i) => {
+    if (i > 0 && delayMs > 0) await sleep(Math.min(delayMs, 400));
+    opts.signal?.throwIfAborted?.();
+    try {
+      const media = await resolveYouTubeVideo(video.url, {
+        format: opts.format ?? "best",
+        youtube: opts.youtube,
+        outDir,
+        extractorUrl: opts.extractorUrl,
+        fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+        signal: opts.signal,
+        onByteProgress: (p) => {
+          const percent =
+            p.total && p.total > 0
+              ? Math.min(99, Math.round((p.downloaded / p.total) * 100))
+              : undefined;
+          opts.onProgress?.({
+            current: i,
+            total: playlist.videos.length,
+            url: video.url,
+            title: video.title ?? playlist.playlistTitle,
+            percent,
+            downloaded: p.downloaded,
+            totalBytes: p.total,
+            phase: p.phase ?? "download",
+          });
+        },
+      });
+      const result = await writeResolved(media, { ...opts, outDir });
+      opts.onProgress?.({
+        current: i + 1,
+        total: playlist.videos.length,
+        url: video.url,
+        title: result.title ?? video.title,
+        result,
+        percent: Math.round(((i + 1) / playlist.videos.length) * 100),
+      });
+      return { ok: true as const, index: i, result, url: video.url };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      opts.onProgress?.({
+        current: i + 1,
+        total: playlist.videos.length,
         url: video.url,
         error: message,
       });

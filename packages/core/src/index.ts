@@ -12,8 +12,11 @@ export { resolvePin, resolveBoard, isBoardUrl, isPinUrl, isPinterestUrl } from "
 export {
   isYouTubeChannelUrl,
   resolveYouTubeChannel,
+  isYouTubePlaylistUrl,
+  resolveYouTubePlaylist,
 } from "./providers";
 export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./providers";
+export type { YoutubePlaylistVideo, YoutubePlaylistResolveResult } from "./providers";
 export {
   listProviders,
   getProvider,

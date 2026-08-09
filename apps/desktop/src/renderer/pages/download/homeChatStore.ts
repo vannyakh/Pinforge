@@ -50,6 +50,8 @@ export type ChatMessage = {
   extract?: ExtractPreview | null;
   status?: "detecting" | "ready" | "error" | "started" | "done" | "failed";
   pendingConfirm?: boolean;
+  /** Selected extract item URLs for profile / bulk pick-download. */
+  selectedItemUrls?: string[];
   /** Single-item download result card (shown when done). */
   result?: ChatDownloadCard | null;
   /** Download / extract cards (list). */
@@ -154,6 +156,12 @@ export const useHomeChatStore = create<HomeChatState>((set) => ({
 
 export function selectPendingConfirm(messages: ChatMessage[]) {
   return messages.find((m) => m.pendingConfirm && m.status === "ready");
+}
+
+/** Profile / board / multi-item extracts that need a pick list. */
+export function isSelectableExtract(extract: ExtractPreview | null | undefined): boolean {
+  if (!extract) return false;
+  return extract.itemCount > 1 || (extract.mode !== "single" && extract.items.length > 0);
 }
 
 export function makeDownloadCards(
