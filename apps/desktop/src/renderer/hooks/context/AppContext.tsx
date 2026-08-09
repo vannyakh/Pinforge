@@ -119,6 +119,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           format: opts?.format ?? settings.format,
           features: opts?.features ?? settings.enhanceFeatures,
           youtube: opts?.youtube ?? settings.youtube,
+          pinterest: settings.pinterest,
         });
         const stopped = res.errors.some((e) => /stopped/i.test(e.error));
         if (
@@ -174,6 +175,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               : prev.enhanceFeatures,
             autoDownload: next.autoDownload ?? prev.autoDownload,
             youtube: next.youtube ? { ...prev.youtube, ...next.youtube } : prev.youtube,
+            pinterest: next.pinterest
+              ? { ...prev.pinterest, ...next.pinterest }
+              : prev.pinterest,
           }
         : prev
     );

@@ -1,5 +1,6 @@
 /**
  * YouTube channel / profile listing via Innertube (+ HTML fallback for @handles).
+ * Supports channel tabs: /videos, /shorts, /streams.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,31 +27,71 @@ export interface YoutubeChannelVideo {
   durationSec?: number;
 }
 
+export type YoutubeChannelTab = "videos" | "shorts" | "streams";
+
 export interface YoutubeChannelResolveResult {
   channelId: string;
   channelTitle?: string;
   videos: YoutubeChannelVideo[];
   truncated?: boolean;
+  /** Which channel tab was listed. */
+  tab: YoutubeChannelTab;
 }
 
 const DEFAULT_MAX = 50;
 
-/** Channel / @handle / /c/ /user/ — not a single watch/shorts URL. */
+/** Strip /videos|/shorts|/streams tab so resolveURL / HTML work on the channel root. */
+export function youtubeChannelRootUrl(url: string): string {
+  try {
+    const u = new URL(url.trim());
+    const m = u.pathname.match(/^\/((?:channel|c|user)\/[^/]+|@[^/]+)/i);
+    if (m) {
+      u.pathname = `/${m[1]}`;
+      u.search = "";
+      u.hash = "";
+      return u.toString();
+    }
+  } catch {
+    /* ignore */
+  }
+  return url.trim();
+}
+
+/** Detect /videos, /shorts, or /streams tab from a channel URL. */
+export function detectYouTubeChannelTab(url: string): YoutubeChannelTab {
+  try {
+    const u = new URL(url.trim());
+    const tab = u.pathname.match(/\/(shorts|videos|streams)\/?$/i)?.[1]?.toLowerCase();
+    if (tab === "shorts") return "shorts";
+    if (tab === "streams") return "streams";
+    return "videos";
+  } catch {
+    return "videos";
+  }
+}
+
+/**
+ * Channel / @handle / /c/ /user/ including tab paths (/shorts, /videos, /streams).
+ * Not a single watch URL or /shorts/VIDEO_ID.
+ */
 export function isYouTubeChannelUrl(url: string): boolean {
   try {
     const u = new URL(url.trim());
     if (!/^(www\.)?(youtube\.com|m\.youtube\.com)$/i.test(u.hostname)) return false;
     if (u.searchParams.has("v")) return false;
-    if (/\/(watch|shorts|embed|live|playlist)\b/i.test(u.pathname)) return false;
-    if (/^\/(channel|c|user)\//i.test(u.pathname)) return true;
-    if (/^\/@/.test(u.pathname)) return true;
+    // Single Short: /shorts/abcdef…
+    if (/\/shorts\/[\w-]+/i.test(u.pathname)) return false;
+    if (/\/(watch|embed|live|playlist)\b/i.test(u.pathname)) return false;
+    if (/^\/(channel|c|user)\/[^/]+/i.test(u.pathname)) return true;
+    if (/^\/@[^/]+/i.test(u.pathname)) return true;
     return false;
   } catch {
     return false;
   }
 }
 
-function videoUrl(id: string): string {
+function videoUrl(id: string, tab: YoutubeChannelTab): string {
+  if (tab === "shorts") return `https://www.youtube.com/shorts/${id}`;
   return `https://www.youtube.com/watch?v=${id}`;
 }
 
@@ -66,14 +107,19 @@ function pickVideoId(node: AnyYt): string | null {
     node.video_id ||
     node.on_tap_endpoint?.payload?.videoId ||
     node.endpoint?.payload?.videoId ||
-    node.navigation_endpoint?.payload?.videoId;
-  return typeof id === "string" && id.length >= 6 ? id : null;
+    node.navigation_endpoint?.payload?.videoId ||
+    (typeof node.entity_id === "string"
+      ? node.entity_id.replace(/^shorts-shelf-item-/, "")
+      : null);
+  if (typeof id === "string" && /^[\w-]{6,}$/.test(id)) return id;
+  return null;
 }
 
 function pickVideoTitle(node: AnyYt): string | undefined {
   const raw =
     node?.title?.text ??
     node?.title ??
+    node?.overlay_metadata?.primary_text?.text ??
     node?.metadata?.title?.text ??
     node?.metadata?.title ??
     node?.metadata?.lockup_metadata_view?.title?.text;
@@ -137,7 +183,6 @@ function pickDuration(node: AnyYt): { text?: string; sec?: number } {
           : "";
     if (!raw || raw === "[object Object]") continue;
     if (!/\d/.test(raw) || !/[:\d]/.test(raw)) continue;
-    // Prefer clock-like strings
     if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw.trim()) && !/^\d+\s*(s|sec|min)/i.test(raw)) {
       if (!/^\d{1,2}:\d{2}/.test(raw.trim())) continue;
     }
@@ -149,7 +194,7 @@ function pickDuration(node: AnyYt): { text?: string; sec?: number } {
 
 async function resolveChannelIdFromHtml(url: string, signal?: AbortSignal): Promise<string | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetch(youtubeChannelRootUrl(url), {
       signal,
       headers: {
         "user-agent":
@@ -160,7 +205,6 @@ async function resolveChannelIdFromHtml(url: string, signal?: AbortSignal): Prom
     });
     if (!res.ok) return null;
     const html = await res.text();
-    // Prefer canonical / owner ids — bare "channelId" often matches related channels first.
     const patterns = [
       /"externalId":"(UC[\w-]+)"/,
       /"browseId":"(UC[\w-]+)"/,
@@ -181,12 +225,13 @@ async function resolveChannelIdFromHtml(url: string, signal?: AbortSignal): Prom
 }
 
 async function resolveChannelId(url: string, yt: AnyYt, signal?: AbortSignal): Promise<string> {
-  const u = new URL(url.trim());
+  const root = youtubeChannelRootUrl(url);
+  const u = new URL(root);
   const fromPath = u.pathname.match(/\/channel\/(UC[\w-]+)/i);
   if (fromPath?.[1]) return fromPath[1];
 
   try {
-    const endpoint = await yt.resolveURL(url.trim());
+    const endpoint = await yt.resolveURL(root);
     const browseId =
       endpoint?.payload?.browseId ??
       endpoint?.metadata?.browseId ??
@@ -198,10 +243,9 @@ async function resolveChannelId(url: string, yt: AnyYt, signal?: AbortSignal): P
     /* fall through */
   }
 
-  const fromHtml = await resolveChannelIdFromHtml(url, signal);
+  const fromHtml = await resolveChannelIdFromHtml(root, signal);
   if (fromHtml) return fromHtml;
 
-  // Last resort: search by @handle / path segment
   const handle = u.pathname.match(/^\/@([^/]+)/)?.[1];
   if (handle) {
     try {
@@ -225,8 +269,24 @@ async function resolveChannelId(url: string, yt: AnyYt, signal?: AbortSignal): P
   );
 }
 
+async function loadChannelTabPage(
+  channel: AnyYt,
+  tab: YoutubeChannelTab
+): Promise<AnyYt | null> {
+  if (tab === "shorts") {
+    if (!channel.has_shorts) return null;
+    return channel.getShorts();
+  }
+  if (tab === "streams") {
+    if (!channel.has_live_streams) return null;
+    return channel.getLiveStreams();
+  }
+  if (!channel.has_videos) return null;
+  return channel.getVideos();
+}
+
 /**
- * List uploads from a YouTube channel / profile URL.
+ * List uploads from a YouTube channel / profile URL (optionally a /shorts or /streams tab).
  * Caps at `maxVideos` (default 50) and sets `truncated` when more exist.
  */
 export async function resolveYouTubeChannel(
@@ -234,6 +294,7 @@ export async function resolveYouTubeChannel(
   opts: { maxVideos?: number; signal?: AbortSignal } = {}
 ): Promise<YoutubeChannelResolveResult> {
   const maxVideos = Math.max(1, Math.min(500, opts.maxVideos ?? DEFAULT_MAX));
+  const tab = detectYouTubeChannelTab(url);
   opts.signal?.throwIfAborted?.();
 
   const { Innertube, ClientType, UniversalCache } = await getInnertube();
@@ -258,11 +319,12 @@ export async function resolveYouTubeChannel(
       ? channelTitleRaw.trim()
       : undefined;
 
-  if (!channel.has_videos) {
-    return { channelId, channelTitle, videos: [] };
+  const firstPage = await loadChannelTabPage(channel, tab);
+  if (!firstPage) {
+    return { channelId, channelTitle, videos: [], tab, truncated: false };
   }
 
-  let page: AnyYt = await channel.getVideos();
+  let page: AnyYt = firstPage;
   const seen = new Set<string>();
   const videos: YoutubeChannelVideo[] = [];
 
@@ -274,7 +336,7 @@ export async function resolveYouTubeChannel(
       const duration = pickDuration(node);
       videos.push({
         id,
-        url: videoUrl(id),
+        url: videoUrl(id, tab),
         title: pickVideoTitle(node),
         coverUrl: pickCoverUrl(node, id),
         durationText: duration.text,
@@ -299,5 +361,6 @@ export async function resolveYouTubeChannel(
     channelTitle,
     videos,
     truncated: Boolean(page.has_continuation) || videos.length >= maxVideos,
+    tab,
   };
 }

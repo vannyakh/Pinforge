@@ -12,7 +12,7 @@ import type {
 import { DEFAULT_ENHANCE_FEATURES } from "./types";
 import {
   detectProvider,
-  isBoardUrl,
+  isPinterestCollectionUrl,
   isYouTubeChannelUrl,
   isYouTubePlaylistUrl,
   resolveBoard,
@@ -24,7 +24,8 @@ import {
 import { resolveYouTubeVideo } from "./providers/youtube/service";
 import { sanitizeFilename, sleep } from "./utils";
 import { mapPool } from "./download/pool";
-import { DEFAULT_YOUTUBE_OPTIONS } from "./types";
+import { DEFAULT_PINTEREST_OPTIONS, DEFAULT_YOUTUBE_OPTIONS } from "./types";
+import { zipFolder } from "./zip/folderZip";
 
 export interface ProcessBoardOptions extends ProcessOptions {
   onProgress?: (info: {
@@ -49,8 +50,24 @@ async function writeResolved(
   await fs.mkdir(opts.outDir, { recursive: true });
 
   const enhance = opts.enhance !== false && media.kind === "image" && media.buffer;
-  const base = sanitizeFilename(media.title ?? `${media.provider}-${Date.now()}`);
-  const stamp = Date.now();
+  const idPart = media.id ? sanitizeFilename(media.id) : "";
+  const titlePart = sanitizeFilename(
+    media.title?.trim() || (idPart ? media.provider : `${media.provider}-${Date.now()}`)
+  );
+  // Stable name when id known → resume / duplicate skip
+  const base = idPart
+    ? sanitizeFilename(`${titlePart}-${idPart}`.slice(0, 180))
+    : titlePart;
+  const stamp = idPart ? "" : `-${Date.now()}`;
+
+  const exists = async (p: string) => {
+    try {
+      await fs.access(p);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   if (enhance && media.buffer) {
     const features = {
@@ -61,15 +78,27 @@ async function writeResolved(
       preset: opts.preset ?? "auto",
       features,
     });
-    const outPath = path.join(opts.outDir, `${base}-${stamp}.${enhanced.ext}`);
+    const enhancedPath = path.join(opts.outDir, `${base}${stamp}.${enhanced.ext}`);
+    if (idPart && (await exists(enhancedPath))) {
+      return {
+        outPath: enhancedPath,
+        sourceUrl: media.sourceUrl,
+        title: media.title,
+        provider: media.provider,
+        kind: media.kind,
+        skipped: true,
+      };
+    }
     let originalPath: string | undefined;
     if (features.keepOriginal !== false) {
-      originalPath = path.join(opts.outDir, `${base}-${stamp}-original.${media.ext}`);
-      await fs.writeFile(originalPath, media.buffer);
+      originalPath = path.join(opts.outDir, `${base}${stamp}-original.${media.ext}`);
+      if (!(idPart && (await exists(originalPath)))) {
+        await fs.writeFile(originalPath, media.buffer);
+      }
     }
-    await fs.writeFile(outPath, enhanced.buffer);
+    await fs.writeFile(enhancedPath, enhanced.buffer);
     return {
-      outPath,
+      outPath: enhancedPath,
       originalPath,
       sourceUrl: media.sourceUrl,
       title: media.title,
@@ -91,7 +120,17 @@ async function writeResolved(
         kind: media.kind,
       };
     }
-    const dest = path.join(opts.outDir, `${base}-${stamp}.${media.ext}`);
+    const dest = path.join(opts.outDir, `${base}${stamp}.${media.ext}`);
+    if (idPart && (await exists(dest))) {
+      return {
+        outPath: dest,
+        sourceUrl: media.sourceUrl,
+        title: media.title,
+        provider: media.provider,
+        kind: media.kind,
+        skipped: true,
+      };
+    }
     await fs.copyFile(media.filePath, dest);
     return {
       outPath: dest,
@@ -105,7 +144,17 @@ async function writeResolved(
   const buffer = media.buffer ?? null;
   if (!buffer) throw new Error("Resolved media has no buffer or file path");
 
-  const outPath = path.join(opts.outDir, `${base}-${stamp}.${media.ext}`);
+  const outPath = path.join(opts.outDir, `${base}${stamp}.${media.ext}`);
+  if (idPart && (await exists(outPath))) {
+    return {
+      outPath,
+      sourceUrl: media.sourceUrl,
+      title: media.title,
+      provider: media.provider,
+      kind: media.kind,
+      skipped: true,
+    };
+  }
   await fs.writeFile(outPath, buffer);
   return {
     outPath,
@@ -132,7 +181,7 @@ export async function processMedia(
   const provider = detectProvider(url);
   const itemConcurrency = Math.max(1, opts.itemConcurrency ?? 3);
 
-  if (provider.id === "pinterest" && isBoardUrl(url)) {
+  if (provider.id === "pinterest" && isPinterestCollectionUrl(url)) {
     return processPinterestBoard(url, opts, provider.id);
   }
 
@@ -223,16 +272,28 @@ async function processPinterestBoard(
   opts: ProcessBoardOptions,
   providerId: ProviderId
 ): Promise<DownloadResult> {
-  const { pinUrls, boardName } = await resolveBoard(url);
+  const pinOpts = { ...DEFAULT_PINTEREST_OPTIONS, ...opts.pinterest };
+  const maxPins = Math.max(
+    1,
+    Math.min(2000, pinOpts.boardMaxPins ?? DEFAULT_PINTEREST_OPTIONS.boardMaxPins)
+  );
+  const { pinUrls, pins, boardName, kind } = await resolveBoard(url, {
+    maxPins,
+    signal: opts.signal,
+  });
   const delayMs = opts.delayMs ?? 400;
   const itemConcurrency = Math.max(1, opts.itemConcurrency ?? 3);
-  const outDir = boardName
-    ? path.join(opts.outDir, sanitizeFilename(boardName))
-    : opts.outDir;
+  const folderLabel =
+    boardName ||
+    (kind === "profile" ? "pinterest-profile" : kind === "search" ? "pinterest-search" : "pinterest-board");
+  const outDir = path.join(opts.outDir, sanitizeFilename(folderLabel));
+
+  const pinMeta = new Map((pins ?? []).map((p) => [p.url, p]));
 
   const outcomes = await mapPool(pinUrls, itemConcurrency, async (pinUrl, i) => {
     if (i > 0 && delayMs > 0) await sleep(Math.min(delayMs, 250));
     try {
+      const meta = pinMeta.get(pinUrl);
       const asset = await resolvePin(pinUrl);
       const result = await writeResolved(
         {
@@ -240,8 +301,9 @@ async function processPinterestBoard(
           buffer: asset.buffer,
           ext: asset.ext,
           sourceUrl: asset.sourceUrl,
-          title: asset.title,
+          title: asset.title || meta?.title,
           provider: providerId,
+          id: asset.pinId || meta?.pinId,
         },
         { ...opts, outDir }
       );
@@ -250,6 +312,7 @@ async function processPinterestBoard(
         total: pinUrls.length,
         url: pinUrl,
         result,
+        title: asset.title || meta?.title,
       });
       return { ok: true as const, index: i, result, url: pinUrl };
     } catch (err) {
@@ -271,7 +334,23 @@ async function processPinterestBoard(
     else errors.push({ url: o.url, error: o.error });
   }
 
-  return { results, errors, provider: providerId, kind: "batch" };
+  let zipPath: string | undefined;
+  if (pinOpts.zipBoards && results.length > 0) {
+    try {
+      opts.onProgress?.({
+        current: pinUrls.length,
+        total: pinUrls.length,
+        url,
+        phase: "zip",
+        title: boardName,
+      });
+      zipPath = await zipFolder(outDir);
+    } catch {
+      /* zip is best-effort */
+    }
+  }
+
+  return { results, errors, provider: providerId, kind: "batch", zipPath };
 }
 
 async function processYouTubeChannel(

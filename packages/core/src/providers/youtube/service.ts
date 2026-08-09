@@ -14,6 +14,7 @@ import { extractYouTubeId } from "../extractors/youtube";
 import {
   audioOutputExt,
   extFromMime,
+  heightFromLabel,
   pickAudioOnly,
   pickDashPair,
   pickProgressive,
@@ -67,10 +68,43 @@ type VideoMeta = {
   channel?: string;
   description?: string;
   uploadDate?: string;
+  durationSec?: number;
   thumbnailUrl?: string;
   formats: YtStreamFormat[];
   captions: CaptionTrack[];
 };
+
+export type YoutubeVideoPreview = {
+  id: string;
+  title: string;
+  channel?: string;
+  description?: string;
+  durationSec?: number;
+  durationText?: string;
+  thumbnailUrl?: string;
+  qualities: number[];
+  captionLangs: string[];
+};
+
+function formatDurationText(sec?: number): string | undefined {
+  if (sec == null || !Number.isFinite(sec) || sec < 0) return undefined;
+  const s = Math.floor(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function uniqueHeights(formats: YtStreamFormat[]): number[] {
+  const set = new Set<number>();
+  for (const f of formats) {
+    if (!f.has_video) continue;
+    const h = heightFromLabel(f.quality_label, f.height);
+    if (h > 0) set.add(h);
+  }
+  return [...set].sort((a, b) => b - a);
+}
 
 async function resolveInnertubeMeta(id: string): Promise<VideoMeta> {
   const { Innertube, ClientType, UniversalCache } = await getInnertube();
@@ -84,8 +118,6 @@ async function resolveInnertubeMeta(id: string): Promise<VideoMeta> {
         client_type: ClientType[client],
       });
       const info = await yt.getBasicInfo(id, { client });
-      // youtubei.js shapes vary by client — keep access loose
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const basic: any = info.basic_info ?? {};
       const formats: YtStreamFormat[] = [
         ...(info.streaming_data?.formats ?? []),
@@ -130,6 +162,12 @@ async function resolveInnertubeMeta(id: string): Promise<VideoMeta> {
         uploadDate: basic.start_timestamp
           ? String(basic.start_timestamp).slice(0, 10)
           : undefined,
+        durationSec:
+          typeof basic.duration === "number"
+            ? basic.duration
+            : typeof basic.duration_seconds === "number"
+              ? basic.duration_seconds
+              : undefined,
         thumbnailUrl,
         formats,
         captions,
@@ -139,6 +177,31 @@ async function resolveInnertubeMeta(id: string): Promise<VideoMeta> {
     }
   }
   throw lastError ?? new Error("Innertube extraction failed");
+}
+
+/** Lightweight video info for Home extract preview (title, channel, duration, qualities). */
+export async function previewYouTubeVideo(url: string): Promise<YoutubeVideoPreview> {
+  const id = await extractYouTubeId(url);
+  if (!id) throw new Error("Could not parse YouTube video id from URL");
+  const meta = await resolveInnertubeMeta(id);
+  const captionLangs = [
+    ...new Set(
+      meta.captions
+        .map((t) => (t.language_code || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  return {
+    id: meta.id,
+    title: meta.title,
+    channel: meta.channel,
+    description: meta.description,
+    durationSec: meta.durationSec,
+    durationText: formatDurationText(meta.durationSec),
+    thumbnailUrl: meta.thumbnailUrl,
+    qualities: uniqueHeights(meta.formats),
+    captionLangs,
+  };
 }
 
 async function downloadUrlToFile(
@@ -209,6 +272,7 @@ export async function resolveYouTubeVideo(
   const ytOpts = { ...DEFAULT_YOUTUBE_OPTIONS, ...opts.youtube };
   const quality = qualityFromFormat(format, ytOpts.quality);
   const audioOnly = format === "audio-only";
+  const preferMp4 = format === "mp4";
 
   let meta: VideoMeta;
   try {
@@ -226,7 +290,7 @@ export async function resolveYouTubeVideo(
 
   const workRoot =
     opts.outDir ??
-    path.join(os.tmpdir(), "pinforge-yt", id, String(Date.now()));
+    path.join(os.tmpdir(), "pinforge-yt", id);
   await fs.mkdir(workRoot, { recursive: true });
 
   const channelDir =
@@ -235,9 +299,9 @@ export async function resolveYouTubeVideo(
       : opts.outDir ?? workRoot;
   if (opts.outDir) await fs.mkdir(channelDir, { recursive: true });
 
-  const stamp = Date.now();
-  const baseName = sanitizeFilename(meta.title);
-  const tmpDir = path.join(workRoot, `.tmp-${stamp}`);
+  // Stable names so Stop → Continue can resume the same .part paths
+  const baseName = sanitizeFilename(`${meta.title}-${id}`.slice(0, 180));
+  const tmpDir = path.join(workRoot, ".yt-tmp", id);
   await fs.mkdir(tmpDir, { recursive: true });
 
   const headersAcceptVideo = "video/mp4,video/webm,video/*,*/*;q=0.8";
@@ -254,7 +318,7 @@ export async function resolveYouTubeVideo(
 
   try {
     if (audioOnly) {
-      const audio = pickAudioOnly(meta.formats);
+      const audio = pickAudioOnly(meta.formats, preferMp4 || ytOpts.audioContainer === "m4a");
       if (!audio?.url) throw new Error("No audio stream available");
       const srcExt = extFromMime(audio.mime_type) || "m4a";
       const rawPath = path.join(tmpDir, `audio.${srcExt}`);
@@ -278,7 +342,7 @@ export async function resolveYouTubeVideo(
         await convertAudio(rawPath, mediaPath, want);
       }
     } else {
-      const dash = pickDashPair(meta.formats, quality);
+      const dash = pickDashPair(meta.formats, quality, preferMp4);
       const ff = await resolveFfmpeg();
 
       if (dash?.video.url && dash.audio.url && ff) {
@@ -318,7 +382,12 @@ export async function resolveYouTubeVideo(
             emitDash();
           },
         });
-        outExt = vExt === "webm" && aExt === "webm" ? "webm" : "mp4";
+        outExt =
+          preferMp4 || vExt === "mp4"
+            ? "mp4"
+            : vExt === "webm" && aExt === "webm"
+              ? "webm"
+              : "mp4";
         mediaPath = path.join(tmpDir, `merged.${outExt}`);
         onProg?.({
           downloaded: (vTotal ?? vDone) + (aTotal ?? aDone),
@@ -327,7 +396,7 @@ export async function resolveYouTubeVideo(
         });
         await muxAv(vPath, aPath, mediaPath);
       } else {
-        const progressive = pickProgressive(meta.formats, quality);
+        const progressive = pickProgressive(meta.formats, quality, preferMp4);
         if (!progressive?.url) {
           if (dash && !ff) throw new Error(requireFfmpegMessage());
           throw new Error("No matching video stream");
@@ -375,7 +444,7 @@ export async function resolveYouTubeVideo(
 
     const finalDir = channelDir;
     await fs.mkdir(finalDir, { recursive: true });
-    let finalPath = path.join(finalDir, `${baseName}-${stamp}.${outExt}`);
+    let finalPath = path.join(finalDir, `${baseName}.${outExt}`);
 
     const needsTag =
       ytOpts.tagMetadata ||
@@ -421,7 +490,7 @@ export async function resolveYouTubeVideo(
 
     const savedSubs: string[] = [];
     for (const sub of subtitlePaths) {
-      const dest = path.join(finalDir, path.basename(sub).replace(baseName, `${baseName}-${stamp}`));
+      const dest = path.join(finalDir, path.basename(sub));
       await fs.copyFile(sub, dest);
       savedSubs.push(dest);
     }

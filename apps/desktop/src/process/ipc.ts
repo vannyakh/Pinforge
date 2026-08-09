@@ -7,11 +7,15 @@ import {
   PRESETS,
   DEFAULT_ENHANCE_FEATURES,
   DEFAULT_YOUTUBE_OPTIONS,
+  DEFAULT_PINTEREST_OPTIONS,
+  configurePinterestCookies,
+  zipFolder,
   type PresetName,
   type FormatPreset,
   type ProcessResult,
   type EnhanceFeatures,
   type YoutubeDownloadOptions,
+  type PinterestOptions,
 } from "@pinterest-desktop/core";
 import {
   getStore,
@@ -97,6 +101,7 @@ async function runProcess(
     format?: FormatPreset;
     features?: Partial<EnhanceFeatures>;
     youtube?: YoutubeDownloadOptions;
+    pinterest?: PinterestOptions;
   }
 ) {
   const store = getStore();
@@ -112,6 +117,12 @@ async function runProcess(
     ...store.get("youtube"),
     ...payload.youtube,
   };
+  const pinterest = {
+    ...DEFAULT_PINTEREST_OPTIONS,
+    ...store.get("pinterest"),
+    ...payload.pinterest,
+  };
+  configurePinterestCookies(pinterest.cookies);
 
   // Provider extension overrides (engine / format / extractor / plugins)
   let providerCfg: CustomProviderConfig | undefined;
@@ -186,6 +197,7 @@ async function runProcess(
       features,
       format,
       youtube,
+      pinterest,
       extractorUrl,
       delayMs: store.get("delayMs"),
       itemConcurrency: 3,
@@ -326,6 +338,13 @@ async function runProcess(
 }
 
 export function registerIpc(): void {
+  try {
+    const pin = getStore().get("pinterest");
+    configurePinterestCookies(pin?.cookies);
+  } catch {
+    /* store may not be ready */
+  }
+
   ipcMain.handle("media:process", async (e, payload) => runProcess(e, payload));
   ipcMain.handle("pin:process", async (e, payload) => runProcess(e, payload));
   ipcMain.handle("media:cancel", async () => {
@@ -357,6 +376,7 @@ export function registerIpc(): void {
       opts?: {
         channelMaxVideos?: number;
         playlistMaxVideos?: number;
+        boardMaxPins?: number;
         preferPlaylist?: boolean;
       }
     ) => {
@@ -366,9 +386,15 @@ export function registerIpc(): void {
         ...DEFAULT_YOUTUBE_OPTIONS,
         ...store.get("youtube"),
       };
+      const pinterest = {
+        ...DEFAULT_PINTEREST_OPTIONS,
+        ...store.get("pinterest"),
+      };
+      configurePinterestCookies(pinterest.cookies);
       return await extractMediaPreview(url, {
         channelMaxVideos: opts?.channelMaxVideos ?? youtube.channelMaxVideos,
         playlistMaxVideos: opts?.playlistMaxVideos ?? youtube.playlistMaxVideos,
+        boardMaxPins: opts?.boardMaxPins ?? pinterest.boardMaxPins,
         preferPlaylist: opts?.preferPlaylist,
       });
     } catch (err) {
@@ -451,6 +477,10 @@ export function registerIpc(): void {
         ...DEFAULT_YOUTUBE_OPTIONS,
         ...store.get("youtube"),
       },
+      pinterest: {
+        ...DEFAULT_PINTEREST_OPTIONS,
+        ...store.get("pinterest"),
+      },
       extractorUrl: store.get("extractorUrl"),
       history: store.get("history"),
       packs: store.get("packs"),
@@ -475,6 +505,7 @@ export function registerIpc(): void {
         autoDownload: boolean;
         format: FormatPreset;
         youtube: Partial<YoutubeDownloadOptions>;
+        pinterest: Partial<PinterestOptions>;
         extractorUrl: string;
         system: Partial<SystemConfig>;
       }>
@@ -499,6 +530,15 @@ export function registerIpc(): void {
           ...store.get("youtube"),
           ...partial.youtube,
         });
+      }
+      if (partial.pinterest !== undefined) {
+        const next = {
+          ...DEFAULT_PINTEREST_OPTIONS,
+          ...store.get("pinterest"),
+          ...partial.pinterest,
+        };
+        store.set("pinterest", next);
+        configurePinterestCookies(next.cookies);
       }
       if (partial.extractorUrl !== undefined) store.set("extractorUrl", partial.extractorUrl);
       if (partial.system !== undefined) {
@@ -527,6 +567,10 @@ export function registerIpc(): void {
         youtube: {
           ...DEFAULT_YOUTUBE_OPTIONS,
           ...store.get("youtube"),
+        },
+        pinterest: {
+          ...DEFAULT_PINTEREST_OPTIONS,
+          ...store.get("pinterest"),
         },
         extractorUrl: store.get("extractorUrl"),
         system: resolveSystemPaths(store.get("system")),
@@ -758,6 +802,41 @@ export function registerIpc(): void {
     }
   });
 
+  /** Previous CPU times for delta usage (main process). */
+  let prevCpuSample: { idle: number; total: number } | null = null;
+
+  ipcMain.handle("system:resources", async () => {
+    const os = await import("node:os");
+    const cpus = os.cpus();
+    let idle = 0;
+    let total = 0;
+    for (const cpu of cpus) {
+      const t = cpu.times;
+      idle += t.idle;
+      const steal = "steal" in t ? Number((t as { steal?: number }).steal ?? 0) : 0;
+      total += t.user + t.nice + t.sys + t.idle + t.irq + steal;
+    }
+    let cpuPercent = 0;
+    if (prevCpuSample && total > prevCpuSample.total) {
+      const dIdle = idle - prevCpuSample.idle;
+      const dTotal = total - prevCpuSample.total;
+      cpuPercent = Math.max(0, Math.min(100, Math.round((1 - dIdle / dTotal) * 100)));
+    }
+    prevCpuSample = { idle, total };
+
+    const memTotal = os.totalmem();
+    const memFree = os.freemem();
+    return {
+      cpuPercent,
+      cpuCount: cpus.length,
+      memory: {
+        used: Math.max(0, memTotal - memFree),
+        free: memFree,
+        total: memTotal,
+      },
+    };
+  });
+
   ipcMain.handle("fs:fileSizes", async (_e, paths: string[]) => {
     const list = Array.isArray(paths) ? paths.filter(Boolean).slice(0, 500) : [];
     const { stat } = await import("node:fs/promises");
@@ -772,6 +851,14 @@ export function registerIpc(): void {
       })
     );
     return out;
+  });
+
+  ipcMain.handle("fs:zipFolder", async (_e, folderPath: string, outZipPath?: string) => {
+    if (!folderPath || typeof folderPath !== "string") {
+      throw new Error("Folder path is required");
+    }
+    const zipPath = await zipFolder(folderPath, outZipPath);
+    return { zipPath };
   });
 
   ipcMain.handle("window:minimize", (e) => {

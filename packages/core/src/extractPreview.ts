@@ -2,6 +2,8 @@ import type { DownloadMode, FormatPreset, ProviderId } from "./types";
 import { detectProvider, ProviderNotFoundError } from "./providers";
 import {
   isBoardUrl,
+  isPinterestCollectionUrl,
+  isProfileUrl,
   resolveBoard,
   isYouTubeChannelUrl,
   resolveYouTubeChannel,
@@ -55,7 +57,9 @@ function classifyMode(providerId: string, url: string): DownloadMode {
   const path = pathOf(url);
 
   if (providerId === "pinterest") {
-    return isBoardUrl(url) ? "board" : "single";
+    if (isProfileUrl(url)) return "profile";
+    if (isBoardUrl(url) || isPinterestCollectionUrl(url)) return "board";
+    return "single";
   }
 
   if (providerId === "youtube") {
@@ -63,7 +67,12 @@ function classifyMode(providerId: string, url: string): DownloadMode {
       const u = new URL(url.trim());
       if (/\/playlist\/?/i.test(u.pathname)) return "playlist";
       if (!u.searchParams.has("v") && u.searchParams.has("list")) return "playlist";
-      if (/^\/(channel|c|user)\//i.test(u.pathname) || /^\/@/.test(u.pathname)) {
+      // Single Short stays single; channel /shorts tab is profile
+      if (/\/shorts\/[\w-]+/i.test(u.pathname)) return "single";
+      if (
+        /^\/(channel|c|user)\/[^/]+/i.test(u.pathname) ||
+        /^\/@[^/]+/i.test(u.pathname)
+      ) {
         return "profile";
       }
     } catch {
@@ -126,6 +135,8 @@ export interface ExtractPreviewOptions {
   channelMaxVideos?: number;
   /** Cap playlist listing (YouTube). Defaults to `DEFAULT_YOUTUBE_OPTIONS.playlistMaxVideos`. */
   playlistMaxVideos?: number;
+  /** Cap Pinterest board / profile / search pins. Defaults to 200. */
+  boardMaxPins?: number;
   /**
    * Treat watch?v=…&list=… as a playlist extract (UI “Get playlist”).
    * Required for Mix / radio lists that must stay on the watch URL.
@@ -194,22 +205,46 @@ export async function extractMediaPreview(
     };
   }
 
-  // Pinterest board / search → real extract list
-  if (provider.id === "pinterest" && mode === "board") {
+  // Pinterest board / profile / search → pin list with covers when available
+  if (
+    provider.id === "pinterest" &&
+    (mode === "board" || mode === "profile" || isPinterestCollectionUrl(sourceUrl))
+  ) {
     try {
-      const board = await resolveBoard(sourceUrl);
-      const items: ExtractPreviewItem[] = board.pinUrls.map((pinUrl, index) => ({
+      const board = await resolveBoard(sourceUrl, {
+        maxPins: opts.boardMaxPins ?? opts.channelMaxVideos ?? 200,
+      });
+      const list =
+        board.pins && board.pins.length > 0
+          ? board.pins
+          : board.pinUrls.map((pinUrl) => {
+              const pinId = pinUrl.match(/\/pin\/(\d+)/)?.[1] ?? "";
+              return { pinId, url: pinUrl, title: undefined as string | undefined, coverUrl: undefined as string | undefined };
+            });
+      const items: ExtractPreviewItem[] = list.map((p, index) => ({
         index: index + 1,
-        url: pinUrl,
-        title: `Pin ${index + 1}`,
+        url: p.url,
+        title: p.title || (p.pinId ? `Pin ${p.pinId}` : `Pin ${index + 1}`),
+        coverUrl: p.coverUrl,
       }));
+      const more = board.truncated ? " (truncated — raise Max and Get list)" : "";
+      const kindLabel =
+        board.kind === "profile"
+          ? "profile"
+          : board.kind === "search"
+            ? "search"
+            : board.kind === "section"
+              ? "section"
+              : "board";
       return {
         ...base,
+        mode: board.kind === "profile" ? "profile" : "board",
         modeSupported: true,
         title: board.boardName,
         items,
         itemCount: items.length,
-        message: `Found ${items.length} pin${items.length === 1 ? "" : "s"} on this board.`,
+        truncated: board.truncated,
+        message: `Found ${items.length} pin${items.length === 1 ? "" : "s"} on this ${kindLabel}${more}.`,
       };
     } catch (err) {
       return {
@@ -222,7 +257,7 @@ export async function extractMediaPreview(
     }
   }
 
-  // YouTube channel / @handle / profile → uploads list
+  // YouTube channel / @handle / profile → uploads (or /shorts /streams tab)
   if (provider.id === "youtube" && (mode === "profile" || isYouTubeChannelUrl(sourceUrl))) {
     try {
       const channel = await resolveYouTubeChannel(sourceUrl, {
@@ -238,6 +273,19 @@ export async function extractMediaPreview(
         durationSec: v.durationSec,
       }));
       const more = channel.truncated ? " (truncated)" : "";
+      const kind =
+        channel.tab === "shorts"
+          ? "short"
+          : channel.tab === "streams"
+            ? "stream"
+            : "video";
+      const kindPlural =
+        channel.tab === "shorts"
+          ? "shorts"
+          : channel.tab === "streams"
+            ? "streams"
+            : "videos";
+      const label = channel.channelTitle ?? "channel";
       return {
         ...base,
         mode: "profile",
@@ -248,10 +296,10 @@ export async function extractMediaPreview(
         truncated: channel.truncated,
         message:
           items.length === 0
-            ? `No videos found on ${channel.channelTitle ?? "this channel"}.`
-            : `Found ${items.length} video${items.length === 1 ? "" : "s"} on ${
-                channel.channelTitle ?? "channel"
-              }${more}.`,
+            ? `No ${kindPlural} found on ${label}.`
+            : `Found ${items.length} ${
+                items.length === 1 ? kind : kindPlural
+              } on ${label}${more}.`,
       };
     } catch (err) {
       return {
@@ -322,6 +370,38 @@ export async function extractMediaPreview(
       itemCount: 0,
       message: `${provider.label} ${mode} extract is not supported yet. Supported: ${supportedModes.join(", ")}.`,
     };
+  }
+
+  // Single YouTube — real Innertube preview (title / channel / duration / qualities)
+  if (provider.id === "youtube" && mode === "single") {
+    try {
+      const { previewYouTubeVideo } = await import("./providers/youtube/service");
+      const preview = await previewYouTubeVideo(sourceUrl);
+      const qualityHint =
+        preview.qualities.length > 0
+          ? ` · up to ${preview.qualities[0]}p`
+          : "";
+      return {
+        ...base,
+        mode: "single",
+        modeSupported: true,
+        title: preview.title,
+        items: [
+          {
+            index: 1,
+            url: sourceUrl,
+            title: preview.title,
+            coverUrl: preview.thumbnailUrl || coverUrlFromMediaUrl(sourceUrl),
+            durationText: preview.durationText,
+            durationSec: preview.durationSec,
+          },
+        ],
+        itemCount: 1,
+        message: `${preview.channel ? `${preview.channel} · ` : ""}${preview.title}${qualityHint}`,
+      };
+    } catch {
+      /* fall through to generic single */
+    }
   }
 
   // Single media — one-item extract list

@@ -167,10 +167,6 @@ const SystemSettings: React.FC = () => {
           <div className="flex items-start justify-between gap-16px mb-10px">
             <div className="min-w-0">
               <div className="text-14px text-t-primary">ffmpeg</div>
-              <div className="text-12px text-t-tertiary mt-4px leading-relaxed">
-                Required for YouTube DASH merge, audio convert (MP3/FLAC), subtitles embed, and
-                metadata tagging. Progressive downloads still work without it.
-              </div>
             </div>
             <Tag color={available ? "green" : "gray"} size="small" className="shrink-0">
               {installing ? "Installing…" : available ? "Installed" : "Not found"}

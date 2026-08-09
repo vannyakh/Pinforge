@@ -1,8 +1,8 @@
 import Store from "electron-store";
 import { app } from "electron";
 import { join } from "node:path";
-import type { FormatPreset, PresetName, ProviderId, MediaKind, EnhanceFeatures, YoutubeDownloadOptions } from "@pinterest-desktop/core";
-import { DEFAULT_ENHANCE_FEATURES, DEFAULT_YOUTUBE_OPTIONS } from "@pinterest-desktop/core";
+import type { FormatPreset, PresetName, ProviderId, MediaKind, EnhanceFeatures, YoutubeDownloadOptions, PinterestOptions } from "@pinterest-desktop/core";
+import { DEFAULT_ENHANCE_FEATURES, DEFAULT_YOUTUBE_OPTIONS, DEFAULT_PINTEREST_OPTIONS } from "@pinterest-desktop/core";
 import {
   DEFAULT_REMOTE,
   DEFAULT_TUNNEL,
@@ -83,6 +83,7 @@ export interface AppStoreSchema {
   autoDownload: boolean;
   format: FormatPreset;
   youtube: YoutubeDownloadOptions;
+  pinterest: PinterestOptions;
   extractorUrl: string;
   history: HistoryItem[];
   packs: DownloadPack[];
@@ -107,6 +108,7 @@ export function getStore(): Store<AppStoreSchema> {
         autoDownload: true,
         format: "best",
         youtube: { ...DEFAULT_YOUTUBE_OPTIONS },
+        pinterest: { ...DEFAULT_PINTEREST_OPTIONS },
         extractorUrl: "",
         history: [],
         packs: [],
@@ -120,6 +122,7 @@ export function getStore(): Store<AppStoreSchema> {
     ensureSystemDefaults(store);
     ensureEnhanceFeatures(store);
     ensureYoutubeOptions(store);
+    ensurePinterestOptions(store);
     if (!Array.isArray(store.get("customProviders"))) {
       store.set("customProviders", []);
     }
@@ -135,6 +138,11 @@ function ensureEnhanceFeatures(s: Store<AppStoreSchema>): void {
 function ensureYoutubeOptions(s: Store<AppStoreSchema>): void {
   const cur = s.get("youtube");
   s.set("youtube", { ...DEFAULT_YOUTUBE_OPTIONS, ...cur });
+}
+
+function ensurePinterestOptions(s: Store<AppStoreSchema>): void {
+  const cur = s.get("pinterest");
+  s.set("pinterest", { ...DEFAULT_PINTEREST_OPTIONS, ...cur });
 }
 
 export function resolveSystemPaths(system: SystemConfig): SystemConfig {

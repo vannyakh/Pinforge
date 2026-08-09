@@ -78,6 +78,21 @@ export const DEFAULT_YOUTUBE_OPTIONS: Required<YoutubeDownloadOptions> = {
   playlistMaxVideos: 50,
 };
 
+export interface PinterestOptions {
+  /** Browser Cookie header (or Netscape lines) for private boards. */
+  cookies?: string;
+  /** Cap pins listed/downloaded from a board/profile/search (1–2000). */
+  boardMaxPins?: number;
+  /** After a board/profile batch, zip the output folder. */
+  zipBoards?: boolean;
+}
+
+export const DEFAULT_PINTEREST_OPTIONS: Required<PinterestOptions> = {
+  cookies: "",
+  boardMaxPins: 200,
+  zipBoards: false,
+};
+
 /** What kinds of URLs / jobs a provider can handle. */
 export type DownloadMode = "single" | "board" | "profile" | "playlist" | "story";
 
@@ -92,6 +107,8 @@ export interface ProcessOptions {
   format?: FormatPreset;
   /** YouTube single-video options (quality, audio, subs, folders). */
   youtube?: YoutubeDownloadOptions;
+  /** Pinterest board/profile options (cookies applied via configurePinterestCookies). */
+  pinterest?: PinterestOptions;
   /** Piped-compatible extractor API base (YouTube fallback). */
   extractorUrl?: string;
   /** Concurrent item downloads for boards/batches (default 3). */
@@ -107,6 +124,8 @@ export interface PinAsset {
   sourceUrl: string;
   title?: string;
   kind?: MediaKind;
+  /** Stable Pinterest pin id when known. */
+  pinId?: string;
 }
 
 export interface ResolvedMedia {
@@ -120,6 +139,8 @@ export interface ResolvedMedia {
   provider: ProviderId;
   /** Channel / uploader name for auto-organization. */
   channel?: string;
+  /** Stable content id (e.g. Pinterest pin id, YouTube video id). */
+  id?: string;
   /** Sidecar subtitle paths written next to the media. */
   subtitlePaths?: string[];
 }
@@ -136,6 +157,8 @@ export interface ProcessResult {
   title?: string;
   provider?: ProviderId;
   kind?: MediaKind;
+  /** True when file already existed and download was skipped. */
+  skipped?: boolean;
 }
 
 export interface DownloadResult {
@@ -143,6 +166,8 @@ export interface DownloadResult {
   errors: { url: string; error: string }[];
   provider: ProviderId;
   kind: "single" | "batch";
+  /** Path to ZIP when board zip export ran. */
+  zipPath?: string;
 }
 
 export interface PipelineOptions {
@@ -154,9 +179,22 @@ export interface EnhanceStepOptions {
   strength?: number;
 }
 
+/** One pin row from a board / profile / search listing. */
+export interface PinListItem {
+  pinId: string;
+  url: string;
+  title?: string;
+  coverUrl?: string;
+}
+
 export interface BoardResolveResult {
   pinUrls: string[];
+  /** Richer listing when scraped from page JSON. */
+  pins?: PinListItem[];
   boardName?: string;
+  /** board | profile | section | search */
+  kind?: "board" | "profile" | "section" | "search";
+  truncated?: boolean;
 }
 
 export interface ProviderInfo {

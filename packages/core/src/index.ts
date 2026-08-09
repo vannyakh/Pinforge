@@ -8,7 +8,7 @@ export type {
   ExtractPreviewItem,
   ExtractPreviewOptions,
 } from "./extractPreview";
-export { resolvePin, resolveBoard, isBoardUrl, isPinUrl, isPinterestUrl } from "./providers";
+export { resolvePin, resolveBoard, isBoardUrl, isPinUrl, isPinterestUrl, isProfileUrl, isPinterestCollectionUrl } from "./providers";
 export {
   isYouTubeChannelUrl,
   resolveYouTubeChannel,
@@ -38,7 +38,12 @@ export { mapPool, runPool, downloadToFile, downloadToBuffer } from "./download";
 export type { FragmentDownloadOptions, FragmentDownloadResult, MapPoolOptions } from "./download";
 export { resolveWorkerBinary, rustPing, rustEnhance, rustDownload } from "./worker/rustWorker";
 export { configureFfmpeg, clearFfmpegCache, resolveFfmpeg } from "./providers/youtube/mux";
-export { PRESETS, DEFAULT_ENHANCE_FEATURES, DEFAULT_YOUTUBE_OPTIONS } from "./types";
+export {
+  configurePinterestCookies,
+  getPinterestCookieHeader,
+} from "./providers/pinterest/session";
+export { zipFolder } from "./zip/folderZip";
+export { PRESETS, DEFAULT_ENHANCE_FEATURES, DEFAULT_YOUTUBE_OPTIONS, DEFAULT_PINTEREST_OPTIONS } from "./types";
 export type {
   PresetName,
   ProcessOptions,
@@ -59,4 +64,5 @@ export type {
   AudioContainer,
   SubtitleMode,
   YoutubeDownloadOptions,
+  PinterestOptions,
 } from "./types";

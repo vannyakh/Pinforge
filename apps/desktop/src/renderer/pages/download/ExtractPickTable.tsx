@@ -34,7 +34,7 @@ type Props = {
   onAudioChange: (v: AudioContainer) => void;
   subs: SubtitleMode;
   onSubsChange: (v: SubtitleMode) => void;
-  /** Default max for playlist / profile list fetch. */
+  /** Default max for playlist / profile / board list fetch. */
   listMax: number;
   onListMaxChange?: (max: number) => void;
   onReloadList: (max: number) => void | Promise<void>;
@@ -95,6 +95,7 @@ const ExtractPickTable: React.FC<Props> = ({
   onDownloadOne,
 }) => {
   const [maxDraft, setMaxDraft] = useState(listMax);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const cardRef = useRef<HTMLDivElement>(null);
   const tableScrollHideRef = useRef<number | null>(null);
 
@@ -102,8 +103,19 @@ const ExtractPickTable: React.FC<Props> = ({
     setMaxDraft(listMax);
   }, [listMax]);
 
+  const isPinterest =
+    extract.provider.id === "pinterest" ||
+    /pinterest/i.test(extract.provider.label || "");
+
+  useEffect(() => {
+    if (isPinterest && (extract.mode === "board" || extract.mode === "profile")) {
+      setViewMode("grid");
+    }
+  }, [isPinterest, extract.mode, extract.sourceUrl]);
+
   const showMaxControl =
-    showYoutube && (extract.mode === "playlist" || extract.mode === "profile");
+    (showYoutube && (extract.mode === "playlist" || extract.mode === "profile")) ||
+    (isPinterest && (extract.mode === "board" || extract.mode === "profile"));
 
   const rows: ExtractPickRow[] = useMemo(
     () =>
@@ -117,7 +129,7 @@ const ExtractPickTable: React.FC<Props> = ({
 
   useEffect(() => {
     const root = cardRef.current;
-    if (!root) return;
+    if (!root || viewMode !== "list") return;
     const body = root.querySelector(".arco-table-body") as HTMLElement | null;
     if (!body) return;
 
@@ -139,7 +151,7 @@ const ExtractPickTable: React.FC<Props> = ({
         window.clearTimeout(tableScrollHideRef.current);
       }
     };
-  }, [rows.length, listLoading]);
+  }, [rows.length, listLoading, viewMode]);
 
   const selectedCount = selectedUrls.length;
   const allSelected = rows.length > 0 && selectedCount === rows.length;
@@ -188,7 +200,7 @@ const ExtractPickTable: React.FC<Props> = ({
       render: (_col, row) => (
         <div className="tasks-table__task">
           <div className="tasks-table__task-main home-extract-pick__task">
-            {row.cover ? (
+            {row.cover && /^https?:\/\//i.test(row.cover) ? (
               <img
                 className="home-extract-pick__cover"
                 src={row.cover}
@@ -389,12 +401,13 @@ const ExtractPickTable: React.FC<Props> = ({
                     size="small"
                     style={{ width: 88 }}
                     min={1}
-                    max={500}
-                    step={10}
+                    max={isPinterest ? 2000 : 500}
+                    step={isPinterest ? 25 : 10}
                     value={maxDraft}
                     disabled={Boolean(listLoading || busy)}
                     onChange={(v) => {
-                      const next = Math.max(1, Math.min(500, Number(v) || listMax));
+                      const cap = isPinterest ? 2000 : 500;
+                      const next = Math.max(1, Math.min(cap, Number(v) || listMax));
                       setMaxDraft(next);
                       onListMaxChange?.(next);
                     }}
@@ -412,6 +425,18 @@ const ExtractPickTable: React.FC<Props> = ({
                 </div>
               </div>
             )}
+            <div className="home-extract-pick__field">
+              <span className="home-extract-pick__field-label">View</span>
+              <Select
+                size="small"
+                style={{ width: 100 }}
+                value={viewMode}
+                onChange={(v) => setViewMode(v as "list" | "grid")}
+              >
+                <Select.Option value="list">List</Select.Option>
+                <Select.Option value="grid">Grid</Select.Option>
+              </Select>
+            </div>
             <div className="home-extract-pick__config-actions">
               <span className="home-extract__sel-count">
                 {selectedCount} selected
@@ -440,41 +465,92 @@ const ExtractPickTable: React.FC<Props> = ({
           </div>
           {showMaxControl && (
             <div className="home-extract-pick__hint">
-              Set Max, then Get list. Use checkboxes to pick videos to download.
+              Set Max, then Get list. Use checkboxes to pick items to download.
             </div>
           )}
         </div>
 
-        <div ref={cardRef} className="tasks-table-card home-extract-pick__card">
-          <Table
-            className="tasks-table home-extract-pick__table"
-            rowKey="key"
-            columns={columns}
-            data={rows}
-            pagination={false}
-            border={false}
-            hover
-            tableLayoutFixed
-            scroll={{ y: 360 }}
-            onRow={(record) => ({
-              className: selectedUrls.some((u) => urlsEqual(u, record.url))
-                ? "tasks-row-selected"
-                : undefined,
-              onClick: (e) => {
-                const target = e.target as HTMLElement;
-                if (
-                  target.closest(
-                    "button, a, input, .arco-checkbox, .arco-select, .home-extract-pick__actions"
-                  )
-                ) {
-                  return;
-                }
-                onToggleUrl(record.url);
-              },
+        {viewMode === "grid" ? (
+          <div className="home-extract-pick__masonry" role="list">
+            {rows.map((row) => {
+              const selected = selectedUrls.some((u) => urlsEqual(u, row.url));
+              return (
+                <button
+                  key={row.key}
+                  type="button"
+                  role="listitem"
+                  className={`home-extract-pick__tile${selected ? " is-selected" : ""}`}
+                  onClick={() => onToggleUrl(row.url)}
+                >
+                  <span className="home-extract-pick__tile-check">
+                    <Checkbox checked={selected} />
+                  </span>
+                  {row.cover && /^https?:\/\//i.test(row.cover) ? (
+                    <img
+                      className="home-extract-pick__tile-img"
+                      src={row.cover}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="home-extract-pick__tile-img home-extract-pick__tile-img--empty" />
+                  )}
+                  <span className="home-extract-pick__tile-meta">
+                    <span className="home-extract-pick__tile-title">
+                      {row.title?.trim() || `Item ${row.index}`}
+                    </span>
+                    <span className="home-extract-pick__tile-actions">
+                      <Tooltip content="Download">
+                        <Button
+                          type="text"
+                          size="mini"
+                          disabled={busy}
+                          icon={<Download theme="outline" size="14" />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDownloadOne(row);
+                          }}
+                        />
+                      </Tooltip>
+                    </span>
+                  </span>
+                </button>
+              );
             })}
-          />
-        </div>
-        {extract.itemCount > 100 && (
+          </div>
+        ) : (
+          <div ref={cardRef} className="tasks-table-card home-extract-pick__card">
+            <Table
+              className="tasks-table home-extract-pick__table"
+              rowKey="key"
+              columns={columns}
+              data={rows}
+              pagination={false}
+              border={false}
+              hover
+              tableLayoutFixed
+              scroll={{ y: 360 }}
+              onRow={(record) => ({
+                className: selectedUrls.some((u) => urlsEqual(u, record.url))
+                  ? "tasks-row-selected"
+                  : undefined,
+                onClick: (e) => {
+                  const target = e.target as HTMLElement;
+                  if (
+                    target.closest(
+                      "button, a, input, .arco-checkbox, .arco-select, .home-extract-pick__actions"
+                    )
+                  ) {
+                    return;
+                  }
+                  onToggleUrl(record.url);
+                },
+              })}
+            />
+          </div>
+        )}
+        {extract.itemCount > 100 && viewMode === "list" && (
           <div className="home-extract__more">
             Showing first 100 of {extract.itemCount} items
           </div>

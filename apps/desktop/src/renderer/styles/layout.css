@@ -114,6 +114,20 @@
     padding 0.3s ease;
 }
 
+.chat-history__divider {
+  height: 1px;
+  background: var(--border-base);
+  opacity: 0.9;
+}
+
+.chat-history__item {
+  position: relative;
+}
+
+.chat-history__item-delete {
+  transition: opacity 0.15s ease;
+}
+
 .chat-history__placeholder {
   max-height: 140px;
 }
@@ -1399,6 +1413,89 @@
   opacity: 1;
 }
 
+.home-extract-pick__masonry {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 4px 2px 8px;
+}
+
+.home-extract-pick__tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-2, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--color-bg-2, #fff);
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.home-extract-pick__tile:hover {
+  border-color: var(--color-border-3, rgba(0, 0, 0, 0.16));
+}
+
+.home-extract-pick__tile.is-selected {
+  border-color: rgb(var(--primary-6, 22, 93, 255));
+  box-shadow: 0 0 0 1px rgb(var(--primary-6, 22, 93, 255));
+}
+
+.home-extract-pick__tile-check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  line-height: 1;
+}
+
+.home-extract-pick__tile-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: var(--color-fill-2, #f2f3f5);
+}
+
+.home-extract-pick__tile-img--empty {
+  min-height: 160px;
+}
+
+.home-extract-pick__tile-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  min-height: 36px;
+}
+
+.home-extract-pick__tile-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--color-text-1);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.home-extract-pick__tile-actions {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.home-extract-pick__tile:hover .home-extract-pick__tile-actions {
+  opacity: 1;
+}
+
 @media (max-width: 720px) {
   .home-extract-pick__config-actions {
     margin-left: 0;
@@ -2603,46 +2700,6 @@
   min-height: 0;
 }
 
-.tasks-digital {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: var(--bg-2);
-  border: 1px solid var(--border-base);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-.tasks-digital__label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-tertiary);
-}
-
-.tasks-digital__time {
-  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  min-width: 4.5ch;
-}
-
-.tasks-digital.is-live {
-  border-color: color-mix(in srgb, rgb(var(--primary-6)) 40%, var(--border-base));
-  background: color-mix(in srgb, rgb(var(--primary-6)) 8%, var(--bg-2));
-}
-
-.tasks-digital.is-live .tasks-digital__label {
-  color: rgb(var(--primary-6));
-}
-
-.tasks-digital.is-live .tasks-digital__time {
-  color: var(--text-primary);
-}
-
 .tasks-header-actions {
   max-width: 100%;
 }
@@ -2672,6 +2729,148 @@
   }
 }
 
+.tasks-hw-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-top: 10px;
+  padding: 2px 2px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+.tasks-hw-bar__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tasks-hw-bar__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.tasks-hw-bar__value {
+  color: var(--text-secondary);
+}
+
+.tasks-hw-bar__em {
+  color: var(--text-primary);
+  font-weight: 550;
+}
+
+.tasks-hw-bar__muted {
+  color: var(--text-tertiary);
+}
+
+.tasks-hw-bar__meta {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* Add links modal — AionUI layout (aligned with Add Theme) */
+.tasks-add-modal .arco-modal-header {
+  padding: 20px 24px 16px;
+}
+
+.tasks-add-modal .arco-modal-title {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.tasks-add-modal .arco-modal-body {
+  padding: 4px 24px 8px;
+}
+
+.tasks-add-modal .arco-modal-footer {
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--bg-3);
+}
+
+.tasks-add-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tasks-add-modal__field {
+  min-width: 0;
+}
+
+.tasks-add-modal__label {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.tasks-add-modal__hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+.tasks-add-modal__path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tasks-add-modal__path .arco-input-inner-wrapper,
+.tasks-add-modal__path .arco-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tasks-add-modal__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+}
+
+.tasks-add-modal__field--switch {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.tasks-add-modal__switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.tasks-add-modal__switch-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.tasks-add-modal__links .arco-textarea,
+.tasks-add-modal__links textarea {
+  background: var(--bg-1) !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+.tasks-add-modal__note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  padding-top: 2px;
+}
+
 .tasks-table-card {
   width: 100%;
   border: 1px solid var(--border-base);
@@ -2688,6 +2887,15 @@
   height: 100%;
 }
 
+/* Full-width table; horizontal scroll when narrower than sticky + content cols */
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-content-inner,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body table,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-header table {
+  width: 100% !important;
+  min-width: 1348px !important;
+  table-layout: fixed !important;
+}
+
 .tasks-table .arco-table-content-inner,
 .tasks-table .arco-table-body table,
 .tasks-table .arco-table-header table {
@@ -2702,6 +2910,55 @@
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
+}
+
+/* Tasks: thin auto-hide body scrollbar; let Arco pad the header for vertical gutter */
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-header {
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none;
+}
+
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-header::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body {
+  overflow: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.tasks-table-card:not(.home-extract-pick__card):hover .arco-table-body,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body.is-scrolling {
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 40%, transparent) transparent;
+}
+
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.tasks-table-card:not(.home-extract-pick__card):hover .arco-table-body::-webkit-scrollbar-thumb,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body.is-scrolling::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-secondary) 40%, transparent);
+}
+
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar-track,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Task title column grows to fill remaining space */
+.tasks-table-card:not(.home-extract-pick__card) .tasks-table__col-task {
+  width: auto !important;
 }
 
 .tasks-table .arco-spin {
@@ -2753,32 +3010,6 @@
 .tasks-table .arco-table-body {
   background: transparent;
   border: none;
-}
-
-/*
- * Tasks page: do not override header/body scrollbar — Arco sticky columns
- * (NO / TASK / ACTIONS) require native scrollbar width sync.
- * Reset any inherited custom scrollbar rules on the Tasks card only.
- */
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-header,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-body {
-  scrollbar-gutter: auto;
-  scrollbar-width: auto;
-  scrollbar-color: auto;
-}
-
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-header::-webkit-scrollbar,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar {
-  width: unset;
-  height: unset;
-}
-
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-header::-webkit-scrollbar-thumb,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar-thumb,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-header::-webkit-scrollbar-track,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar-track {
-  background: unset;
-  border-radius: unset;
 }
 
 .tasks-table .arco-table-td {
@@ -2848,7 +3079,7 @@ body.tasks-drag-selecting {
   background: var(--color-fill-2, #f2f3f5);
 }
 
-/* Shadow on last sticky-left column (Task) */
+/* Shadow on last sticky-left column (checkbox) */
 .tasks-table .arco-table-col-fixed-left-last::after {
   content: "";
   position: absolute;
@@ -2859,6 +3090,19 @@ body.tasks-drag-selecting {
   transform: translateX(100%);
   pointer-events: none;
   box-shadow: inset 8px 0 8px -8px rgba(0, 0, 0, 0.18);
+}
+
+/* Shadow on first sticky-right column (Actions) */
+.tasks-table .arco-table-col-fixed-right-first::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: -1px;
+  width: 8px;
+  transform: translateX(-100%);
+  pointer-events: none;
+  box-shadow: inset -8px 0 8px -8px rgba(0, 0, 0, 0.18);
 }
 
 .tasks-table__index {

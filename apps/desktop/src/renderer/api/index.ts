@@ -26,6 +26,8 @@ import type {
   AudioContainer,
   SubtitleMode,
   DiskSpaceInfo,
+  SystemResourcesInfo,
+  PinterestOptions,
 } from "../../preload/index";
 
 export type {
@@ -56,6 +58,8 @@ export type {
   AudioContainer,
   SubtitleMode,
   DiskSpaceInfo,
+  SystemResourcesInfo,
+  PinterestOptions,
 };
 
 export const api = {
@@ -67,6 +71,7 @@ export const api = {
     format?: FormatPreset;
     features?: Partial<EnhanceFeatures>;
     youtube?: Partial<YoutubeDownloadOptions>;
+    pinterest?: Partial<PinterestOptions>;
   }) => window.api.processMedia(payload),
   cancelMedia: () => window.api.cancelMedia(),
   processPin: (url: string, preset: PresetName, outDir: string) =>
@@ -77,6 +82,7 @@ export const api = {
     opts?: {
       channelMaxVideos?: number;
       playlistMaxVideos?: number;
+      boardMaxPins?: number;
       preferPlaylist?: boolean;
     }
   ) => window.api.extractPreview(url, opts),
@@ -109,7 +115,10 @@ export const api = {
   openPath: (filePath: string) => window.api.openPath(filePath),
   openExternal: (url: string) => window.api.openExternal(url),
   diskSpace: (dirPath?: string) => window.api.diskSpace(dirPath),
+  systemResources: () => window.api.systemResources(),
   fileSizes: (paths: string[]) => window.api.fileSizes(paths),
+  zipFolder: (folderPath: string, outZipPath?: string) =>
+    window.api.zipFolder(folderPath, outZipPath),
   onMediaProgress: (cb: (event: MediaProgressEvent) => void) => window.api.onMediaProgress(cb),
   ffmpegStatus: () => window.api.ffmpegStatus(),
   ffmpegInstall: () => window.api.ffmpegInstall(),

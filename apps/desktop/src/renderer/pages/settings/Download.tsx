@@ -1,5 +1,5 @@
 import React from "react";
-import { InputNumber, Select, Switch } from "@arco-design/web-react";
+import { Input, InputNumber, Select, Switch } from "@arco-design/web-react";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import type { FormatPreset, PresetName } from "@renderer/api";
 
@@ -158,6 +158,47 @@ const DownloadSettings: React.FC = () => {
             onChange={(v) => void updateSettings({ youtube: { organizeByChannel: v } })}
           />
         </Row>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">Pinterest board max pins</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            How many pins to list/download from a board, profile, or search (1–2000).
+          </div>
+          <InputNumber
+            className="w-full"
+            min={1}
+            max={2000}
+            step={25}
+            value={settings.pinterest?.boardMaxPins ?? 200}
+            onChange={(v) =>
+              void updateSettings({
+                pinterest: { boardMaxPins: Math.max(1, Math.min(2000, Number(v) || 200)) },
+              })
+            }
+          />
+        </div>
+        <Row
+          title="ZIP board downloads"
+          description="After a board/profile batch finishes, create a .zip next to the folder."
+        >
+          <Switch
+            checked={Boolean(settings.pinterest?.zipBoards)}
+            onChange={(v) => void updateSettings({ pinterest: { zipBoards: v } })}
+          />
+        </Row>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">Pinterest cookies</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            Paste a Cookie header from your browser (DevTools → Network) to access private boards.
+            Stored locally only.
+          </div>
+          <Input.TextArea
+            className="w-full"
+            autoSize={{ minRows: 3, maxRows: 8 }}
+            placeholder="_pinterest_sess=…; csrftoken=…"
+            value={settings.pinterest?.cookies ?? ""}
+            onChange={(v) => void updateSettings({ pinterest: { cookies: v } })}
+          />
+        </div>
         <div className="py-14px">
           <div className="text-14px text-t-primary mb-4px">Board delay (ms)</div>
           <div className="text-12px text-t-tertiary mb-8px">

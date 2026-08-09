@@ -6,7 +6,6 @@ import { useApp } from "@renderer/hooks/context/AppContext";
 const PAGES = [
   { path: "/", label: "Home", hint: "Download composer" },
   { path: "/tasks", label: "Tasks", hint: "Active & recent jobs" },
-  { path: "/gallery", label: "Gallery", hint: "Saved packs" },
   { path: "/schedule", label: "Schedule", hint: "Coming soon" },
   { path: "/settings/system", label: "Settings", hint: "System & environment" },
 ] as const;
@@ -98,7 +97,7 @@ const TitlebarSearch: React.FC<TitlebarSearchProps> = ({ renderTrigger }) => {
                     key={p.id}
                     type="button"
                     className="titlebar-search-item"
-                    onClick={() => go("/gallery")}
+                    onClick={() => go("/tasks")}
                     title={p.url}
                   >
                     <span className="text-13px text-t-primary font-500 truncate">

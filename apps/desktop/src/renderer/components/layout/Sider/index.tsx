@@ -1,21 +1,27 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import classNames from "classnames";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
   Checklist,
   AlarmClock,
-  Pic,
   SettingTwo,
   Moon,
   Sun,
   Left,
+  Plus,
+  Message,
+  Delete,
 } from "@icon-park/react";
-import { Tag } from "@arco-design/web-react";
+import { Tag, Tooltip } from "@arco-design/web-react";
 import { useThemeContext } from "@renderer/hooks/context/ThemeContext";
 import { useLayoutContext } from "@renderer/hooks/context/LayoutContext";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import SettingsSider from "@renderer/pages/settings/components/SettingsSider";
+import {
+  selectRecentChats,
+  useHomeChatStore,
+} from "@renderer/pages/download/homeChatStore";
 import siderStyles from "./Sider.module.css";
 
 interface SiderProps {
@@ -27,7 +33,6 @@ const NAV = [
   { path: "/", label: "Home", Icon: Home, soon: false },
   { path: "/tasks", label: "Tasks", Icon: Checklist, soon: false },
   { path: "/schedule", label: "Schedule", Icon: AlarmClock, soon: true },
-  { path: "/gallery", label: "Gallery", Icon: Pic, soon: false },
 ] as const;
 
 const LAST_PATH_KEY = "pinforge:last-non-settings-path";
@@ -38,9 +43,16 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const { theme, setTheme } = useThemeContext();
   const { isMobile } = useLayoutContext();
   const { tasks } = useApp();
+  const sessions = useHomeChatStore((s) => s.sessions);
+  const activeId = useHomeChatStore((s) => s.activeId);
+  const openChat = useHomeChatStore((s) => s.openChat);
+  const newChat = useHomeChatStore((s) => s.newChat);
+  const removeChat = useHomeChatStore((s) => s.removeChat);
   const isSettings = pathname.startsWith("/settings");
   const runningCount = tasks.filter((t) => t.status === "running").length;
   const lastNonSettingsPathRef = useRef("/");
+
+  const recent = useMemo(() => selectRecentChats(sessions, 14), [sessions]);
 
   useEffect(() => {
     if (!pathname.startsWith("/settings")) {
@@ -74,13 +86,29 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     go("/settings/system");
   };
 
+  const openRecent = (id: string) => {
+    openChat(id);
+    go("/");
+  };
+
+  const startNewChat = () => {
+    newChat();
+    go("/");
+  };
+
   return (
     <div className="size-full flex flex-col">
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2px">
         {isSettings ? (
           <SettingsSider collapsed={collapsed} onItemClick={onSessionClick} />
         ) : (
-          <div className={classNames("flex-1 min-h-0 overflow-y-auto", siderStyles.scrollArea)}>
+          <div
+            className={classNames(
+              "flex-1 min-h-0 overflow-y-auto flex flex-col",
+              siderStyles.scrollArea,
+              collapsed && "chat-history--collapsed"
+            )}
+          >
             <div className="px-10px pt-4px pb-8px text-11px font-500 text-t-tertiary tracking-wide uppercase sider-section-title">
               {!collapsed && "Workspace"}
             </div>
@@ -120,6 +148,88 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                 </button>
               );
             })}
+
+            <div className="chat-history__divider mx-10px my-10px" role="separator" />
+
+            <div
+              className={classNames(
+                "chat-history flex-1 min-h-0 flex flex-col",
+                collapsed && "chat-history--collapsed"
+              )}
+            >
+              <div className="chat-history__section px-10px pb-6px flex items-center justify-between gap-8px">
+                {!collapsed && (
+                  <span className="text-11px font-500 text-t-tertiary tracking-wide uppercase">
+                    Recent
+                  </span>
+                )}
+                <Tooltip content="New chat">
+                  <button
+                    type="button"
+                    className="chat-history__new shrink-0 flex items-center justify-center w-24px h-24px rd-6px border-none cursor-pointer bg-transparent text-t-secondary hover:bg-hover hover:text-t-primary"
+                    onClick={startNewChat}
+                    aria-label="New chat"
+                    title={collapsed ? "New chat" : undefined}
+                  >
+                    <Plus theme="outline" size="14" fill="currentColor" strokeWidth={3} />
+                  </button>
+                </Tooltip>
+              </div>
+
+              {recent.length === 0 ? (
+                !collapsed && (
+                  <div className="chat-history__placeholder px-12px py-8px text-12px text-t-tertiary">
+                    Chats you start on Home show up here.
+                  </div>
+                )
+              ) : (
+                recent.map((chat) => {
+                  const active = pathname === "/" && activeId === chat.id;
+                  return (
+                    <div
+                      key={chat.id}
+                      className={classNames(
+                        "chat-history__item group w-full flex items-center gap-8px rd-8px px-10px py-8px cursor-pointer",
+                        active
+                          ? "chat-history__item--active bg-primary-light-1 text-t-primary"
+                          : "text-t-secondary hover:bg-hover"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="flex-1 min-w-0 flex items-center gap-8px border-none bg-transparent cursor-pointer text-left font-inherit text-inherit p-0"
+                        onClick={() => openRecent(chat.id)}
+                        title={collapsed ? chat.title : undefined}
+                      >
+                        <Message
+                          theme="outline"
+                          size="16"
+                          fill="currentColor"
+                          strokeWidth={3}
+                          className="shrink-0"
+                        />
+                        {!collapsed && (
+                          <span className="chat-history__item-name text-13px">{chat.title}</span>
+                        )}
+                      </button>
+                      {!collapsed && (
+                        <button
+                          type="button"
+                          className="chat-history__item-delete opacity-0 group-hover:opacity-100 shrink-0 flex items-center justify-center w-22px h-22px rd-4px border-none cursor-pointer bg-transparent text-t-tertiary hover:text-danger"
+                          aria-label="Remove chat"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeChat(chat.id);
+                          }}
+                        >
+                          <Delete theme="outline" size="12" fill="currentColor" strokeWidth={3} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
       </div>

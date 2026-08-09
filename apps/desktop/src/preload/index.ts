@@ -21,6 +21,12 @@ export interface YoutubeDownloadOptions {
   playlistMaxVideos?: number;
 }
 
+export interface PinterestOptions {
+  cookies?: string;
+  boardMaxPins?: number;
+  zipBoards?: boolean;
+}
+
 export interface EnhanceFeatures {
   autoLevels: boolean;
   denoise: boolean;
@@ -204,6 +210,7 @@ export interface AppSettings {
   autoDownload: boolean;
   format: FormatPreset;
   youtube: YoutubeDownloadOptions;
+  pinterest: PinterestOptions;
   extractorUrl: string;
   history: HistoryItem[];
   packs: DownloadPack[];
@@ -263,6 +270,7 @@ export type SettingsPartial = Partial<{
   autoDownload: boolean;
   format: FormatPreset;
   youtube: Partial<YoutubeDownloadOptions>;
+  pinterest: Partial<PinterestOptions>;
   extractorUrl: string;
   system: Partial<SystemConfig>;
 }>;
@@ -289,6 +297,16 @@ export interface DiskSpaceInfo {
   total: number;
 }
 
+export interface SystemResourcesInfo {
+  cpuPercent: number;
+  cpuCount: number;
+  memory: {
+    used: number;
+    free: number;
+    total: number;
+  };
+}
+
 const api = {
   processMedia: (payload: {
     url: string;
@@ -298,6 +316,7 @@ const api = {
     format?: FormatPreset;
     features?: Partial<EnhanceFeatures>;
     youtube?: Partial<YoutubeDownloadOptions>;
+    pinterest?: Partial<PinterestOptions>;
   }): Promise<ProcessResponse> => ipcRenderer.invoke("media:process", payload),
   cancelMedia: (): Promise<{ ok: boolean; message: string }> =>
     ipcRenderer.invoke("media:cancel"),
@@ -310,6 +329,7 @@ const api = {
     opts?: {
       channelMaxVideos?: number;
       playlistMaxVideos?: number;
+      boardMaxPins?: number;
       preferPlaylist?: boolean;
     }
   ): Promise<ExtractPreview> => ipcRenderer.invoke("media:extract", url, opts),
@@ -351,6 +371,7 @@ const api = {
       | "autoDownload"
       | "format"
       | "youtube"
+      | "pinterest"
       | "extractorUrl"
       | "system"
     >
@@ -378,8 +399,14 @@ const api = {
     ipcRenderer.invoke("shell:openExternal", url),
   diskSpace: (dirPath?: string): Promise<DiskSpaceInfo | null> =>
     ipcRenderer.invoke("fs:diskSpace", dirPath),
+  systemResources: (): Promise<SystemResourcesInfo> =>
+    ipcRenderer.invoke("system:resources"),
   fileSizes: (paths: string[]): Promise<Record<string, number>> =>
     ipcRenderer.invoke("fs:fileSizes", paths),
+  zipFolder: (
+    folderPath: string,
+    outZipPath?: string
+  ): Promise<{ zipPath: string }> => ipcRenderer.invoke("fs:zipFolder", folderPath, outZipPath),
 
   onMediaProgress: (cb: (event: MediaProgressEvent) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, payload: MediaProgressEvent) => cb(payload);

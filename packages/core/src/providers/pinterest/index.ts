@@ -1,37 +1,21 @@
 import type { MediaProvider } from "../types";
 import type { ResolvedMedia } from "../../types";
 import { resolvePin } from "./resolvePin";
-import { isBoardUrl, isPinterestUrl, resolveBoard } from "./resolveBoard";
+import { isPinterestCollectionUrl, isPinterestUrl } from "./resolveBoard";
 import { registerProvider } from "../registry";
-import { sleep } from "../../utils";
 
 export const pinterestProvider: MediaProvider = {
   id: "pinterest",
   label: "Pinterest",
   live: true,
   formats: ["best"],
-  modes: ["single", "board"],
+  modes: ["single", "board", "profile"],
   match: (url) => isPinterestUrl(url),
   async resolve(url: string): Promise<ResolvedMedia | ResolvedMedia[]> {
-    if (isBoardUrl(url)) {
-      const { pinUrls } = await resolveBoard(url);
-      // Return pin URL list as resolved items one-by-one would be heavy;
-      // processMedia will handle board via dedicated path — here resolve first pin page list meta only.
-      // For provider.resolve on boards, resolve all pins (caller may rate-limit).
-      const items: ResolvedMedia[] = [];
-      for (let i = 0; i < pinUrls.length; i++) {
-        const asset = await resolvePin(pinUrls[i]!);
-        items.push({
-          kind: asset.kind ?? "image",
-          buffer: asset.buffer,
-          ext: asset.ext,
-          sourceUrl: asset.sourceUrl,
-          title: asset.title,
-          provider: "pinterest",
-        });
-        if (i < pinUrls.length - 1) await sleep(800);
-      }
-      return items;
+    if (isPinterestCollectionUrl(url)) {
+      throw new Error(
+        "Pinterest board/profile/search downloads use the batch process path (processMedia)."
+      );
     }
 
     const asset = await resolvePin(url);
@@ -42,6 +26,7 @@ export const pinterestProvider: MediaProvider = {
       sourceUrl: asset.sourceUrl,
       title: asset.title,
       provider: "pinterest",
+      id: asset.pinId,
     };
   },
 };
@@ -49,4 +34,18 @@ export const pinterestProvider: MediaProvider = {
 registerProvider(pinterestProvider);
 
 export { resolvePin } from "./resolvePin";
-export { resolveBoard, isBoardUrl, isPinUrl, isPinterestUrl } from "./resolveBoard";
+export {
+  resolveBoard,
+  isBoardUrl,
+  isProfileUrl,
+  isPinterestCollectionUrl,
+  isPinUrl,
+  isPinterestUrl,
+  classifyPinterestCollection,
+} from "./resolveBoard";
+export type { ResolveBoardOptions } from "./resolveBoard";
+export {
+  configurePinterestCookies,
+  getPinterestCookieHeader,
+  pinterestRequestHeaders,
+} from "./session";

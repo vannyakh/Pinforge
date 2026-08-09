@@ -1,13 +1,19 @@
 export * from "./formats";
 export * from "./mux";
 export * from "./resume";
-export { resolveYouTubeVideo, resolveYouTubeBuffer } from "./service";
-export type { YoutubeResolveOpts } from "./service";
+export { resolveYouTubeVideo, resolveYouTubeBuffer, previewYouTubeVideo } from "./service";
+export type { YoutubeResolveOpts, YoutubeVideoPreview } from "./service";
 export {
   isYouTubeChannelUrl,
   resolveYouTubeChannel,
+  detectYouTubeChannelTab,
+  youtubeChannelRootUrl,
 } from "./channel";
-export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./channel";
+export type {
+  YoutubeChannelVideo,
+  YoutubeChannelResolveResult,
+  YoutubeChannelTab,
+} from "./channel";
 export {
   isYouTubePlaylistUrl,
   isYouTubeMixPlaylistId,

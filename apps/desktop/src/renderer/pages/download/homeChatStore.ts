@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type {
   AudioContainer,
   DetectedProvider,
@@ -58,7 +59,23 @@ export type ChatMessage = {
   results?: ChatDownloadCard[];
 };
 
-type HomeChatState = {
+export type ChatSession = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ChatMessage[];
+  url: string;
+  filter: PlatformFilter;
+  confirmFormat: FormatPreset;
+  confirmEnhance: boolean;
+  confirmYtQuality: YoutubeQuality;
+  confirmAudio: AudioContainer;
+  confirmSubs: SubtitleMode;
+  getPlaylistList: boolean;
+};
+
+type LiveChatFields = {
   url: string;
   filter: PlatformFilter;
   messages: ChatMessage[];
@@ -68,8 +85,12 @@ type HomeChatState = {
   confirmAudio: AudioContainer;
   confirmSubs: SubtitleMode;
   extracting: boolean;
-  /** When watch URL has &list=, opt in to extract the playlist instead of the single video. */
   getPlaylistList: boolean;
+};
+
+type HomeChatState = LiveChatFields & {
+  activeId: string | null;
+  sessions: ChatSession[];
 
   setUrl: (url: string) => void;
   setFilter: (filter: PlatformFilter) => void;
@@ -89,75 +110,273 @@ type HomeChatState = {
     patch: Partial<ChatDownloadCard>
   ) => void;
   clearConfirmPending: () => void;
+  /** Start a blank workspace; keeps prior chats in history when they have messages. */
+  newChat: () => void;
+  /** Restore a saved session into the Home workspace. */
+  openChat: (id: string) => void;
+  removeChat: (id: string) => void;
   resetChat: () => void;
 };
 
-const initialState = {
+const MAX_SESSIONS = 40;
+
+const liveDefaults: LiveChatFields = {
   url: "",
-  filter: "auto" as PlatformFilter,
-  messages: [] as ChatMessage[],
-  confirmFormat: "best" as FormatPreset,
+  filter: "auto",
+  messages: [],
+  confirmFormat: "best",
   confirmEnhance: true,
-  confirmYtQuality: "best" as YoutubeQuality,
-  confirmAudio: "m4a" as AudioContainer,
-  confirmSubs: "separate" as SubtitleMode,
+  confirmYtQuality: "best",
+  confirmAudio: "m4a",
+  confirmSubs: "separate",
   extracting: false,
   getPlaylistList: false,
 };
+
+function makeSessionId() {
+  return `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export function chatSessionTitle(messages: ChatMessage[]): string {
+  const user = messages.find((m) => m.role === "user");
+  const raw = (user?.text || user?.url || "").trim() || "New chat";
+  const oneLine = raw.replace(/\s+/g, " ");
+  return oneLine.length > 42 ? `${oneLine.slice(0, 40)}…` : oneLine;
+}
 
 function urlsMatch(a: string, b: string): boolean {
   const norm = (s: string) => s.trim().replace(/\/+$/, "");
   return norm(a) === norm(b);
 }
 
-export const useHomeChatStore = create<HomeChatState>((set) => ({
-  ...initialState,
+function snapshotFromLive(s: LiveChatFields & { activeId: string | null }): ChatSession | null {
+  if (!s.messages.length) return null;
+  const id = s.activeId || makeSessionId();
+  const now = Date.now();
+  return {
+    id,
+    title: chatSessionTitle(s.messages),
+    createdAt: now,
+    updatedAt: now,
+    messages: s.messages,
+    url: s.url,
+    filter: s.filter,
+    confirmFormat: s.confirmFormat,
+    confirmEnhance: s.confirmEnhance,
+    confirmYtQuality: s.confirmYtQuality,
+    confirmAudio: s.confirmAudio,
+    confirmSubs: s.confirmSubs,
+    getPlaylistList: s.getPlaylistList,
+  };
+}
 
-  setUrl: (url) => set({ url }),
-  setFilter: (filter) => set({ filter }),
-  setConfirmFormat: (confirmFormat) => set({ confirmFormat }),
-  setConfirmEnhance: (confirmEnhance) => set({ confirmEnhance }),
-  setConfirmYtQuality: (confirmYtQuality) => set({ confirmYtQuality }),
-  setConfirmAudio: (confirmAudio) => set({ confirmAudio }),
-  setConfirmSubs: (confirmSubs) => set({ confirmSubs }),
-  setExtracting: (extracting) => set({ extracting }),
-  setGetPlaylistList: (getPlaylistList) => set({ getPlaylistList }),
+function upsertSession(sessions: ChatSession[], next: ChatSession): ChatSession[] {
+  const prev = sessions.find((x) => x.id === next.id);
+  const merged: ChatSession = {
+    ...next,
+    createdAt: prev?.createdAt ?? next.createdAt,
+    updatedAt: Date.now(),
+    title: next.messages.length ? chatSessionTitle(next.messages) : prev?.title || next.title,
+  };
+  const rest = sessions.filter((x) => x.id !== merged.id);
+  return [merged, ...rest]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_SESSIONS);
+}
 
-  appendMessages: (messages) =>
-    set((s) => ({ messages: [...s.messages, ...messages] })),
+function withSyncedSession(
+  s: HomeChatState,
+  live: Partial<LiveChatFields>
+): Partial<HomeChatState> {
+  const merged: LiveChatFields & { activeId: string | null } = {
+    url: live.url ?? s.url,
+    filter: live.filter ?? s.filter,
+    messages: live.messages ?? s.messages,
+    confirmFormat: live.confirmFormat ?? s.confirmFormat,
+    confirmEnhance: live.confirmEnhance ?? s.confirmEnhance,
+    confirmYtQuality: live.confirmYtQuality ?? s.confirmYtQuality,
+    confirmAudio: live.confirmAudio ?? s.confirmAudio,
+    confirmSubs: live.confirmSubs ?? s.confirmSubs,
+    extracting: live.extracting ?? s.extracting,
+    getPlaylistList: live.getPlaylistList ?? s.getPlaylistList,
+    activeId: s.activeId,
+  };
 
-  updateMessage: (id, patch) =>
-    set((s) => ({
-      messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-    })),
+  if (!merged.messages.length) {
+    return { ...live };
+  }
 
-  mapMessages: (fn) => set((s) => ({ messages: fn(s.messages) })),
+  const snap = snapshotFromLive(merged);
+  if (!snap) return { ...live };
 
-  patchDownloadCard: (messageId, matchUrl, patch) =>
-    set((s) => ({
-      messages: s.messages.map((m) => {
-        if (m.id !== messageId || !m.results?.length) return m;
-        const results = m.results.map((card) =>
-          urlsMatch(card.sourceUrl, matchUrl) ? { ...card, ...patch } : card
-        );
-        const doneOne = results.length === 1 ? results[0] : null;
-        return {
-          ...m,
-          results,
-          result: doneOne?.status === "done" ? doneOne : m.result,
-        };
+  return {
+    ...live,
+    activeId: snap.id,
+    sessions: upsertSession(s.sessions, snap),
+  };
+}
+
+export const useHomeChatStore = create<HomeChatState>()(
+  persist(
+    (set, get) => ({
+      ...liveDefaults,
+      activeId: null,
+      sessions: [],
+
+      setUrl: (url) => set({ url }),
+      setFilter: (filter) => set({ filter }),
+      setConfirmFormat: (confirmFormat) => set({ confirmFormat }),
+      setConfirmEnhance: (confirmEnhance) => set({ confirmEnhance }),
+      setConfirmYtQuality: (confirmYtQuality) => set({ confirmYtQuality }),
+      setConfirmAudio: (confirmAudio) => set({ confirmAudio }),
+      setConfirmSubs: (confirmSubs) => set({ confirmSubs }),
+      setExtracting: (extracting) => set({ extracting }),
+      setGetPlaylistList: (getPlaylistList) => set({ getPlaylistList }),
+
+      appendMessages: (messages) =>
+        set((s) =>
+          withSyncedSession(s, { messages: [...s.messages, ...messages] })
+        ),
+
+      updateMessage: (id, patch) =>
+        set((s) =>
+          withSyncedSession(s, {
+            messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+          })
+        ),
+
+      mapMessages: (fn) =>
+        set((s) => withSyncedSession(s, { messages: fn(s.messages) })),
+
+      patchDownloadCard: (messageId, matchUrl, patch) =>
+        set((s) =>
+          withSyncedSession(s, {
+            messages: s.messages.map((m) => {
+              if (m.id !== messageId || !m.results?.length) return m;
+              const results = m.results.map((card) =>
+                urlsMatch(card.sourceUrl, matchUrl) ? { ...card, ...patch } : card
+              );
+              const doneOne = results.length === 1 ? results[0] : null;
+              return {
+                ...m,
+                results,
+                result: doneOne?.status === "done" ? doneOne : m.result,
+              };
+            }),
+          })
+        ),
+
+      clearConfirmPending: () =>
+        set((s) =>
+          withSyncedSession(s, {
+            messages: s.messages.map((m) =>
+              m.pendingConfirm ? { ...m, pendingConfirm: false } : m
+            ),
+          })
+        ),
+
+      newChat: () => {
+        const s = get();
+        let sessions = s.sessions;
+        if (s.messages.length) {
+          const snap = snapshotFromLive(s);
+          if (snap) sessions = upsertSession(sessions, snap);
+        }
+        set({
+          ...liveDefaults,
+          activeId: makeSessionId(),
+          sessions,
+          // keep last confirm prefs from previous chat
+          confirmFormat: s.confirmFormat,
+          confirmEnhance: s.confirmEnhance,
+          confirmYtQuality: s.confirmYtQuality,
+          confirmAudio: s.confirmAudio,
+          confirmSubs: s.confirmSubs,
+        });
+      },
+
+      openChat: (id) => {
+        const s = get();
+        const session = s.sessions.find((x) => x.id === id);
+        if (!session) return;
+        // Persist current workspace first if it has content and isn't the same id
+        let sessions = s.sessions;
+        if (s.messages.length && s.activeId && s.activeId !== id) {
+          const snap = snapshotFromLive(s);
+          if (snap) sessions = upsertSession(sessions, snap);
+        }
+        set({
+          activeId: session.id,
+          sessions,
+          url: session.url,
+          filter: session.filter,
+          messages: session.messages,
+          confirmFormat: session.confirmFormat,
+          confirmEnhance: session.confirmEnhance,
+          confirmYtQuality: session.confirmYtQuality,
+          confirmAudio: session.confirmAudio,
+          confirmSubs: session.confirmSubs,
+          getPlaylistList: session.getPlaylistList,
+          extracting: false,
+        });
+      },
+
+      removeChat: (id) =>
+        set((s) => {
+          const sessions = s.sessions.filter((x) => x.id !== id);
+          if (s.activeId !== id) return { sessions };
+          return {
+            ...liveDefaults,
+            activeId: makeSessionId(),
+            sessions,
+            confirmFormat: s.confirmFormat,
+            confirmEnhance: s.confirmEnhance,
+            confirmYtQuality: s.confirmYtQuality,
+            confirmAudio: s.confirmAudio,
+            confirmSubs: s.confirmSubs,
+          };
+        }),
+
+      resetChat: () => {
+        const s = get();
+        set({
+          ...liveDefaults,
+          activeId: makeSessionId(),
+          sessions: s.sessions,
+          confirmFormat: s.confirmFormat,
+          confirmEnhance: s.confirmEnhance,
+          confirmYtQuality: s.confirmYtQuality,
+          confirmAudio: s.confirmAudio,
+          confirmSubs: s.confirmSubs,
+        });
+      },
+    }),
+    {
+      name: "pinforge:home-chat",
+      partialize: (s) => ({
+        activeId: s.activeId,
+        sessions: s.sessions,
+        url: s.url,
+        filter: s.filter,
+        messages: s.messages,
+        confirmFormat: s.confirmFormat,
+        confirmEnhance: s.confirmEnhance,
+        confirmYtQuality: s.confirmYtQuality,
+        confirmAudio: s.confirmAudio,
+        confirmSubs: s.confirmSubs,
+        getPlaylistList: s.getPlaylistList,
       }),
-    })),
+    }
+  )
+);
 
-  clearConfirmPending: () =>
-    set((s) => ({
-      messages: s.messages.map((m) =>
-        m.pendingConfirm ? { ...m, pendingConfirm: false } : m
-      ),
-    })),
-
-  resetChat: () => set({ ...initialState }),
-}));
+/** Sessions with messages, newest first (for sidebar). */
+export function selectRecentChats(sessions: ChatSession[], limit = 12): ChatSession[] {
+  return sessions
+    .filter((s) => s.messages.length > 0)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, limit);
+}
 
 export function selectPendingConfirm(messages: ChatMessage[]) {
   return messages.find((m) => m.pendingConfirm && m.status === "ready");

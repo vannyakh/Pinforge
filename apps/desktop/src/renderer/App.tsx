@@ -3,7 +3,6 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import Sider from "./components/layout/Sider";
 import DownloadPage from "./pages/download";
-import GalleryPage from "./pages/gallery";
 import TasksPage from "./pages/tasks";
 import SchedulePage from "./pages/schedule";
 import SettingsPage from "./pages/settings";
@@ -21,7 +20,6 @@ const App: React.FC = () => (
               <Route path="/" element={<DownloadPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
-              <Route path="/gallery" element={<GalleryPage />} />
               <Route path="/settings/*" element={<SettingsPage />} />
               <Route path="*" element={<DownloadPage />} />
             </Route>

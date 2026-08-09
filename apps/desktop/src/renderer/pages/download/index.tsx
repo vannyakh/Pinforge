@@ -742,7 +742,8 @@ const DownloadPage: React.FC = () => {
 
   const reloadExtractList = async (msg: ChatMessage, max: number) => {
     if (!msg.extract?.sourceUrl) return;
-    const capped = Math.max(1, Math.min(500, max));
+    const isPin = msg.detected?.id === "pinterest";
+    const capped = Math.max(1, Math.min(isPin ? 2000 : 500, max));
     setListMax(capped);
     setListReloadingId(msg.id);
     try {
@@ -750,10 +751,11 @@ const DownloadPage: React.FC = () => {
       const next = await api.extractPreview(msg.extract.sourceUrl, {
         channelMaxVideos: capped,
         playlistMaxVideos: capped,
+        boardMaxPins: capped,
         preferPlaylist: mode === "playlist",
       });
       const extract =
-        mode === "playlist" || mode === "profile"
+        mode === "playlist" || mode === "profile" || mode === "board"
           ? { ...next, mode: mode as typeof next.mode }
           : next;
       const selectedItemUrls = extract.items.map((i) => i.url);
@@ -780,6 +782,8 @@ const DownloadPage: React.FC = () => {
               ? { playlistMaxVideos: capped }
               : { channelMaxVideos: capped },
         });
+      } else if (isPin) {
+        void updateSettings({ pinterest: { boardMaxPins: capped } });
       }
     } finally {
       setListReloadingId(null);
@@ -1030,9 +1034,11 @@ const DownloadPage: React.FC = () => {
                               listMax={
                                 extract.mode === "playlist"
                                   ? settings.youtube?.playlistMaxVideos ?? listMax
-                                  : extract.mode === "profile"
-                                    ? settings.youtube?.channelMaxVideos ?? listMax
-                                    : listMax
+                                  : extract.provider.id === "pinterest"
+                                    ? settings.pinterest?.boardMaxPins ?? listMax
+                                    : extract.mode === "profile"
+                                      ? settings.youtube?.channelMaxVideos ?? listMax
+                                      : listMax
                               }
                               onListMaxChange={setListMax}
                               onReloadList={(max) => reloadExtractList(msg, max)}

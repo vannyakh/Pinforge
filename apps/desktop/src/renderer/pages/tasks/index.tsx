@@ -21,6 +21,7 @@ import {
   Delete,
   FolderClose,
   FolderOpen,
+  FileZip,
   Pause,
   PlayOne,
   Plus,
@@ -202,6 +203,9 @@ function classifyCollection(
 
     if (provider === "pinterest" || /pinterest\.com$/i.test(host)) {
       if (/\/pin\//i.test(path)) return itemCount > 1 ? "collection" : null;
+      const parts = path.split("/").filter(Boolean);
+      if (parts.length === 1) return "profile";
+      if (/\/search\//i.test(path)) return "collection";
       return "board";
     }
 
@@ -267,17 +271,6 @@ function formatBytes(n: number | null | undefined): string {
   return `${v.toFixed(digits)} ${units[i]}`;
 }
 
-/** Digital stopwatch HH:MM:SS (or MM:SS under 1h). */
-function formatDigitalElapsed(totalSec: number): string {
-  const s = Math.max(0, Math.floor(totalSec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
-  return `${pad(m)}:${pad(sec)}`;
-}
-
 function rowPercent(
   row: Pick<TaskRow, "current" | "total" | "status" | "downloadedBytes" | "estimateBytes">
 ): number {
@@ -328,13 +321,18 @@ const TasksPage: React.FC = () => {
     direction: "descend",
   });
   const [disk, setDisk] = useState<{ free: number; total: number; path: string } | null>(null);
+  const [resources, setResources] = useState<{
+    cpuPercent: number;
+    cpuCount: number;
+    memory: { used: number; free: number; total: number };
+  } | null>(null);
+  const [visibleCount, setVisibleCount] = useState(40);
   const [packFileBytes, setPackFileBytes] = useState<Record<string, number>>({});
   const [fileBytesByPath, setFileBytesByPath] = useState<Record<string, number>>({});
-  const [processElapsedSec, setProcessElapsedSec] = useState(0);
-  const processStartedRef = useRef<number | null>(null);
   const [queue, setQueue] = useState<QueuedJob[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const stopBatchRef = useRef(false);
+  const tableScrollHideRef = useRef<number | null>(null);
   const dragSelectRef = useRef<{
     active: boolean;
     startIndex: number;
@@ -345,43 +343,35 @@ const TasksPage: React.FC = () => {
   const selectedKeysRef = useRef(selectedKeys);
   selectedKeysRef.current = selectedKeys;
 
+  const PAGE_SIZE = 40;
+
   const detectedUrls = useMemo(() => extractUrls(addText), [addText]);
   const isProcessing = busy || batchRunning || tasks.some((t) => t.status === "running");
   const pushNotify = settings?.system?.notifyOnDownloadComplete !== false;
-
-  useEffect(() => {
-    if (!isProcessing) {
-      processStartedRef.current = null;
-      setProcessElapsedSec(0);
-      return;
-    }
-    if (processStartedRef.current == null) {
-      processStartedRef.current = Date.now();
-      setProcessElapsedSec(0);
-    }
-    const started = processStartedRef.current;
-    const tick = () => {
-      setProcessElapsedSec(Math.floor((Date.now() - started) / 1000));
-    };
-    tick();
-    const timer = window.setInterval(tick, 250);
-    return () => window.clearInterval(timer);
-  }, [isProcessing]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!settings?.outDir) {
         setDisk(null);
-        return;
+      } else {
+        const info = await api.diskSpace(settings.outDir);
+        if (!cancelled) setDisk(info);
       }
-      const info = await api.diskSpace(settings.outDir);
-      if (!cancelled) setDisk(info);
+      try {
+        const res = await api.systemResources();
+        if (!cancelled) setResources(res);
+      } catch {
+        if (!cancelled) setResources(null);
+      }
     };
     void load();
-    const timer = window.setInterval(() => void load(), 15_000);
+    // Second tick so CPU % has a prior sample
+    const warm = window.setTimeout(() => void load(), 600);
+    const timer = window.setInterval(() => void load(), 2_500);
     return () => {
       cancelled = true;
+      window.clearTimeout(warm);
       window.clearInterval(timer);
     };
   }, [settings?.outDir, busy]);
@@ -641,6 +631,63 @@ const TasksPage: React.FC = () => {
 
   rowsRef.current = rows;
 
+  const visibleRows = useMemo(
+    () => rows.slice(0, visibleCount),
+    [rows, visibleCount]
+  );
+  const hasMoreRows = visibleCount < rows.length;
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [sorted.field, sorted.direction]);
+
+  useEffect(() => {
+    setVisibleCount((c) => {
+      if (rows.length <= PAGE_SIZE) return PAGE_SIZE;
+      return Math.min(Math.max(c, PAGE_SIZE), rows.length);
+    });
+  }, [rows.length]);
+
+  useEffect(() => {
+    const root = cardRef.current;
+    if (!root) return;
+    let body: HTMLElement | null = null;
+
+    const onScroll = () => {
+      if (!body) return;
+      body.classList.add("is-scrolling");
+      if (tableScrollHideRef.current) window.clearTimeout(tableScrollHideRef.current);
+      tableScrollHideRef.current = window.setTimeout(() => {
+        body?.classList.remove("is-scrolling");
+      }, 800);
+
+      if (body.scrollTop + body.clientHeight >= body.scrollHeight - 120) {
+        setVisibleCount((c) => {
+          const total = rowsRef.current.length;
+          if (c >= total) return c;
+          return Math.min(c + PAGE_SIZE, total);
+        });
+      }
+    };
+
+    const bind = () => {
+      const next = root.querySelector(".arco-table-body") as HTMLElement | null;
+      if (next === body) return;
+      body?.removeEventListener("scroll", onScroll);
+      body = next;
+      body?.addEventListener("scroll", onScroll, { passive: true });
+    };
+
+    bind();
+    const mo = new MutationObserver(bind);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      body?.removeEventListener("scroll", onScroll);
+      if (tableScrollHideRef.current) window.clearTimeout(tableScrollHideRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     const endDrag = () => {
       dragSelectRef.current = null;
@@ -684,6 +731,32 @@ const TasksPage: React.FC = () => {
       return;
     }
     if (settings?.outDir) void api.openPath(settings.outDir);
+  };
+
+  const exportZip = async (row: TaskRow) => {
+    const items = row.isChild
+      ? history.filter((h) => h.id === row.id)
+      : itemsForPack(row.id);
+    const first = items.find((h) => h.outPath)?.outPath;
+    if (!first) {
+      Message.warning("No downloaded files to zip for this task.");
+      return;
+    }
+    const folder = first.replace(/[\\/][^\\/]+$/, "");
+    if (!folder) {
+      Message.warning("Could not resolve download folder.");
+      return;
+    }
+    const hide = Message.loading({ content: "Creating ZIP…", duration: 0 });
+    try {
+      const { zipPath } = await api.zipFolder(folder);
+      hide();
+      Message.success(`ZIP saved: ${zipPath}`);
+      void api.showItemInFolder(zipPath);
+    } catch (err) {
+      hide();
+      Message.error(err instanceof Error ? err.message : "ZIP failed");
+    }
   };
 
   const selectedRows = useMemo(
@@ -994,8 +1067,8 @@ const TasksPage: React.FC = () => {
     {
       title: "Task",
       dataIndex: "url",
-      width: 320,
-      fixed: "left",
+      // Flexible column — fills remaining width for a clean full-width table
+      width: 280,
       sorter: true,
       ellipsis: true,
       className: "tasks-table__col-task",
@@ -1219,9 +1292,10 @@ const TasksPage: React.FC = () => {
     },
     {
       title: "Actions",
-      width: 96,
+      width: 120,
       align: "right",
       fixed: "right",
+      className: "tasks-table__col-actions",
       render: (_col, row) => {
         if (row.id === "pending") return null;
         const canOpen = (row.files > 0 || row.isChild) && row.status !== "running";
@@ -1237,6 +1311,16 @@ const TasksPage: React.FC = () => {
                   size="mini"
                   icon={<FolderOpen theme="outline" size="14" />}
                   onClick={() => openFolder(row)}
+                />
+              </Tooltip>
+            )}
+            {canOpen && !row.isChild && (
+              <Tooltip content="Export folder as ZIP">
+                <Button
+                  type="text"
+                  size="mini"
+                  icon={<FileZip theme="outline" size="14" />}
+                  onClick={() => void exportZip(row)}
                 />
               </Tooltip>
             )}
@@ -1263,7 +1347,7 @@ const TasksPage: React.FC = () => {
     }
     Modal.confirm({
       title: "Clear task list?",
-      content: "Removes all jobs from this list. Saved files in Gallery stay.",
+      content: "Removes all jobs from this list. Saved files stay on disk.",
       okText: "Clear list",
       okButtonProps: { status: "danger" },
       onOk: async () => {
@@ -1311,14 +1395,6 @@ const TasksPage: React.FC = () => {
         <div className="flex items-center justify-between gap-16px mb-6px">
           <div className="flex items-center gap-12px min-w-0">
             <div className="text-22px font-600 text-t-primary">Tasks</div>
-            <div
-              className={`tasks-digital${isProcessing ? " is-live" : ""}`}
-              title={isProcessing ? "Elapsed since process started" : "Idle"}
-              aria-live="polite"
-            >
-              <span className="tasks-digital__label">{isProcessing ? "RUN" : "IDLE"}</span>
-              <span className="tasks-digital__time">{formatDigitalElapsed(processElapsedSec)}</span>
-            </div>
           </div>
           <Space size={8} className="tasks-header-actions shrink-0 flex-wrap justify-end">
             {selectedKeys.length > 0 ? (
@@ -1450,18 +1526,6 @@ const TasksPage: React.FC = () => {
             )}
           </Space>
         </div>
-        <div className="text-t-secondary text-14px flex flex-wrap items-center gap-x-16px gap-y-4px">
-          <span>
-            Add links to the queue, then Start / Continue. Collections expand as a tree.
-          </span>
-          {disk && (
-            <span className="tasks-disk tabular-nums text-13px">
-              Free space{" "}
-              <span className="text-t-primary font-500">{formatBytes(disk.free)}</span>
-              <span className="text-t-tertiary"> / {formatBytes(disk.total)}</span>
-            </span>
-          )}
-        </div>
         {selectedKeys.length > 0 && (selectedSize.estimate != null || selectedSize.downloaded != null) && (
           <div className="text-13px text-t-secondary mt-8px tabular-nums">
             Selected size
@@ -1486,12 +1550,12 @@ const TasksPage: React.FC = () => {
           className="tasks-table"
           rowKey="id"
           columns={columns}
-          data={rows}
+          data={visibleRows}
           pagination={false}
           border={false}
           hover
           tableLayoutFixed
-          scroll={{ x: 1280, y: scrollY }}
+          scroll={{ x: 1348, y: scrollY }}
           onRow={onRow}
           childrenColumnName="children"
           indentSize={0}
@@ -1516,45 +1580,111 @@ const TasksPage: React.FC = () => {
           noDataElement={<Empty description="No tasks yet. Use + to add links." />}
         />
       </div>
+      <div className="tasks-hw-bar" aria-label="System resources">
+        <div className="tasks-hw-bar__item">
+          <span className="tasks-hw-bar__label">Storage</span>
+          <span className="tasks-hw-bar__value tabular-nums">
+            {disk ? (
+              <>
+                <span className="tasks-hw-bar__em">{formatBytes(disk.free)}</span>
+                <span className="tasks-hw-bar__muted"> free / {formatBytes(disk.total)}</span>
+              </>
+            ) : (
+              <span className="tasks-hw-bar__muted">—</span>
+            )}
+          </span>
+        </div>
+        <div className="tasks-hw-bar__item">
+          <span className="tasks-hw-bar__label">CPU</span>
+          <span className="tasks-hw-bar__value tabular-nums">
+            {resources ? (
+              <>
+                <span className="tasks-hw-bar__em">{resources.cpuPercent}%</span>
+                <span className="tasks-hw-bar__muted"> · {resources.cpuCount} cores</span>
+              </>
+            ) : (
+              <span className="tasks-hw-bar__muted">—</span>
+            )}
+          </span>
+        </div>
+        <div className="tasks-hw-bar__item">
+          <span className="tasks-hw-bar__label">RAM</span>
+          <span className="tasks-hw-bar__value tabular-nums">
+            {resources ? (
+              <>
+                <span className="tasks-hw-bar__em">{formatBytes(resources.memory.used)}</span>
+                <span className="tasks-hw-bar__muted"> / {formatBytes(resources.memory.total)}</span>
+              </>
+            ) : (
+              <span className="tasks-hw-bar__muted">—</span>
+            )}
+          </span>
+        </div>
+        <div className="tasks-hw-bar__meta tabular-nums">
+          {rows.length === 0
+            ? "0 tasks"
+            : hasMoreRows
+              ? `Showing ${visibleRows.length} of ${rows.length}`
+              : `${rows.length} task${rows.length === 1 ? "" : "s"}`}
+        </div>
+      </div>
 
       <Modal
         title="Add links"
         visible={addOpen}
         onCancel={closeAddModal}
-        onOk={submitAddTask}
-        okText={detectedUrls.length > 1 ? `Add to queue (${detectedUrls.length})` : "Add to queue"}
-        okButtonProps={{ disabled: busy || detectedUrls.length === 0 || !addOutDir.trim() }}
-        confirmLoading={busy}
+        autoFocus={false}
+        focusLock
+        className="aionui-modal tasks-add-modal"
         style={{ width: 560 }}
         unmountOnExit
+        footer={
+          <div className="flex justify-end gap-10px">
+            <Button onClick={closeAddModal}>Cancel</Button>
+            <Button
+              type="primary"
+              loading={busy}
+              disabled={busy || detectedUrls.length === 0 || !addOutDir.trim()}
+              onClick={submitAddTask}
+            >
+              {detectedUrls.length > 1
+                ? `Add to queue (${detectedUrls.length})`
+                : "Add to queue"}
+            </Button>
+          </div>
+        }
       >
-        <div className="flex flex-col gap-14px">
-          <div>
-            <div className="text-13px text-t-secondary mb-6px">Links</div>
+        <div className="tasks-add-modal__body">
+          <div className="tasks-add-modal__field">
+            <div className="tasks-add-modal__label">
+              Links <span className="text-danger">*</span>
+            </div>
             <Input.TextArea
               autoFocus
+              className="tasks-add-modal__links"
               value={addText}
               disabled={busy}
-              placeholder={"Paste one or more URLs…\nMixed text is fine — links are extracted automatically."}
-              autoSize={{ minRows: 5, maxRows: 10 }}
+              placeholder={
+                "Paste one or more URLs…\nMixed text is fine — links are extracted automatically."
+              }
+              autoSize={{ minRows: 5, maxRows: 9 }}
               onChange={setAddText}
             />
-            <div className="text-12px text-t-tertiary mt-6px">
+            <div className="tasks-add-modal__hint">
               {detectedUrls.length === 0
                 ? "No URLs detected yet"
                 : `${detectedUrls.length} URL${detectedUrls.length === 1 ? "" : "s"} detected`}
             </div>
           </div>
 
-          <div>
-            <div className="text-13px text-t-secondary mb-6px">Save to</div>
-            <div className="flex items-center gap-8px">
+          <div className="tasks-add-modal__field">
+            <div className="tasks-add-modal__label">Save to</div>
+            <div className="tasks-add-modal__path">
               <Input
                 value={addOutDir}
                 disabled={busy}
                 placeholder="Download folder"
                 onChange={setAddOutDir}
-                className="flex-1"
               />
               <Button
                 icon={<FolderOpen theme="outline" size="14" />}
@@ -1565,18 +1695,18 @@ const TasksPage: React.FC = () => {
               </Button>
             </div>
             {disk && (
-              <div className="text-12px text-t-tertiary mt-6px tabular-nums">
-                Free space on disk:{" "}
+              <div className="tasks-add-modal__hint tabular-nums">
+                Free space{" "}
                 <span className="text-t-secondary">{formatBytes(disk.free)}</span>
-                {" · "}
+                {" / "}
                 {formatBytes(disk.total)} total
               </div>
             )}
           </div>
 
-          <div className="flex gap-12px">
-            <div className="flex-1 min-w-0">
-              <div className="text-13px text-t-secondary mb-6px">Format</div>
+          <div className="tasks-add-modal__grid">
+            <div className="tasks-add-modal__field">
+              <div className="tasks-add-modal__label">Format</div>
               <Select
                 value={addFormat}
                 disabled={busy}
@@ -1584,8 +1714,8 @@ const TasksPage: React.FC = () => {
                 options={FORMAT_OPTIONS}
               />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-13px text-t-secondary mb-6px">Preset</div>
+            <div className="tasks-add-modal__field">
+              <div className="tasks-add-modal__label">Preset</div>
               <Select
                 value={addPreset}
                 disabled={busy || !addEnhance}
@@ -1600,11 +1730,8 @@ const TasksPage: React.FC = () => {
                 }
               />
             </div>
-          </div>
-
-          <div className="flex gap-12px">
-            <div className="flex-1 min-w-0">
-              <div className="text-13px text-t-secondary mb-6px">YouTube quality</div>
+            <div className="tasks-add-modal__field">
+              <div className="tasks-add-modal__label">YouTube quality</div>
               <Select
                 value={addYtQuality}
                 disabled={busy || addFormat === "audio-only"}
@@ -1620,41 +1747,45 @@ const TasksPage: React.FC = () => {
                 ]}
               />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-13px text-t-secondary mb-6px">Audio / Subs</div>
-              <div className="flex gap-8px">
-                <Select
-                  className="flex-1"
-                  value={addAudio}
-                  disabled={busy || addFormat !== "audio-only"}
-                  onChange={(v) => setAddAudio(v as AudioContainer)}
-                  options={[
-                    { value: "m4a", label: "M4A" },
-                    { value: "mp3", label: "MP3" },
-                    { value: "flac", label: "FLAC" },
-                  ]}
-                />
-                <Select
-                  className="flex-1"
-                  value={addSubs}
-                  disabled={busy}
-                  onChange={(v) => setAddSubs(v as SubtitleMode)}
-                  options={[
-                    { value: "none", label: "No subs" },
-                    { value: "separate", label: "Subs file" },
-                    { value: "embed", label: "Embed" },
-                  ]}
-                />
+            <div className="tasks-add-modal__field">
+              <div className="tasks-add-modal__label">Audio</div>
+              <Select
+                value={addAudio}
+                disabled={busy || addFormat !== "audio-only"}
+                onChange={(v) => setAddAudio(v as AudioContainer)}
+                options={[
+                  { value: "m4a", label: "M4A" },
+                  { value: "mp3", label: "MP3" },
+                  { value: "flac", label: "FLAC" },
+                ]}
+              />
+            </div>
+            <div className="tasks-add-modal__field">
+              <div className="tasks-add-modal__label">Subtitles</div>
+              <Select
+                value={addSubs}
+                disabled={busy}
+                onChange={(v) => setAddSubs(v as SubtitleMode)}
+                options={[
+                  { value: "none", label: "No subs" },
+                  { value: "separate", label: "Subs file" },
+                  { value: "embed", label: "Embed" },
+                ]}
+              />
+            </div>
+            <div className="tasks-add-modal__field tasks-add-modal__field--switch">
+              <div className="tasks-add-modal__label">Enhance stills</div>
+              <div className="tasks-add-modal__switch-row">
+                <Switch checked={addEnhance} disabled={busy} onChange={setAddEnhance} />
+                <span className="tasks-add-modal__switch-hint">
+                  {addEnhance ? "On — apply preset to stills" : "Off"}
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-12px">
-            <div className="flex items-center gap-8px">
-              <Switch checked={addEnhance} disabled={busy} onChange={setAddEnhance} size="small" />
-              <span className="text-13px text-t-secondary">Enhance stills</span>
-            </div>
-            <span className="text-12px text-t-tertiary">Queued — press Start to download</span>
+          <div className="tasks-add-modal__note">
+            Links are queued here — press Start on the Tasks page to download.
           </div>
         </div>
       </Modal>
