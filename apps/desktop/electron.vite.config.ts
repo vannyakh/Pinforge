@@ -1,4 +1,5 @@
 import { resolve } from "path";
+import { readFileSync } from "fs";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import UnoCSS from "unocss/vite";
@@ -6,6 +7,7 @@ import unoConfig from "./uno.config";
 
 const desktopSrc = resolve("src");
 const rendererRoot = resolve("src/renderer");
+const APP_VERSION = JSON.parse(readFileSync(resolve("package.json"), "utf-8")).version as string;
 
 /** Heavy / Node-native deps must stay external — bundling undici pulls `node:sqlite` (unsupported in Electron 31). */
 const MAIN_EXTERNALS = [
@@ -65,6 +67,9 @@ export default defineConfig({
   renderer: {
     root: rendererRoot,
     base: "./",
+    define: {
+      __APP_VERSION__: JSON.stringify(APP_VERSION),
+    },
     resolve: {
       alias: {
         "@": desktopSrc,

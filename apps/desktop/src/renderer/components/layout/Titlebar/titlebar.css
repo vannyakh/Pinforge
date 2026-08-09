@@ -95,6 +95,41 @@
   background-color: rgba(255, 255, 255, 0.16);
 }
 
+.app-titlebar__button:disabled,
+.app-titlebar__button[disabled] {
+  opacity: 0.35;
+  cursor: default;
+  background-color: transparent;
+}
+
+.app-titlebar__button:disabled:hover,
+.app-titlebar__button[disabled]:hover {
+  background-color: transparent;
+}
+
+.app-titlebar__button--nav svg {
+  display: block;
+}
+
+.titlebar-search-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.titlebar-search-item:hover {
+  background: var(--color-fill-2, rgba(255, 255, 255, 0.06));
+}
+
 .app-window-controls {
   display: flex;
   align-items: stretch;

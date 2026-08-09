@@ -100,6 +100,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? `Done — ${ok} saved${fail ? `, ${fail} failed` : ""}`
             : `Saved${res.provider ? ` (${res.provider})` : ""}`
         );
+        if (
+          settings.system?.notifications &&
+          settings.system.notifyOnDownloadComplete &&
+          typeof Notification !== "undefined"
+        ) {
+          try {
+            new Notification("Pinforge", {
+              body:
+                res.kind === "board"
+                  ? `Board done — ${ok} saved`
+                  : `Download saved${res.provider ? ` (${res.provider})` : ""}`,
+            });
+          } catch {
+            // Notification permission denied
+          }
+        }
         await refresh();
       } catch (e) {
         Message.clear();
@@ -114,7 +130,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateSettings = useCallback(async (partial: SettingsPartial) => {
     const next = await api.setSettings(partial);
-    setSettings((prev) => (prev ? { ...prev, ...next } : prev));
+    setSettings((prev) =>
+      prev
+        ? {
+            ...prev,
+            ...next,
+            system: next.system ?? prev.system,
+          }
+        : prev
+    );
   }, []);
 
   const clearHistory = useCallback(async () => {

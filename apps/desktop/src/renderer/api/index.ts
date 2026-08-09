@@ -13,6 +13,10 @@ import type {
   RemoteConfig,
   RemoteChannelConfig,
   CloudflareTunnelConfig,
+  SystemConfig,
+  CustomProviderConfig,
+  FormatPluginConfig,
+  ProviderManifest,
 } from "../../preload/index";
 
 export type {
@@ -30,6 +34,10 @@ export type {
   RemoteConfig,
   RemoteChannelConfig,
   CloudflareTunnelConfig,
+  SystemConfig,
+  CustomProviderConfig,
+  FormatPluginConfig,
+  ProviderManifest,
 };
 
 export const api = {
@@ -45,6 +53,15 @@ export const api = {
   detectProvider: (url: string) => window.api.detectProvider(url),
   listProviders: () => window.api.listProviders(),
   pickFolder: () => window.api.pickFolder(),
+  pickFolderPath: (defaultPath?: string) => window.api.pickFolderPath(defaultPath),
+  pickProviderSource: () => window.api.pickProviderSource(),
+  pickFormatPlugin: () => window.api.pickFormatPlugin(),
+  listCustomProviders: () => window.api.listCustomProviders(),
+  upsertCustomProvider: (provider: CustomProviderConfig) => window.api.upsertCustomProvider(provider),
+  removeCustomProvider: (id: string) => window.api.removeCustomProvider(id),
+  installProviderFromSource: (sourcePath: string) => window.api.installProviderFromSource(sourcePath),
+  readProviderManifest: (pathOrDir: string) => window.api.readProviderManifest(pathOrDir),
+  uploadFormatPlugin: (sourcePath: string) => window.api.uploadFormatPlugin(sourcePath),
   getSettings: () => window.api.getSettings(),
   setSettings: (partial: SettingsPartial) => window.api.setSettings(partial),
   clearHistory: () => window.api.clearHistory(),
@@ -55,7 +72,10 @@ export const api = {
   }) => window.api.setRemote(partial),
   upsertRemoteChannel: (channel: Partial<RemoteChannelConfig> & { id: string }) =>
     window.api.upsertRemoteChannel(channel),
+  testRemoteChannel: (payload: { id: string; botToken?: string; webhookUrl?: string }) =>
+    window.api.testRemoteChannel(payload),
   showItemInFolder: (filePath: string) => window.api.showItemInFolder(filePath),
   openPath: (filePath: string) => window.api.openPath(filePath),
+  openExternal: (url: string) => window.api.openExternal(url),
   onMediaProgress: (cb: (event: MediaProgressEvent) => void) => window.api.onMediaProgress(cb),
 };

@@ -74,6 +74,62 @@ export interface DetectedProvider {
   formats: FormatPreset[];
 }
 
+export interface SystemConfig {
+  language: string;
+  startOnBoot: boolean;
+  closeToTray: boolean;
+  hardwareAcceleration: boolean;
+  notifications: boolean;
+  notifyOnDownloadComplete: boolean;
+  tempDir: string;
+  logDir: string;
+}
+
+export interface FormatPluginConfig {
+  id: string;
+  label: string;
+  enabled: boolean;
+  sourcePath: string;
+  entry?: string;
+  version?: string;
+  createdAt: number;
+}
+
+export interface ProviderManifest {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  logo?: string;
+  engine?: string;
+  hosts?: string[];
+  formats?: string[];
+  main?: string;
+  author?: string;
+  homepage?: string;
+  formatPlugins?: Array<{ id: string; name: string; entry?: string }>;
+  config?: Record<string, unknown>;
+}
+
+export interface CustomProviderConfig {
+  id: string;
+  label: string;
+  enabled: boolean;
+  hosts: string;
+  sourcePath?: string;
+  manifestPath?: string;
+  manifest?: ProviderManifest;
+  sourceUrl?: string;
+  notes?: string;
+  engine?: string;
+  extractorUrl?: string;
+  format?: string;
+  formatPlugins?: FormatPluginConfig[];
+  builtin?: boolean;
+  version?: string;
+  createdAt: number;
+}
+
 export interface AppSettings {
   outDir: string;
   preset: PresetName;
@@ -84,6 +140,7 @@ export interface AppSettings {
   history: HistoryItem[];
   packs: DownloadPack[];
   remote: RemoteConfig;
+  system: SystemConfig;
   presets: Record<
     PresetName,
     {
@@ -96,6 +153,7 @@ export interface AppSettings {
     }
   >;
   providers: ProviderInfo[];
+  customProviders: CustomProviderConfig[];
 }
 
 export type RemoteChannelId = string;
@@ -135,6 +193,7 @@ export type SettingsPartial = Partial<{
   enhance: boolean;
   format: FormatPreset;
   extractorUrl: string;
+  system: Partial<SystemConfig>;
 }>;
 
 export interface DownloadTask {
@@ -162,11 +221,36 @@ const api = {
     ipcRenderer.invoke("media:detect", url),
   listProviders: (): Promise<ProviderInfo[]> => ipcRenderer.invoke("media:providers"),
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke("pin:pickFolder"),
+  pickFolderPath: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke("dialog:pickFolder", defaultPath),
+  pickProviderSource: (): Promise<string | null> =>
+    ipcRenderer.invoke("dialog:pickProviderSource"),
+  pickFormatPlugin: (): Promise<string | null> =>
+    ipcRenderer.invoke("dialog:pickFormatPlugin"),
+  listCustomProviders: (): Promise<CustomProviderConfig[]> =>
+    ipcRenderer.invoke("providers:listCustom"),
+  upsertCustomProvider: (provider: CustomProviderConfig): Promise<CustomProviderConfig[]> =>
+    ipcRenderer.invoke("providers:upsertCustom", provider),
+  removeCustomProvider: (id: string): Promise<CustomProviderConfig[]> =>
+    ipcRenderer.invoke("providers:removeCustom", id),
+  installProviderFromSource: (
+    sourcePath: string
+  ): Promise<{ provider: CustomProviderConfig; providers: CustomProviderConfig[] }> =>
+    ipcRenderer.invoke("providers:installFromSource", sourcePath),
+  readProviderManifest: (
+    pathOrDir: string
+  ): Promise<{ path: string; manifest: ProviderManifest } | null> =>
+    ipcRenderer.invoke("providers:readManifest", pathOrDir),
+  uploadFormatPlugin: (sourcePath: string): Promise<FormatPluginConfig> =>
+    ipcRenderer.invoke("providers:uploadFormatPlugin", sourcePath),
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),
   setSettings: (
     partial: SettingsPartial
   ): Promise<
-    Pick<AppSettings, "outDir" | "preset" | "delayMs" | "enhance" | "format" | "extractorUrl">
+    Pick<
+      AppSettings,
+      "outDir" | "preset" | "delayMs" | "enhance" | "format" | "extractorUrl" | "system"
+    >
   > => ipcRenderer.invoke("settings:set", partial),
   clearHistory: (): Promise<boolean> => ipcRenderer.invoke("history:clear"),
   getRemote: (): Promise<RemoteConfig> => ipcRenderer.invoke("remote:get"),
@@ -176,10 +260,17 @@ const api = {
   }): Promise<RemoteConfig> => ipcRenderer.invoke("remote:set", partial),
   upsertRemoteChannel: (channel: Partial<RemoteChannelConfig> & { id: string }): Promise<RemoteConfig> =>
     ipcRenderer.invoke("remote:upsertChannel", channel),
+  testRemoteChannel: (payload: {
+    id: string;
+    botToken?: string;
+    webhookUrl?: string;
+  }): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke("remote:testChannel", payload),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),
   openPath: (filePath: string): Promise<string> =>
     ipcRenderer.invoke("shell:openPath", filePath),
+  openExternal: (url: string): Promise<boolean> =>
+    ipcRenderer.invoke("shell:openExternal", url),
 
   onMediaProgress: (cb: (event: MediaProgressEvent) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, payload: MediaProgressEvent) => cb(payload);

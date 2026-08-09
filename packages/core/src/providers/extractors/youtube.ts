@@ -53,7 +53,7 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 
 /**
  * YouTube via built-in JS extractor, then Invidious/Piped service fallbacks.
- * No yt-dlp. Set `extractorUrl` to force a specific service instance.
+ * Set `extractorUrl` to force a specific service instance.
  */
 export async function extractYouTubeViaPiped(
   url: string,

@@ -9,21 +9,24 @@ import SchedulePage from "./pages/schedule";
 import SettingsPage from "./pages/settings";
 import { AppProvider } from "./hooks/context/AppContext";
 import { ThemeProvider } from "./hooks/context/ThemeContext";
+import { NavigationHistoryProvider } from "./hooks/context/NavigationHistoryContext";
 
 const App: React.FC = () => (
   <ThemeProvider>
     <AppProvider>
       <HashRouter>
-        <Routes>
-          <Route element={<Layout sider={<Sider />} />}>
-            <Route path="/" element={<DownloadPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/schedule" element={<SchedulePage />} />
-            <Route path="/gallery" element={<GalleryPage />} />
-            <Route path="/settings/*" element={<SettingsPage />} />
-            <Route path="*" element={<DownloadPage />} />
-          </Route>
-        </Routes>
+        <NavigationHistoryProvider>
+          <Routes>
+            <Route element={<Layout sider={<Sider />} />}>
+              <Route path="/" element={<DownloadPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/schedule" element={<SchedulePage />} />
+              <Route path="/gallery" element={<GalleryPage />} />
+              <Route path="/settings/*" element={<SettingsPage />} />
+              <Route path="*" element={<DownloadPage />} />
+            </Route>
+          </Routes>
+        </NavigationHistoryProvider>
       </HashRouter>
     </AppProvider>
   </ThemeProvider>

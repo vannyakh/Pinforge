@@ -1,0 +1,14 @@
+{
+  "id": "example-site",
+  "name": "Example Site",
+  "version": "1.0.0",
+  "description": "Sample Pinforge provider extension. Rename and fill hosts/engine.",
+  "logo": "logo.svg",
+  "engine": "script",
+  "hosts": ["example.com", "www.example.com"],
+  "formats": ["best", "mp4"],
+  "main": "index.js",
+  "author": "you",
+  "formatPlugins": [],
+  "config": {}
+}

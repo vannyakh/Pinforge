@@ -8,7 +8,22 @@ import {
   type FormatPreset,
   type ProcessResult,
 } from "@pinterest-desktop/core";
-import { getStore, type DownloadPack, type HistoryItem, type PackStatus } from "./store";
+import {
+  getStore,
+  resolveSystemPaths,
+  type DownloadPack,
+  type HistoryItem,
+  type PackStatus,
+  type SystemConfig,
+  type CustomProviderConfig,
+} from "./store";
+import { applySystemPrefs } from "./systemPrefs";
+import {
+  findManifestPath,
+  installFormatPlugin,
+  installProviderFromSource,
+  readProviderManifest,
+} from "./providerInstall";
 
 function emitProgress(
   e: IpcMainInvokeEvent,
@@ -71,8 +86,23 @@ async function runProcess(
   const store = getStore();
   const { url, preset, outDir } = payload;
   const enhance = payload.enhance ?? store.get("enhance");
-  const format = payload.format ?? store.get("format");
-  const extractorUrl = store.get("extractorUrl") || undefined;
+
+  // Provider extension overrides (engine / format / extractor / plugins)
+  let providerCfg: CustomProviderConfig | undefined;
+  try {
+    const detected = detectProvider(url);
+    providerCfg = (store.get("customProviders") ?? []).find((p) => p.id === detected.id);
+  } catch {
+    providerCfg = undefined;
+  }
+
+  const format =
+    payload.format ??
+    (providerCfg?.format as FormatPreset | undefined) ??
+    store.get("format");
+  const extractorUrl =
+    providerCfg?.extractorUrl?.trim() || store.get("extractorUrl") || undefined;
+  const enabledPlugins = (providerCfg?.formatPlugins ?? []).filter((p) => p.enabled);
 
   store.set("preset", preset);
   store.set("outDir", outDir);
@@ -92,7 +122,18 @@ async function runProcess(
     updatedAt: startedAt,
   };
   upsertPack(runningPack);
-  emitProgress(e, { packId, url, current: 0, total: 1, status: "running", message: "Starting…" });
+  const pluginHint =
+    enabledPlugins.length > 0
+      ? ` · ${enabledPlugins.length} format plugin${enabledPlugins.length === 1 ? "" : "s"}`
+      : "";
+  emitProgress(e, {
+    packId,
+    url,
+    current: 0,
+    total: 1,
+    status: "running",
+    message: `Starting${providerCfg?.engine ? ` (${providerCfg.engine})` : ""}${pluginHint}…`,
+  });
 
   try {
     const res = await processMedia(url, {
@@ -212,6 +253,41 @@ export function registerIpc(): void {
     return res.filePaths[0];
   });
 
+  ipcMain.handle("dialog:pickFolder", async (_e, defaultPath?: string) => {
+    const store = getStore();
+    const res = await dialog.showOpenDialog({
+      properties: ["openDirectory", "createDirectory"],
+      defaultPath: defaultPath || store.get("outDir"),
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    return res.filePaths[0];
+  });
+
+  ipcMain.handle("dialog:pickProviderSource", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile", "openDirectory"],
+      filters: [
+        { name: "Provider package", extensions: ["json", "js", "mjs", "cjs", "zip"] },
+        { name: "Manifest", extensions: ["json"] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    return res.filePaths[0];
+  });
+
+  ipcMain.handle("dialog:pickFormatPlugin", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: [
+        { name: "Format plugin", extensions: ["js", "mjs", "cjs", "json", "zip"] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    return res.filePaths[0];
+  });
+
   ipcMain.handle("settings:get", async () => {
     const store = getStore();
     return {
@@ -224,6 +300,8 @@ export function registerIpc(): void {
       history: store.get("history"),
       packs: store.get("packs"),
       remote: store.get("remote"),
+      system: resolveSystemPaths(store.get("system")),
+      customProviders: store.get("customProviders") ?? [],
       presets: PRESETS,
       providers: listProviders(),
     };
@@ -240,6 +318,7 @@ export function registerIpc(): void {
         enhance: boolean;
         format: FormatPreset;
         extractorUrl: string;
+        system: Partial<SystemConfig>;
       }>
     ) => {
       const store = getStore();
@@ -249,6 +328,11 @@ export function registerIpc(): void {
       if (partial.enhance !== undefined) store.set("enhance", partial.enhance);
       if (partial.format !== undefined) store.set("format", partial.format);
       if (partial.extractorUrl !== undefined) store.set("extractorUrl", partial.extractorUrl);
+      if (partial.system !== undefined) {
+        const next = { ...store.get("system"), ...partial.system };
+        store.set("system", next);
+        applySystemPrefs(next);
+      }
       return {
         outDir: store.get("outDir"),
         preset: store.get("preset"),
@@ -256,6 +340,7 @@ export function registerIpc(): void {
         enhance: store.get("enhance"),
         format: store.get("format"),
         extractorUrl: store.get("extractorUrl"),
+        system: resolveSystemPaths(store.get("system")),
       };
     }
   );
@@ -292,12 +377,152 @@ export function registerIpc(): void {
     return next;
   });
 
+  ipcMain.handle(
+    "remote:testChannel",
+    async (
+      _e,
+      payload: { id: string; botToken?: string; webhookUrl?: string }
+    ): Promise<{ ok: boolean; message: string }> => {
+      const id = String(payload.id);
+      const token = (payload.botToken ?? "").trim();
+      const webhookUrl = (payload.webhookUrl ?? "").trim();
+
+      try {
+        if (id === "telegram" || id.startsWith("telegram")) {
+          if (!token) return { ok: false, message: "Enter a bot token first." };
+          const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+          const data = (await res.json()) as {
+            ok?: boolean;
+            result?: { username?: string; first_name?: string };
+            description?: string;
+          };
+          if (!data.ok) {
+            return { ok: false, message: data.description || "Telegram rejected this token." };
+          }
+          const user = data.result?.username || data.result?.first_name || "bot";
+          return { ok: true, message: `Connected — @${user}` };
+        }
+
+        if (id === "discord") {
+          if (!token && !webhookUrl) {
+            return { ok: false, message: "Enter a bot token or webhook URL." };
+          }
+          if (webhookUrl) {
+            if (!/^https:\/\/(discord(?:app)?\.com|discord\.com)\/api\/webhooks\//i.test(webhookUrl)) {
+              return { ok: false, message: "Discord webhook URL looks invalid." };
+            }
+            const res = await fetch(webhookUrl);
+            if (!res.ok) return { ok: false, message: `Webhook check failed (${res.status}).` };
+            return { ok: true, message: "Discord webhook looks valid." };
+          }
+          // Bot token: lightweight format check (runtime connect comes later)
+          if (token.length < 50) {
+            return { ok: false, message: "Discord bot token looks too short." };
+          }
+          return { ok: true, message: "Token format OK. Full Discord runtime comes soon." };
+        }
+
+        if (id === "webhook" || id.startsWith("webhook")) {
+          if (!webhookUrl) return { ok: false, message: "Enter a webhook URL." };
+          let parsed: URL;
+          try {
+            parsed = new URL(webhookUrl);
+          } catch {
+            return { ok: false, message: "Webhook URL is not valid." };
+          }
+          if (!/^https?:$/i.test(parsed.protocol)) {
+            return { ok: false, message: "Webhook must be http(s)." };
+          }
+          return { ok: true, message: "Webhook URL looks valid." };
+        }
+
+        return { ok: false, message: "This channel cannot be tested yet." };
+      } catch (err) {
+        return {
+          ok: false,
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+  );
+
+  ipcMain.handle("providers:listCustom", async () => getStore().get("customProviders") ?? []);
+
+  ipcMain.handle("providers:upsertCustom", async (_e, provider: CustomProviderConfig) => {
+    const store = getStore();
+    const list = [...(store.get("customProviders") ?? [])];
+    const idx = list.findIndex((p) => p.id === provider.id);
+    if (idx >= 0) list[idx] = { ...list[idx]!, ...provider };
+    else list.push(provider);
+    store.set("customProviders", list);
+    return list;
+  });
+
+  ipcMain.handle("providers:removeCustom", async (_e, id: string) => {
+    const store = getStore();
+    const list = (store.get("customProviders") ?? []).filter((p) => p.id !== id);
+    store.set("customProviders", list);
+    return list;
+  });
+
+  ipcMain.handle("providers:installFromSource", async (_e, sourcePath: string) => {
+    const installed = installProviderFromSource(sourcePath);
+    const store = getStore();
+    const list = [...(store.get("customProviders") ?? [])];
+    const next: CustomProviderConfig = {
+      id: installed.manifest.id,
+      label: installed.manifest.name,
+      enabled: false,
+      hosts: (installed.manifest.hosts ?? []).join(", "),
+      sourcePath: installed.installDir,
+      manifestPath: installed.manifestPath,
+      manifest: installed.manifest,
+      engine: installed.manifest.engine ?? "script",
+      format: installed.manifest.formats?.[0],
+      notes: installed.manifest.description,
+      version: installed.manifest.version,
+      formatPlugins: [],
+      createdAt: Date.now(),
+    };
+    const idx = list.findIndex((p) => p.id === next.id);
+    if (idx >= 0) list[idx] = { ...list[idx]!, ...next, createdAt: list[idx]!.createdAt };
+    else list.push(next);
+    store.set("customProviders", list);
+    return { provider: next, providers: list };
+  });
+
+  ipcMain.handle("providers:readManifest", async (_e, pathOrDir: string) => {
+    const manifestPath = findManifestPath(pathOrDir);
+    if (!manifestPath) return null;
+    return { path: manifestPath, manifest: readProviderManifest(manifestPath) };
+  });
+
+  ipcMain.handle("providers:uploadFormatPlugin", async (_e, sourcePath: string) => {
+    return installFormatPlugin(sourcePath);
+  });
+
   ipcMain.handle("shell:showItem", async (_e, filePath: string) => {
     shell.showItemInFolder(filePath);
   });
 
   ipcMain.handle("shell:openPath", async (_e, filePath: string) => {
+    try {
+      const { mkdirSync, existsSync, statSync } = await import("node:fs");
+      if (!existsSync(filePath)) {
+        mkdirSync(filePath, { recursive: true });
+      } else if (!statSync(filePath).isDirectory()) {
+        // file path — open as-is
+      }
+    } catch {
+      // ignore mkdir failures
+    }
     return shell.openPath(filePath);
+  });
+
+  ipcMain.handle("shell:openExternal", async (_e, url: string) => {
+    if (!/^https?:\/\//i.test(url)) return false;
+    await shell.openExternal(url);
+    return true;
   });
 
   ipcMain.handle("window:minimize", (e) => {
@@ -312,7 +537,14 @@ export function registerIpc(): void {
   });
 
   ipcMain.handle("window:close", (e) => {
-    BrowserWindow.fromWebContents(e.sender)?.close();
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return;
+    const system = getStore().get("system");
+    if (system?.closeToTray) {
+      win.close(); // close handler hides when tray enabled
+      return;
+    }
+    win.close();
   });
 
   ipcMain.handle("window:isMaximized", (e) => {

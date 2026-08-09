@@ -9,8 +9,10 @@ import {
   type RemoteChannelConfig,
   type CloudflareTunnelConfig,
 } from "../common/remote/types";
+import type { CustomProviderConfig } from "../common/providers/types";
 
 export type { RemoteConfig, RemoteChannelConfig, CloudflareTunnelConfig };
+export type { CustomProviderConfig };
 export type PackStatus = "running" | "done" | "failed" | "partial";
 
 export interface HistoryItem {
@@ -40,6 +42,30 @@ export interface DownloadPack {
   updatedAt: number;
 }
 
+export interface SystemConfig {
+  language: string;
+  startOnBoot: boolean;
+  closeToTray: boolean;
+  hardwareAcceleration: boolean;
+  notifications: boolean;
+  notifyOnDownloadComplete: boolean;
+  /** Empty = OS temp + /Pinforge */
+  tempDir: string;
+  /** Empty = userData/logs */
+  logDir: string;
+}
+
+export const DEFAULT_SYSTEM: SystemConfig = {
+  language: "en",
+  startOnBoot: false,
+  closeToTray: false,
+  hardwareAcceleration: true,
+  notifications: true,
+  notifyOnDownloadComplete: true,
+  tempDir: "",
+  logDir: "",
+};
+
 export interface AppStoreSchema {
   outDir: string;
   preset: PresetName;
@@ -50,6 +76,8 @@ export interface AppStoreSchema {
   history: HistoryItem[];
   packs: DownloadPack[];
   remote: RemoteConfig;
+  system: SystemConfig;
+  customProviders: CustomProviderConfig[];
   windowBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -69,12 +97,35 @@ export function getStore(): Store<AppStoreSchema> {
         history: [],
         packs: [],
         remote: DEFAULT_REMOTE,
+        system: DEFAULT_SYSTEM,
+        customProviders: [],
       },
     });
     migrateFlatHistoryToPacks(store);
     ensureRemoteDefaults(store);
+    ensureSystemDefaults(store);
+    if (!Array.isArray(store.get("customProviders"))) {
+      store.set("customProviders", []);
+    }
   }
   return store;
+}
+
+export function resolveSystemPaths(system: SystemConfig): SystemConfig {
+  return {
+    ...system,
+    tempDir: system.tempDir || join(app.getPath("temp"), "Pinforge"),
+    logDir: system.logDir || join(app.getPath("userData"), "logs"),
+  };
+}
+
+function ensureSystemDefaults(s: Store<AppStoreSchema>): void {
+  const system = s.get("system");
+  if (!system) {
+    s.set("system", DEFAULT_SYSTEM);
+    return;
+  }
+  s.set("system", { ...DEFAULT_SYSTEM, ...system });
 }
 
 function ensureRemoteDefaults(s: Store<AppStoreSchema>): void {

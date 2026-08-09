@@ -59,7 +59,7 @@ const AppearanceSettings: React.FC = () => {
   const [addOpen, setAddOpen] = useState(false);
 
   return (
-    <div className="appearance-page max-w-820px">
+    <div className="appearance-page max-w-820px w-full">
       <div className="flex items-start justify-between gap-16px mb-20px">
         <div>
           <div className="text-22px font-600 text-t-primary mb-6px">Theme</div>

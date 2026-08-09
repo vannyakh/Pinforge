@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerIpc } from "./process/ipc";
 import { getStore } from "./process/store";
+import {
+  applyLoginItem,
+  markAppQuitting,
+  wireCloseToTray,
+} from "./process/systemPrefs";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -16,6 +21,15 @@ protocol.registerSchemesAsPrivileged([
     },
   },
 ]);
+
+// Must run before app.ready — hardware acceleration cannot be toggled later.
+{
+  const store = getStore();
+  const system = store.get("system");
+  if (system && system.hardwareAcceleration === false) {
+    app.disableHardwareAcceleration();
+  }
+}
 
 function createWindow(): void {
   const store = getStore();
@@ -52,8 +66,11 @@ function createWindow(): void {
   win.on("unmaximize", emitMaximized);
 
   win.on("close", () => {
+    if (!win.isVisible()) return;
     store.set("windowBounds", win.getBounds());
   });
+
+  wireCloseToTray(win);
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -76,12 +93,18 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(filePath).href);
   });
 
+  applyLoginItem(getStore().get("system"));
   registerIpc();
   createWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else BrowserWindow.getAllWindows()[0]?.show();
   });
+});
+
+app.on("before-quit", () => {
+  markAppQuitting();
 });
 
 app.on("window-all-closed", () => {
