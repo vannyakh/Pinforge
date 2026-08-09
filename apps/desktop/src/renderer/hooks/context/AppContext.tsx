@@ -22,6 +22,11 @@ interface ProcessOpts {
   outDir?: string;
   features?: Partial<EnhanceFeatures>;
   youtube?: Partial<YoutubeDownloadOptions>;
+  /**
+   * When false, skip desktop Notification / Message for this call
+   * (used for batch downloads that notify once at the end). Default true.
+   */
+  notify?: boolean;
 }
 
 export interface DownloadTask {
@@ -103,6 +108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const processUrl = useCallback(
     async (url: string, opts?: ProcessOpts): Promise<ProcessResponse | null> => {
       if (!settings) return null;
+      const shouldNotify = opts?.notify !== false;
       setBusy(true);
       try {
         const res = await api.processMedia({
@@ -116,6 +122,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         const stopped = res.errors.some((e) => /stopped/i.test(e.error));
         if (
+          shouldNotify &&
           !stopped &&
           settings.system?.notifications &&
           settings.system.notifyOnDownloadComplete &&
@@ -137,7 +144,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return res;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        if (!/abort|stopped/i.test(msg)) {
+        if (shouldNotify && !/abort|stopped/i.test(msg)) {
           Message.error(msg);
         }
         await refresh();

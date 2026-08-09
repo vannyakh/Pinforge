@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Checkbox, InputNumber, Select, Table, Tag, Tooltip } from "@arco-design/web-react";
 import type { ColumnProps } from "@arco-design/web-react/es/Table/interface";
 import { Download, LinkOne, Refresh } from "@icon-park/react";
@@ -95,6 +95,9 @@ const ExtractPickTable: React.FC<Props> = ({
   onDownloadOne,
 }) => {
   const [maxDraft, setMaxDraft] = useState(listMax);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const tableScrollHideRef = useRef<number | null>(null);
+
   useEffect(() => {
     setMaxDraft(listMax);
   }, [listMax]);
@@ -111,6 +114,32 @@ const ExtractPickTable: React.FC<Props> = ({
       })),
     [extract.items]
   );
+
+  useEffect(() => {
+    const root = cardRef.current;
+    if (!root) return;
+    const body = root.querySelector(".arco-table-body") as HTMLElement | null;
+    if (!body) return;
+
+    const onScroll = () => {
+      body.classList.add("is-scrolling");
+      if (tableScrollHideRef.current != null) {
+        window.clearTimeout(tableScrollHideRef.current);
+      }
+      tableScrollHideRef.current = window.setTimeout(() => {
+        body.classList.remove("is-scrolling");
+        tableScrollHideRef.current = null;
+      }, 900);
+    };
+
+    body.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      body.removeEventListener("scroll", onScroll);
+      if (tableScrollHideRef.current != null) {
+        window.clearTimeout(tableScrollHideRef.current);
+      }
+    };
+  }, [rows.length, listLoading]);
 
   const selectedCount = selectedUrls.length;
   const allSelected = rows.length > 0 && selectedCount === rows.length;
@@ -416,7 +445,7 @@ const ExtractPickTable: React.FC<Props> = ({
           )}
         </div>
 
-        <div className="tasks-table-card home-extract-pick__card">
+        <div ref={cardRef} className="tasks-table-card home-extract-pick__card">
           <Table
             className="tasks-table home-extract-pick__table"
             rowKey="key"

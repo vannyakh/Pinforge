@@ -1,14 +1,8 @@
-/* Layout-level styles: sidebar, sider animations, message positioning */
 
-/* Sticky section labels in the sider (team / cron / projects / timeline). */
 .sider-section-label {
   background-color: var(--bg-2);
 }
 
-/* Sidebar row action buttons (more / plus) — use opaque tokens so text
-   underneath never bleeds through (Arco's fill tokens are semi-transparent
-   in dark mode). Light tier stays lighter than the row hover fill-3;
-   hover lightens one more step. */
 .sider-action-btn {
   background-color: var(--bg-2);
 }
@@ -275,13 +269,91 @@
   }
 }
 
-/* Home composer (chat-like URL bar) */
+/* Shared: small custom scrollbar, auto-hide until hover / scroll
+   (Do NOT apply to Tasks page .tasks-table — sticky cols need Arco’s native scrollbar sync.) */
+.ui-scroll,
+.home-chat,
+.home-extract-pick__table .arco-table-body,
+.home-extract-table-wrap--list {
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.ui-scroll:hover,
+.ui-scroll:focus-within,
+.ui-scroll.is-scrolling,
+.home-chat:hover,
+.home-chat:focus-within,
+.home-chat.is-scrolling,
+.home-extract-pick__card:hover .arco-table-body,
+.home-extract-pick__table .arco-table-body.is-scrolling,
+.home-extract-table-wrap--list:hover,
+.home-extract-table-wrap--list.is-scrolling {
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 40%, transparent) transparent;
+}
+
+.ui-scroll::-webkit-scrollbar,
+.home-chat::-webkit-scrollbar,
+.home-extract-pick__table .arco-table-body::-webkit-scrollbar,
+.home-extract-table-wrap--list::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.ui-scroll::-webkit-scrollbar-thumb,
+.home-chat::-webkit-scrollbar-thumb,
+.home-extract-pick__table .arco-table-body::-webkit-scrollbar-thumb,
+.home-extract-table-wrap--list::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+  min-height: 32px;
+  transition: background 0.2s ease;
+}
+
+.ui-scroll:hover::-webkit-scrollbar-thumb,
+.ui-scroll:focus-within::-webkit-scrollbar-thumb,
+.ui-scroll.is-scrolling::-webkit-scrollbar-thumb,
+.home-chat:hover::-webkit-scrollbar-thumb,
+.home-chat:focus-within::-webkit-scrollbar-thumb,
+.home-chat.is-scrolling::-webkit-scrollbar-thumb,
+.home-extract-pick__card:hover .arco-table-body::-webkit-scrollbar-thumb,
+.home-extract-pick__table .arco-table-body.is-scrolling::-webkit-scrollbar-thumb,
+.home-extract-table-wrap--list:hover::-webkit-scrollbar-thumb,
+.home-extract-table-wrap--list.is-scrolling::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-secondary) 38%, transparent);
+}
+
+.ui-scroll:hover::-webkit-scrollbar-thumb:hover,
+.ui-scroll.is-scrolling::-webkit-scrollbar-thumb:hover,
+.home-chat:hover::-webkit-scrollbar-thumb:hover,
+.home-chat.is-scrolling::-webkit-scrollbar-thumb:hover,
+.home-extract-pick__card:hover .arco-table-body::-webkit-scrollbar-thumb:hover,
+.home-extract-pick__table .arco-table-body.is-scrolling::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-secondary) 55%, transparent);
+}
+
+.ui-scroll::-webkit-scrollbar-track,
+.home-chat::-webkit-scrollbar-track,
+.home-extract-pick__table .arco-table-body::-webkit-scrollbar-track,
+.home-extract-table-wrap--list::-webkit-scrollbar-track,
+.ui-scroll::-webkit-scrollbar-corner,
+.home-chat::-webkit-scrollbar-corner,
+.home-extract-pick__table .arco-table-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Home chat scroll panel */
 .home-chat {
   flex: 1;
   min-height: 0;
   width: 100%;
   min-width: 0;
   overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 }
 
 .home-hero {
@@ -640,7 +712,7 @@
   background: var(--bg-hover);
 }
 
-/* Chat surface — centered column; never wider than parent */
+/* Chat surface — content column only (layout stays full width) */
 .chat-surface-container {
   container-type: inline-size;
   width: 100%;
@@ -660,42 +732,102 @@
 
 /* Chat extract / confirm on home — AionUI conversation layout */
 .home-hero__stage--chat {
+  height: 100%;
   max-height: 100%;
-  padding-top: 12px;
-  padding-bottom: 12px;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  width: 100%;
 }
 
+/* Layout shell: full width so scrollbar sits on the right of the main panel */
 .home-guid-layout--chat {
   height: 100%;
   width: 100%;
-  max-width: min(1280px, 100%);
-  margin-left: auto;
-  margin-right: auto;
-  margin-top: 0;
+  max-width: none;
+  margin: 0;
   box-sizing: border-box;
   min-width: 0;
-  overflow-x: hidden;
-}
-
-.home-guid-layout--chat .chat-surface-fluid,
-.home-guid-layout--chat .home-chat__sendbox-inner {
-  max-width: min(1280px, 100%);
+  overflow: hidden;
 }
 
 .home-chat-layout {
   width: 100%;
   min-width: 0;
-  max-width: 100%;
-  overflow-x: hidden;
+  max-width: none;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Chat mode content: wider column. Empty home stays 800px via .guidLayout */
+.home-chat__content {
+  --home-chat-content-max: 1280px;
+  width: 100%;
+  max-width: var(--home-chat-content-max);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 16px;
+  padding-right: 16px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* Don't let thread override content max-width when both classes are on one node */
+.home-chat__thread.home-chat__content {
+  max-width: var(--home-chat-content-max);
+}
+
+.home-chat__scroll-shell {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.home-chat__fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 32px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.home-chat__fade.is-visible {
+  opacity: 1;
+}
+
+.home-chat__fade--top {
+  top: 0;
+  background: linear-gradient(
+    180deg,
+    var(--bg-1) 0%,
+    color-mix(in srgb, var(--bg-1) 55%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+.home-chat__fade--bottom {
+  bottom: 0;
+  background: linear-gradient(
+    0deg,
+    var(--bg-1) 0%,
+    color-mix(in srgb, var(--bg-1) 55%, transparent) 55%,
+    transparent 100%
+  );
 }
 
 .home-chat__thread {
   display: flex;
   flex-direction: column;
-  padding: 4px 0 12px;
+  padding-top: 4px;
+  padding-bottom: 16px;
   box-sizing: border-box;
   min-width: 0;
-  max-width: 100%;
   overflow-x: hidden;
 }
 
@@ -772,7 +904,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 520px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
@@ -1194,6 +1327,29 @@
   min-width: 0 !important;
 }
 
+/* Extract pick header: invisible gutter matching body (no sticky cols here) */
+.home-extract-pick__table .arco-table-header {
+  overflow-y: scroll !important;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.home-extract-pick__table .arco-table-header::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.home-extract-pick__table .arco-table-header::-webkit-scrollbar-thumb,
+.home-extract-pick__table .arco-table-header::-webkit-scrollbar-track,
+.home-extract-pick__table .arco-table-header::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.home-extract-pick__table .arco-table-body::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
 .home-extract-pick__table .arco-spin,
 .home-extract-pick__table .arco-table,
 .home-extract-pick__table .arco-table-container {
@@ -1258,14 +1414,14 @@
   }
 }
 
-/* Single download result card */
+/* Single download result card — fill content column (max-width is on .home-chat__content) */
 .home-result-list {
   margin-top: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: 100%;
-  max-width: 720px;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -1396,17 +1552,30 @@
 }
 
 .home-chat__sendbox {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 auto;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding-bottom: 8px;
+  padding-top: 6px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   overflow-x: hidden;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-1) 0%, transparent) 0%,
+    var(--bg-1) 28%
+  );
+  box-shadow: 0 -10px 28px -18px rgba(0, 0, 0, 0.22);
+}
+
+.safe-area-bottom {
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
 }
 
 .home-chat__sendbox-inner {
   box-sizing: border-box;
-  max-width: min(1280px, 100%);
   min-width: 0;
 }
 
@@ -2584,6 +2753,32 @@
 .tasks-table .arco-table-body {
   background: transparent;
   border: none;
+}
+
+/*
+ * Tasks page: do not override header/body scrollbar — Arco sticky columns
+ * (NO / TASK / ACTIONS) require native scrollbar width sync.
+ * Reset any inherited custom scrollbar rules on the Tasks card only.
+ */
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-header,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body {
+  scrollbar-gutter: auto;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-header::-webkit-scrollbar,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar {
+  width: unset;
+  height: unset;
+}
+
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-header::-webkit-scrollbar-thumb,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar-thumb,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-header::-webkit-scrollbar-track,
+.tasks-table-card:not(.home-extract-pick__card) .arco-table-body::-webkit-scrollbar-track {
+  background: unset;
+  border-radius: unset;
 }
 
 .tasks-table .arco-table-td {

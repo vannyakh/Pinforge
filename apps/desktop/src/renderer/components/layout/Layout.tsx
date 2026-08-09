@@ -17,6 +17,7 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const isSettings = pathname.startsWith("/settings");
+  const isHome = pathname === "/" || pathname === "";
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(detectMobile);
 
@@ -154,7 +155,9 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
             <div
               className={classNames(
                 "flex-1 min-h-0 flex flex-col",
-                isSettings ? "p-0 overflow-hidden" : "p-24px overflow-auto"
+                isSettings || isHome
+                  ? "p-0 overflow-hidden"
+                  : "p-24px overflow-auto"
               )}
             >
               <Outlet />

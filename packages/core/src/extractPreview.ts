@@ -1,6 +1,14 @@
 import type { DownloadMode, FormatPreset, ProviderId } from "./types";
 import { detectProvider, ProviderNotFoundError } from "./providers";
-import { isBoardUrl, resolveBoard, isYouTubeChannelUrl, resolveYouTubeChannel, isYouTubePlaylistUrl, resolveYouTubePlaylist } from "./providers";
+import {
+  isBoardUrl,
+  resolveBoard,
+  isYouTubeChannelUrl,
+  resolveYouTubeChannel,
+  isYouTubePlaylistUrl,
+  extractYouTubePlaylistId,
+  resolveYouTubePlaylist,
+} from "./providers";
 import { DEFAULT_YOUTUBE_OPTIONS } from "./types";
 
 export interface ExtractPreviewItem {
@@ -118,6 +126,11 @@ export interface ExtractPreviewOptions {
   channelMaxVideos?: number;
   /** Cap playlist listing (YouTube). Defaults to `DEFAULT_YOUTUBE_OPTIONS.playlistMaxVideos`. */
   playlistMaxVideos?: number;
+  /**
+   * Treat watch?v=…&list=… as a playlist extract (UI “Get playlist”).
+   * Required for Mix / radio lists that must stay on the watch URL.
+   */
+  preferPlaylist?: boolean;
 }
 
 /**
@@ -253,7 +266,14 @@ export async function extractMediaPreview(
   }
 
   // YouTube playlist / mix → video list (same pick-download UX as profile)
-  if (provider.id === "youtube" && (mode === "playlist" || isYouTubePlaylistUrl(sourceUrl))) {
+  const listId = provider.id === "youtube" ? extractYouTubePlaylistId(sourceUrl) : null;
+  const preferWatchPlaylist = Boolean(opts.preferPlaylist) && Boolean(listId);
+  const isPlaylistExtract =
+    mode === "playlist" ||
+    isYouTubePlaylistUrl(sourceUrl) ||
+    preferWatchPlaylist;
+
+  if (provider.id === "youtube" && isPlaylistExtract) {
     try {
       const playlist = await resolveYouTubePlaylist(sourceUrl, {
         maxVideos:

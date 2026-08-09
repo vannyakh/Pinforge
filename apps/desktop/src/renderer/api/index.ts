@@ -74,7 +74,11 @@ export const api = {
   detectProvider: (url: string) => window.api.detectProvider(url),
   extractPreview: (
     url: string,
-    opts?: { channelMaxVideos?: number; playlistMaxVideos?: number }
+    opts?: {
+      channelMaxVideos?: number;
+      playlistMaxVideos?: number;
+      preferPlaylist?: boolean;
+    }
   ) => window.api.extractPreview(url, opts),
   listProviders: () => window.api.listProviders(),
   pickFolder: () => window.api.pickFolder(),

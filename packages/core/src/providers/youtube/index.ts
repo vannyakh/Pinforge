@@ -10,7 +10,10 @@ export {
 export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./channel";
 export {
   isYouTubePlaylistUrl,
+  isYouTubeMixPlaylistId,
   extractYouTubePlaylistId,
+  extractYouTubeVideoId,
+  seedVideoIdFromMixPlaylistId,
   resolveYouTubePlaylist,
 } from "./playlist";
 export type { YoutubePlaylistVideo, YoutubePlaylistResolveResult } from "./playlist";

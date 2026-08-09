@@ -307,7 +307,11 @@ const api = {
     ipcRenderer.invoke("media:detect", url),
   extractPreview: (
     url: string,
-    opts?: { channelMaxVideos?: number; playlistMaxVideos?: number }
+    opts?: {
+      channelMaxVideos?: number;
+      playlistMaxVideos?: number;
+      preferPlaylist?: boolean;
+    }
   ): Promise<ExtractPreview> => ipcRenderer.invoke("media:extract", url, opts),
   listProviders: (): Promise<ProviderInfo[]> => ipcRenderer.invoke("media:providers"),
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke("pin:pickFolder"),

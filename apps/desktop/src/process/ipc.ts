@@ -354,7 +354,11 @@ export function registerIpc(): void {
     async (
       _e,
       url: string,
-      opts?: { channelMaxVideos?: number; playlistMaxVideos?: number }
+      opts?: {
+        channelMaxVideos?: number;
+        playlistMaxVideos?: number;
+        preferPlaylist?: boolean;
+      }
     ) => {
     try {
       const store = getStore();
@@ -365,6 +369,7 @@ export function registerIpc(): void {
       return await extractMediaPreview(url, {
         channelMaxVideos: opts?.channelMaxVideos ?? youtube.channelMaxVideos,
         playlistMaxVideos: opts?.playlistMaxVideos ?? youtube.playlistMaxVideos,
+        preferPlaylist: opts?.preferPlaylist,
       });
     } catch (err) {
       return {

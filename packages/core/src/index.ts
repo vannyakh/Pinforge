@@ -13,7 +13,11 @@ export {
   isYouTubeChannelUrl,
   resolveYouTubeChannel,
   isYouTubePlaylistUrl,
+  isYouTubeMixPlaylistId,
   resolveYouTubePlaylist,
+  extractYouTubePlaylistId,
+  extractYouTubeVideoId,
+  seedVideoIdFromMixPlaylistId,
 } from "./providers";
 export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./providers";
 export type { YoutubePlaylistVideo, YoutubePlaylistResolveResult } from "./providers";

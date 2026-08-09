@@ -122,6 +122,10 @@ const DownloadPage: React.FC = () => {
   const [listReloadingId, setListReloadingId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const scrollHideTimerRef = useRef<number | null>(null);
+  const [chatFade, setChatFade] = useState({ top: false, bottom: false });
   const progressTargetRef = useRef<{ assistantId: string; activeUrl: string } | null>(
     null
   );
@@ -152,10 +156,54 @@ const DownloadPage: React.FC = () => {
     setConfirmSubs,
   ]);
 
+  const updateChatFade = () => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = dist < 96;
+    setChatFade({
+      top: el.scrollTop > 10,
+      bottom: dist > 10,
+    });
+  };
+
+  const onChatScroll = () => {
+    updateChatFade();
+    const el = chatScrollRef.current;
+    if (!el) return;
+    el.classList.add("is-scrolling");
+    if (scrollHideTimerRef.current != null) {
+      window.clearTimeout(scrollHideTimerRef.current);
+    }
+    scrollHideTimerRef.current = window.setTimeout(() => {
+      el.classList.remove("is-scrolling");
+      scrollHideTimerRef.current = null;
+    }, 900);
+  };
+
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    return () => {
+      if (scrollHideTimerRef.current != null) {
+        window.clearTimeout(scrollHideTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    if (!stickToBottomRef.current) {
+      updateChatFade();
+      return;
+    }
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    // Fade after layout settles
+    requestAnimationFrame(updateChatFade);
   }, [messages, extracting, busy]);
 
+  useEffect(() => {
+    updateChatFade();
+  }, [hasChat]);
   useEffect(() => {
     return api.onMediaProgress((ev) => {
       const target = progressTargetRef.current;
@@ -230,6 +278,7 @@ const DownloadPage: React.FC = () => {
     }
   ) => {
     const urls = Array.isArray(targetUrls) ? targetUrls : [targetUrls];
+    const isBatch = urls.length > 1;
     let okCount = 0;
     let failCount = 0;
 
@@ -283,6 +332,8 @@ const DownloadPage: React.FC = () => {
         enhance: opts.enhance,
         format: opts.format,
         youtube: opts.youtube,
+        // Batch: one notification after the whole run finishes.
+        notify: !isBatch,
       });
 
       if (!res || res.results.length === 0) {
@@ -316,6 +367,21 @@ const DownloadPage: React.FC = () => {
     }
 
     progressTargetRef.current = null;
+
+    if (isBatch && settings.system?.notifications && settings.system.notifyOnDownloadComplete) {
+      try {
+        if (typeof Notification !== "undefined") {
+          new Notification("Pinforge", {
+            body:
+              okCount === 0
+                ? `Batch failed — ${failCount} item${failCount === 1 ? "" : "s"}`
+                : `Batch done — ${okCount} saved${failCount ? `, ${failCount} failed` : ""}`,
+          });
+        }
+      } catch {
+        /* permission denied */
+      }
+    }
 
     if (okCount === 0) {
       mapMessages((prev) =>
@@ -387,7 +453,11 @@ const DownloadPage: React.FC = () => {
     const extracts: ExtractPreview[] = [];
     for (const u of urls) {
       try {
-        extracts.push(await api.extractPreview(u));
+        extracts.push(
+          await api.extractPreview(u, {
+            preferPlaylist,
+          })
+        );
       } catch (err) {
         extracts.push({
           sourceUrl: u,
@@ -680,6 +750,7 @@ const DownloadPage: React.FC = () => {
       const next = await api.extractPreview(msg.extract.sourceUrl, {
         channelMaxVideos: capped,
         playlistMaxVideos: capped,
+        preferPlaylist: mode === "playlist",
       });
       const extract =
         mode === "playlist" || mode === "profile"
@@ -830,16 +901,25 @@ const DownloadPage: React.FC = () => {
     <div
       className={
         hasChat
-          ? "home-hero flex flex-col h-full min-h-0 -m-24px"
+          ? "home-hero flex flex-col h-full min-h-0"
           : styles.guidContainer
       }
     >
       {hasChat ? (
-        <div className="home-hero__stage home-hero__stage--chat flex-1 min-h-0 flex flex-col justify-start">
+        <div className="home-hero__stage home-hero__stage--chat flex-1 min-h-0 flex flex-col">
           <div className="home-guid-layout home-guid-layout--chat w-full flex flex-col flex-1 min-h-0">
-            <div className="home-chat-layout flex flex-col flex-1 min-h-0 w-full max-w-full min-w-0 chat-surface-container px-16px overflow-x-hidden">
-              <div className="home-chat flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-10px box-border">
-                <div className="home-chat__thread chat-surface-fluid min-w-0 max-w-full">
+            <div className="home-chat-layout flex flex-col flex-1 min-h-0 w-full max-w-full min-w-0">
+              <div className="home-chat__scroll-shell">
+                <div
+                  className={`home-chat__fade home-chat__fade--top${chatFade.top ? " is-visible" : ""}`}
+                  aria-hidden
+                />
+                <div
+                  ref={chatScrollRef}
+                  className="home-chat"
+                  onScroll={onChatScroll}
+                >
+                  <div className="home-chat__thread home-chat__content min-w-0">
                   <div className="h-10px" />
                   {messages.map((msg) => {
                     const meta = msg.detected ? platformMetaFor(msg.detected.id) : null;
@@ -1077,11 +1157,16 @@ const DownloadPage: React.FC = () => {
                   })}
                   <div className="h-20px" />
                   <div ref={chatEndRef} />
+                  </div>
                 </div>
+                <div
+                  className={`home-chat__fade home-chat__fade--bottom${chatFade.bottom ? " is-visible" : ""}`}
+                  aria-hidden
+                />
               </div>
 
-              <div className="home-chat__sendbox shrink-0">
-                <div className="chat-surface-fluid home-chat__sendbox-inner">{composer}</div>
+              <div className="home-chat__sendbox shrink-0 safe-area-bottom">
+                <div className="home-chat__content home-chat__sendbox-inner">{composer}</div>
               </div>
             </div>
           </div>
