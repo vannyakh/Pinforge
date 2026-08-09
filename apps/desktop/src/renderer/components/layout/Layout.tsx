@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Layout as ArcoLayout } from "@arco-design/web-react";
+import { Layout as ArcoLayout, Tooltip } from "@arco-design/web-react";
 import classNames from "classnames";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import Titlebar from "@renderer/components/layout/Titlebar";
 import { LayoutContextProvider } from "@renderer/hooks/context/LayoutContext";
+import { LAST_PATH_KEY } from "@renderer/components/layout/Sider";
 import logoUrl from "@renderer/assets/logo.png";
 import "@renderer/styles/layout.css";
 
@@ -14,14 +15,26 @@ const detectMobile = (): boolean =>
 
 const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const isSettings = pathname.startsWith("/settings");
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(detectMobile);
 
   const toggleSider = useCallback(() => {
-    if (isSettings) return;
     setCollapsed((p) => !p);
-  }, [isSettings]);
+  }, []);
+
+  const handleBrandHome = useCallback(() => {
+    if (!isSettings) return;
+    let target = "/";
+    try {
+      const stored = sessionStorage.getItem(LAST_PATH_KEY);
+      if (stored && !stored.startsWith("/settings")) target = stored;
+    } catch {
+      /* ignore */
+    }
+    void navigate(target);
+  }, [isSettings, navigate]);
 
   useEffect(() => {
     const onResize = () => {
@@ -37,15 +50,15 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
     <LayoutContextProvider
       value={{
         isMobile,
-        siderCollapsed: collapsed || isSettings,
+        siderCollapsed: collapsed,
         setSiderCollapsed: setCollapsed,
         toggleSider,
       }}
     >
       <div className="app-shell flex flex-col size-full min-h-0">
-        <Titlebar hideSiderToggle={isSettings} />
+        <Titlebar />
 
-        {isMobile && !collapsed && !isSettings && (
+        {isMobile && !collapsed && (
           <div
             className="fixed inset-0 bg-black/30 z-90"
             onClick={() => setCollapsed(true)}
@@ -54,55 +67,80 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
         )}
 
         <ArcoLayout className="size-full layout flex-1 min-h-0">
-          {!isSettings && (
-            <ArcoLayout.Sider
-              collapsedWidth={0}
-              collapsed={collapsed}
-              width={DEFAULT_SIDER_WIDTH}
-              className={classNames("!bg-2 layout-sider", { collapsed })}
-              style={
-                isMobile
-                  ? {
-                      position: "fixed",
-                      left: 0,
-                      top: 42,
-                      bottom: 0,
-                      zIndex: 100,
-                      height: "auto",
-                    }
-                  : undefined
-              }
+          <ArcoLayout.Sider
+            collapsedWidth={0}
+            collapsed={collapsed}
+            width={DEFAULT_SIDER_WIDTH}
+            className={classNames("!bg-2 layout-sider", { collapsed })}
+            style={
+              isMobile
+                ? {
+                    position: "fixed",
+                    left: 0,
+                    top: 42,
+                    bottom: 0,
+                    zIndex: 100,
+                    height: "auto",
+                  }
+                : undefined
+            }
+          >
+            <ArcoLayout.Header
+              className={classNames(
+                "flex items-center justify-start pt-8px pb-8px pl-18px pr-16px gap-12px layout-sider-header",
+                { "layout-sider-header--settings": isSettings }
+              )}
             >
-              <ArcoLayout.Header className="flex items-center justify-start pt-8px pb-8px pl-18px pr-16px gap-12px layout-sider-header">
-                <img
-                  src={logoUrl}
-                  alt="Pinforge"
-                  className="shrink-0 size-32px rd-full object-cover"
-                  draggable={false}
-                />
+              <img
+                src={logoUrl}
+                alt="Pinforge"
+                className="shrink-0 size-32px rd-full object-cover"
+                draggable={false}
+                onClick={isSettings ? handleBrandHome : undefined}
+                style={isSettings ? { cursor: "pointer" } : undefined}
+              />
+              {isSettings ? (
+                <Tooltip content="Back to app" position="bottom">
+                  <div
+                    className="text-16px text-t-primary collapsed-hidden font-semibold cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Back to app"
+                    onClick={handleBrandHome}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        handleBrandHome();
+                      }
+                    }}
+                  >
+                    Pinforge
+                  </div>
+                </Tooltip>
+              ) : (
                 <div className="text-16px text-t-primary collapsed-hidden font-semibold">
                   Pinforge
                 </div>
-              </ArcoLayout.Header>
+              )}
+            </ArcoLayout.Header>
 
-              <ArcoLayout.Content className="pt-0 px-8px pb-0 layout-sider-content">
-                {React.isValidElement(sider)
-                  ? React.cloneElement(
-                      sider as React.ReactElement<{
-                        collapsed?: boolean;
-                        onSessionClick?: () => void;
-                      }>,
-                      {
-                        collapsed,
-                        onSessionClick: () => {
-                          if (isMobile) setCollapsed(true);
-                        },
-                      }
-                    )
-                  : sider}
-              </ArcoLayout.Content>
-            </ArcoLayout.Sider>
-          )}
+            <ArcoLayout.Content className="pt-0 px-8px pb-0 layout-sider-content">
+              {React.isValidElement(sider)
+                ? React.cloneElement(
+                    sider as React.ReactElement<{
+                      collapsed?: boolean;
+                      onSessionClick?: () => void;
+                    }>,
+                    {
+                      collapsed,
+                      onSessionClick: () => {
+                        if (isMobile) setCollapsed(true);
+                      },
+                    }
+                  )
+                : sider}
+            </ArcoLayout.Content>
+          </ArcoLayout.Sider>
 
           <ArcoLayout.Content
             className={classNames(
@@ -110,7 +148,7 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
               isSettings && "layout-content--settings"
             )}
             onClick={() => {
-              if (isMobile && !collapsed && !isSettings) setCollapsed(true);
+              if (isMobile && !collapsed) setCollapsed(true);
             }}
           >
             <div

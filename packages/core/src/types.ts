@@ -2,6 +2,24 @@ export type PresetName = "auto" | "soft" | "crisp" | "upscale";
 
 export type MediaKind = "image" | "video" | "audio";
 
+/** Toggleable stills enhance steps (Pinforge pipeline only). */
+export interface EnhanceFeatures {
+  autoLevels: boolean;
+  denoise: boolean;
+  sharpen: boolean;
+  upscale: boolean;
+  /** Keep a copy of the original file next to the enhanced output. */
+  keepOriginal: boolean;
+}
+
+export const DEFAULT_ENHANCE_FEATURES: EnhanceFeatures = {
+  autoLevels: true,
+  denoise: true,
+  sharpen: true,
+  upscale: false,
+  keepOriginal: true,
+};
+
 export type ProviderId =
   | "pinterest"
   | "youtube"
@@ -29,6 +47,8 @@ export interface ProcessOptions {
   delayMs?: number;
   /** Apply sharp enhance for images (default true for Pinterest stills). */
   enhance?: boolean;
+  /** Per-step enhance toggles (stills pipeline). */
+  features?: Partial<EnhanceFeatures>;
   format?: FormatPreset;
   /** Piped-compatible extractor API base (YouTube). */
   extractorUrl?: string;
@@ -81,6 +101,7 @@ export interface DownloadResult {
 
 export interface PipelineOptions {
   preset: PresetName;
+  features?: Partial<EnhanceFeatures>;
 }
 
 export interface EnhanceStepOptions {

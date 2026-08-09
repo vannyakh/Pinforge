@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import classNames from "classnames";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -9,11 +9,13 @@ import {
   SettingTwo,
   Moon,
   Sun,
+  Left,
 } from "@icon-park/react";
 import { Tag } from "@arco-design/web-react";
 import { useThemeContext } from "@renderer/hooks/context/ThemeContext";
 import { useLayoutContext } from "@renderer/hooks/context/LayoutContext";
 import { useApp } from "@renderer/hooks/context/AppContext";
+import SettingsSider from "@renderer/pages/settings/components/SettingsSider";
 import siderStyles from "./Sider.module.css";
 
 interface SiderProps {
@@ -28,64 +30,98 @@ const NAV = [
   { path: "/gallery", label: "Gallery", Icon: Pic, soon: false },
 ] as const;
 
+const LAST_PATH_KEY = "pinforge:last-non-settings-path";
+
 const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search, hash } = useLocation();
   const { theme, setTheme } = useThemeContext();
   const { isMobile } = useLayoutContext();
   const { tasks } = useApp();
   const isSettings = pathname.startsWith("/settings");
   const runningCount = tasks.filter((t) => t.status === "running").length;
+  const lastNonSettingsPathRef = useRef("/");
+
+  useEffect(() => {
+    if (!pathname.startsWith("/settings")) {
+      const full = `${pathname}${search}${hash}`;
+      lastNonSettingsPathRef.current = full;
+      try {
+        sessionStorage.setItem(LAST_PATH_KEY, full);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [pathname, search, hash]);
 
   const go = (path: string) => {
     void navigate(path);
     onSessionClick?.();
   };
 
+  const handleSettingsClick = () => {
+    if (isSettings) {
+      let target = lastNonSettingsPathRef.current || "/";
+      try {
+        const stored = sessionStorage.getItem(LAST_PATH_KEY);
+        if (stored && !stored.startsWith("/settings")) target = stored;
+      } catch {
+        /* ignore */
+      }
+      go(target);
+      return;
+    }
+    go("/settings/system");
+  };
+
   return (
     <div className="size-full flex flex-col">
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2px">
-        <div className={classNames("flex-1 min-h-0 overflow-y-auto", siderStyles.scrollArea)}>
-          <div className="px-10px pt-4px pb-8px text-11px font-500 text-t-tertiary tracking-wide uppercase sider-section-title">
-            {!collapsed && "Workspace"}
-          </div>
-          {NAV.map(({ path, label, Icon, soon }) => {
-            const active = path === "/" ? pathname === "/" : pathname.startsWith(path);
-            return (
-              <button
-                key={path}
-                type="button"
-                className={classNames(
-                  "w-full flex items-center gap-10px rd-8px border-none cursor-pointer text-left font-inherit px-12px py-10px settings-sider__item",
-                  active
-                    ? "bg-primary-light-1 text-t-primary font-600"
-                    : "bg-transparent text-t-secondary hover:bg-hover"
-                )}
-                onClick={() => go(path)}
-                title={collapsed ? label : undefined}
-              >
-                <Icon theme="outline" size="18" fill="currentColor" strokeWidth={3} />
-                {!collapsed && (
-                  <span className="settings-sider__item-label flex-1 flex items-center justify-between gap-8px">
-                    <span>{label}</span>
-                    <span className="flex items-center gap-4px">
-                      {path === "/tasks" && runningCount > 0 && (
-                        <Tag size="small" color="arcoblue">
-                          {runningCount}
-                        </Tag>
-                      )}
-                      {soon && (
-                        <Tag size="small" color="orangered">
-                          Soon
-                        </Tag>
-                      )}
+        {isSettings ? (
+          <SettingsSider collapsed={collapsed} onItemClick={onSessionClick} />
+        ) : (
+          <div className={classNames("flex-1 min-h-0 overflow-y-auto", siderStyles.scrollArea)}>
+            <div className="px-10px pt-4px pb-8px text-11px font-500 text-t-tertiary tracking-wide uppercase sider-section-title">
+              {!collapsed && "Workspace"}
+            </div>
+            {NAV.map(({ path, label, Icon, soon }) => {
+              const active = path === "/" ? pathname === "/" : pathname.startsWith(path);
+              return (
+                <button
+                  key={path}
+                  type="button"
+                  className={classNames(
+                    "w-full flex items-center gap-10px rd-8px border-none cursor-pointer text-left font-inherit px-12px py-10px settings-sider__item",
+                    active
+                      ? "bg-primary-light-1 text-t-primary font-600"
+                      : "bg-transparent text-t-secondary hover:bg-hover"
+                  )}
+                  onClick={() => go(path)}
+                  title={collapsed ? label : undefined}
+                >
+                  <Icon theme="outline" size="18" fill="currentColor" strokeWidth={3} />
+                  {!collapsed && (
+                    <span className="settings-sider__item-label flex-1 flex items-center justify-between gap-8px">
+                      <span>{label}</span>
+                      <span className="flex items-center gap-4px">
+                        {path === "/tasks" && runningCount > 0 && (
+                          <Tag size="small" color="arcoblue">
+                            {runningCount}
+                          </Tag>
+                        )}
+                        {soon && (
+                          <Tag size="small" color="orangered">
+                            Soon
+                          </Tag>
+                        )}
+                      </span>
                     </span>
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="shrink-0 flex flex-col gap-2px pb-8px pt-4px border-t border-b-base mx-4px">
@@ -97,11 +133,15 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               ? "bg-primary-light-1 text-t-primary font-600"
               : "bg-transparent text-t-secondary hover:bg-hover"
           )}
-          onClick={() => go("/settings")}
-          title={collapsed ? "Settings" : undefined}
+          onClick={handleSettingsClick}
+          title={collapsed ? (isSettings ? "Back" : "Settings") : undefined}
         >
-          <SettingTwo theme="outline" size="18" fill="currentColor" strokeWidth={3} />
-          {!collapsed && <span>Settings</span>}
+          {isSettings ? (
+            <Left theme="outline" size="18" fill="currentColor" strokeWidth={3} />
+          ) : (
+            <SettingTwo theme="outline" size="18" fill="currentColor" strokeWidth={3} />
+          )}
+          {!collapsed && <span>{isSettings ? "Back" : "Settings"}</span>}
         </button>
         <button
           type="button"
@@ -122,3 +162,4 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
 };
 
 export default Sider;
+export { LAST_PATH_KEY };

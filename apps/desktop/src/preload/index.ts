@@ -2,6 +2,14 @@ import { contextBridge, ipcRenderer } from "electron";
 
 export type PresetName = "auto" | "soft" | "crisp" | "upscale";
 export type FormatPreset = "best" | "mp4" | "audio-only";
+
+export interface EnhanceFeatures {
+  autoLevels: boolean;
+  denoise: boolean;
+  sharpen: boolean;
+  upscale: boolean;
+  keepOriginal: boolean;
+}
 export type ProviderId = string;
 export type MediaKind = "image" | "video" | "audio";
 export type PackStatus = "running" | "done" | "failed" | "partial";
@@ -73,6 +81,33 @@ export interface DetectedProvider {
   label: string;
   live: boolean;
   formats: FormatPreset[];
+  modes?: Array<"single" | "board" | "profile" | "playlist" | "story">;
+}
+
+export type DownloadMode = "single" | "board" | "profile" | "playlist" | "story";
+
+export interface ExtractPreviewItem {
+  index: number;
+  url: string;
+  title?: string;
+}
+
+export interface ExtractPreview {
+  sourceUrl: string;
+  title?: string;
+  provider: {
+    id: string;
+    label: string;
+    live: boolean;
+  };
+  mode: DownloadMode;
+  modeSupported: boolean;
+  formats: FormatPreset[];
+  supportedModes: DownloadMode[];
+  items: ExtractPreviewItem[];
+  itemCount: number;
+  truncated?: boolean;
+  message?: string;
 }
 
 export interface SystemConfig {
@@ -136,6 +171,8 @@ export interface AppSettings {
   preset: PresetName;
   delayMs: number;
   enhance: boolean;
+  enhanceFeatures: EnhanceFeatures;
+  autoDownload: boolean;
   format: FormatPreset;
   extractorUrl: string;
   history: HistoryItem[];
@@ -192,6 +229,8 @@ export type SettingsPartial = Partial<{
   preset: PresetName;
   delayMs: number;
   enhance: boolean;
+  enhanceFeatures: Partial<EnhanceFeatures>;
+  autoDownload: boolean;
   format: FormatPreset;
   extractorUrl: string;
   system: Partial<SystemConfig>;
@@ -215,11 +254,14 @@ const api = {
     outDir: string;
     enhance?: boolean;
     format?: FormatPreset;
+    features?: Partial<EnhanceFeatures>;
   }): Promise<ProcessResponse> => ipcRenderer.invoke("media:process", payload),
   processPin: (url: string, preset: PresetName, outDir: string): Promise<ProcessResponse> =>
     ipcRenderer.invoke("pin:process", { url, preset, outDir }),
   detectProvider: (url: string): Promise<DetectedProvider | null> =>
     ipcRenderer.invoke("media:detect", url),
+  extractPreview: (url: string): Promise<ExtractPreview> =>
+    ipcRenderer.invoke("media:extract", url),
   listProviders: (): Promise<ProviderInfo[]> => ipcRenderer.invoke("media:providers"),
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke("pin:pickFolder"),
   pickFolderPath: (defaultPath?: string): Promise<string | null> =>
@@ -250,7 +292,15 @@ const api = {
   ): Promise<
     Pick<
       AppSettings,
-      "outDir" | "preset" | "delayMs" | "enhance" | "format" | "extractorUrl" | "system"
+      | "outDir"
+      | "preset"
+      | "delayMs"
+      | "enhance"
+      | "enhanceFeatures"
+      | "autoDownload"
+      | "format"
+      | "extractorUrl"
+      | "system"
     >
   > => ipcRenderer.invoke("settings:set", partial),
   clearHistory: (): Promise<boolean> => ipcRenderer.invoke("history:clear"),

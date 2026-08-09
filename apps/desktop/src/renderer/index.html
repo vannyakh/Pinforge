@@ -1,24 +1,49 @@
 <!doctype html>
-<html data-theme="dark" data-color-scheme="default">
+<html data-theme="light" data-color-scheme="default" data-ui-scale="95">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="application-name" content="Pinforge" />
-    <meta name="theme-color" content="#0e0e0e" />
+    <meta name="theme-color" content="#f7f8fa" />
     <title>Pinforge</title>
     <script>
       (function () {
         try {
           var appearance = localStorage.getItem("__aionui_theme");
-          if (appearance === "light" || appearance === "dark") {
-            document.documentElement.setAttribute("data-theme", appearance);
+          if (appearance !== "light" && appearance !== "dark") {
+            appearance = "light";
           }
-          var scale = localStorage.getItem("__aionui_ui_scale");
-          if (scale) {
-            var n = Number(scale);
-            if (n >= 80 && n <= 120) {
-              document.documentElement.style.fontSize = (16 * n) / 100 + "px";
-              document.documentElement.setAttribute("data-ui-scale", String(n));
+          document.documentElement.setAttribute("data-theme", appearance);
+
+          var scaleRaw = localStorage.getItem("__aionui_ui_scale");
+          var factor = 0.95;
+          if (scaleRaw) {
+            var n = Number(scaleRaw);
+            if (Number.isFinite(n)) {
+              // Legacy percent (80–120) → factor; else treat as factor (0.8–1.3)
+              factor = n > 3 ? n / 100 : n;
+            }
+          }
+          if (factor < 0.8) factor = 0.8;
+          if (factor > 1.3) factor = 1.3;
+          factor = Math.round(factor * 100) / 100;
+          document.documentElement.style.zoom = String(factor);
+          document.documentElement.style.setProperty("--ui-scale", String(factor));
+          document.documentElement.setAttribute("data-ui-scale", String(Math.round(factor * 100)));
+
+          var sizesRaw = localStorage.getItem("__aionui_font_sizes");
+          if (sizesRaw) {
+            var sizes = JSON.parse(sizesRaw);
+            if (sizes && typeof sizes === "object") {
+              if (typeof sizes.chat === "number") {
+                document.documentElement.style.setProperty("--chat-font-size", sizes.chat + "px");
+              }
+              if (typeof sizes.markdown === "number") {
+                document.documentElement.style.setProperty("--md-font-size", sizes.markdown + "px");
+              }
+              if (typeof sizes.code === "number") {
+                document.documentElement.style.setProperty("--code-font-size", sizes.code + "px");
+              }
             }
           }
         } catch (e) {}
@@ -40,8 +65,10 @@
     <script>
       try {
         var t = localStorage.getItem("__aionui_theme");
-        if (t) document.body.setAttribute("arco-theme", t);
-      } catch (e) {}
+        document.body.setAttribute("arco-theme", t === "dark" ? "dark" : "light");
+      } catch (e) {
+        document.body.setAttribute("arco-theme", "light");
+      }
     </script>
     <div id="root"></div>
     <script type="module" src="./main.tsx"></script>

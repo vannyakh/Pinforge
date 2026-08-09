@@ -17,6 +17,11 @@ declare module "*.css" {
   export default classes;
 }
 
+declare module "*.css?raw" {
+  const css: string;
+  export default css;
+}
+
 declare module "*.module.css" {
   const classes: { readonly [key: string]: string };
   export default classes;

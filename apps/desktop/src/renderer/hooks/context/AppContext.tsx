@@ -6,6 +6,8 @@ import {
   type HistoryItem,
   type DownloadPack,
   type FormatPreset,
+  type PresetName,
+  type EnhanceFeatures,
   type SettingsPartial,
   type MediaProgressEvent,
   type PackStatus,
@@ -14,6 +16,9 @@ import {
 interface ProcessOpts {
   enhance?: boolean;
   format?: FormatPreset;
+  preset?: PresetName;
+  outDir?: string;
+  features?: Partial<EnhanceFeatures>;
 }
 
 export interface DownloadTask {
@@ -87,10 +92,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const res = await api.processMedia({
           url,
-          preset: settings.preset,
-          outDir: settings.outDir,
+          preset: opts?.preset ?? settings.preset,
+          outDir: opts?.outDir ?? settings.outDir,
           enhance: opts?.enhance ?? settings.enhance,
           format: opts?.format ?? settings.format,
+          features: opts?.features ?? settings.enhanceFeatures,
         });
         Message.clear();
         const ok = res.results.length;
@@ -136,6 +142,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ...prev,
             ...next,
             system: next.system ?? prev.system,
+            enhanceFeatures: next.enhanceFeatures
+              ? { ...prev.enhanceFeatures, ...next.enhanceFeatures }
+              : prev.enhanceFeatures,
+            autoDownload: next.autoDownload ?? prev.autoDownload,
           }
         : prev
     );

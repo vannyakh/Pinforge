@@ -3,10 +3,13 @@ import {
   processMedia,
   listProviders,
   detectProvider,
+  extractMediaPreview,
   PRESETS,
+  DEFAULT_ENHANCE_FEATURES,
   type PresetName,
   type FormatPreset,
   type ProcessResult,
+  type EnhanceFeatures,
 } from "@pinterest-desktop/core";
 import {
   getStore,
@@ -81,11 +84,17 @@ async function runProcess(
     outDir: string;
     enhance?: boolean;
     format?: FormatPreset;
+    features?: Partial<EnhanceFeatures>;
   }
 ) {
   const store = getStore();
   const { url, preset, outDir } = payload;
   const enhance = payload.enhance ?? store.get("enhance");
+  const features = {
+    ...DEFAULT_ENHANCE_FEATURES,
+    ...store.get("enhanceFeatures"),
+    ...payload.features,
+  };
 
   // Provider extension overrides (engine / format / extractor / plugins)
   let providerCfg: CustomProviderConfig | undefined;
@@ -140,6 +149,7 @@ async function runProcess(
       preset,
       outDir,
       enhance,
+      features,
       format,
       extractorUrl,
       delayMs: store.get("delayMs"),
@@ -236,9 +246,28 @@ export function registerIpc(): void {
         label: p.label,
         live: p.live,
         formats: p.formats ?? [],
+        modes: p.modes ?? ["single"],
       };
     } catch {
       return null;
+    }
+  });
+
+  ipcMain.handle("media:extract", async (_e, url: string) => {
+    try {
+      return await extractMediaPreview(url);
+    } catch (err) {
+      return {
+        sourceUrl: typeof url === "string" ? url : "",
+        provider: { id: "unknown", label: "Unknown", live: false },
+        mode: "single",
+        modeSupported: false,
+        formats: [],
+        supportedModes: [],
+        items: [],
+        itemCount: 0,
+        message: err instanceof Error ? err.message : String(err),
+      };
     }
   });
 
@@ -297,6 +326,11 @@ export function registerIpc(): void {
       preset: store.get("preset"),
       delayMs: store.get("delayMs"),
       enhance: store.get("enhance"),
+      enhanceFeatures: {
+        ...DEFAULT_ENHANCE_FEATURES,
+        ...store.get("enhanceFeatures"),
+      },
+      autoDownload: store.get("autoDownload") ?? true,
       format: store.get("format"),
       extractorUrl: store.get("extractorUrl"),
       history: store.get("history"),
@@ -318,6 +352,8 @@ export function registerIpc(): void {
         preset: PresetName;
         delayMs: number;
         enhance: boolean;
+        enhanceFeatures: Partial<EnhanceFeatures>;
+        autoDownload: boolean;
         format: FormatPreset;
         extractorUrl: string;
         system: Partial<SystemConfig>;
@@ -328,6 +364,14 @@ export function registerIpc(): void {
       if (partial.preset !== undefined) store.set("preset", partial.preset);
       if (partial.delayMs !== undefined) store.set("delayMs", partial.delayMs);
       if (partial.enhance !== undefined) store.set("enhance", partial.enhance);
+      if (partial.enhanceFeatures !== undefined) {
+        store.set("enhanceFeatures", {
+          ...DEFAULT_ENHANCE_FEATURES,
+          ...store.get("enhanceFeatures"),
+          ...partial.enhanceFeatures,
+        });
+      }
+      if (partial.autoDownload !== undefined) store.set("autoDownload", partial.autoDownload);
       if (partial.format !== undefined) store.set("format", partial.format);
       if (partial.extractorUrl !== undefined) store.set("extractorUrl", partial.extractorUrl);
       if (partial.system !== undefined) {
@@ -340,6 +384,11 @@ export function registerIpc(): void {
         preset: store.get("preset"),
         delayMs: store.get("delayMs"),
         enhance: store.get("enhance"),
+        enhanceFeatures: {
+          ...DEFAULT_ENHANCE_FEATURES,
+          ...store.get("enhanceFeatures"),
+        },
+        autoDownload: store.get("autoDownload") ?? true,
         format: store.get("format"),
         extractorUrl: store.get("extractorUrl"),
         system: resolveSystemPaths(store.get("system")),

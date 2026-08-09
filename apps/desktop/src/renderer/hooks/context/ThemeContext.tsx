@@ -11,22 +11,31 @@ import type { Theme, ThemeAppearance } from "@/common/theme/types";
 import {
   CUSTOM_THEMES_STORAGE_KEY,
   DARK_THEME_ID,
+  DEFAULT_THEME_ID,
   DEFAULT_UI_SCALE,
+  FONT_SIZES_STORAGE_KEY,
   LIGHT_THEME_ID,
-  MAX_UI_SCALE,
-  MIN_UI_SCALE,
-  SYSTEM_THEME_ID,
   THEME_ID_STORAGE_KEY,
   THEME_STORAGE_KEY,
   UI_SCALE_STORAGE_KEY,
 } from "@/common/theme/constants";
+import { resolveActiveTheme } from "@/common/theme/resolveTheme";
+import {
+  FONT_SIZE_KEYS,
+  clampFontSize,
+  defaultFontSizes,
+  type FontSizeKey,
+  type FontSizes,
+} from "@/common/config/fontSizes";
 import { BUILTIN_THEMES } from "@renderer/theme/builtinThemes";
 import {
   loadCustomThemes,
   removeCustomTheme,
   upsertCustomTheme,
 } from "@renderer/theme/customThemes";
-import { applyTheme, applyUiScale } from "@renderer/utils/theme/applyTheme";
+import { injectBackgroundCssBlock } from "@renderer/pages/settings/AppearanceSettings/backgroundUtils";
+import { applyTheme, applyUiScale, clampUiScale } from "@renderer/utils/theme/applyTheme";
+import { applyFontSizes } from "@renderer/utils/theme/applyFontSizes";
 
 interface ThemeContextValue {
   theme: ThemeAppearance;
@@ -36,17 +45,25 @@ interface ThemeContextValue {
   themes: Theme[];
   customThemes: Theme[];
   selectTheme: (id: string) => Promise<void>;
-  addTheme: (theme: Omit<Theme, "id" | "builtin" | "created_at" | "updated_at"> & { id?: string }) => Promise<Theme>;
+  addTheme: (
+    theme: Omit<Theme, "id" | "builtin" | "created_at" | "updated_at"> & { id?: string }
+  ) => Promise<Theme>;
   deleteTheme: (id: string) => Promise<void>;
+  /** Zoom factor 0.8–1.3 (AionUi default 0.95) */
+  fontScale: number;
+  setFontScale: (factor: number) => Promise<void>;
+  /** @deprecated use fontScale */
   uiScale: number;
-  setUiScale: (percent: number) => void;
+  setUiScale: (percentOrFactor: number) => void;
+  fontSizes: FontSizes;
+  setFontSize: (key: FontSizeKey, px: number) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function systemAppearance(): ThemeAppearance {
-  if (typeof window === "undefined") return "dark";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+function systemPrefersDark(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
 function readStoredThemeId(): string {
@@ -58,47 +75,56 @@ function readStoredThemeId(): string {
   } catch {
     /* ignore */
   }
-  return DARK_THEME_ID;
+  return DEFAULT_THEME_ID;
 }
 
 function readUiScale(): number {
   try {
     const n = Number(localStorage.getItem(UI_SCALE_STORAGE_KEY));
-    if (Number.isFinite(n)) return Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, n));
+    if (!Number.isFinite(n)) return DEFAULT_UI_SCALE;
+    // Migrate legacy percent storage (80–120) → factor
+    if (n > 3) return clampUiScale(n / 100);
+    return clampUiScale(n);
   } catch {
     /* ignore */
   }
   return DEFAULT_UI_SCALE;
 }
 
+function readFontSizes(): FontSizes {
+  const base = defaultFontSizes();
+  try {
+    const raw = localStorage.getItem(FONT_SIZES_STORAGE_KEY);
+    if (!raw) return base;
+    const parsed = JSON.parse(raw) as Partial<FontSizes>;
+    for (const key of FONT_SIZE_KEYS) {
+      if (typeof parsed[key] === "number") {
+        base[key] = clampFontSize(key, parsed[key]!);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return base;
+}
+
 export const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const [customThemes, setCustomThemes] = useState<Theme[]>(() => loadCustomThemes());
   const [activeId, setActiveId] = useState<string>(readStoredThemeId);
-  const [systemPref, setSystemPref] = useState<ThemeAppearance>(systemAppearance);
-  const [uiScale, setUiScaleState] = useState<number>(readUiScale);
+  const [prefersDark, setPrefersDark] = useState<boolean>(systemPrefersDark);
+  const [fontScale, setFontScaleState] = useState<number>(readUiScale);
+  const [fontSizes, setFontSizesState] = useState<FontSizes>(readFontSizes);
 
-  const themes = useMemo(
-    () => [...BUILTIN_THEMES, ...customThemes],
-    [customThemes]
+  const themes = useMemo(() => [...BUILTIN_THEMES, ...customThemes], [customThemes]);
+
+  const activeTheme = useMemo(
+    () => resolveActiveTheme(activeId, themes, prefersDark),
+    [activeId, themes, prefersDark]
   );
-
-  const resolveTheme = useCallback(
-    (id: string): Theme => {
-      const found = themes.find((t) => t.id === id);
-      if (!found) return BUILTIN_THEMES.find((t) => t.id === DARK_THEME_ID)!;
-      if (found.id === SYSTEM_THEME_ID) {
-        return { ...found, appearance: systemPref, name: "Follow System" };
-      }
-      return found;
-    },
-    [themes, systemPref]
-  );
-
-  const activeTheme = useMemo(() => resolveTheme(activeId), [resolveTheme, activeId]);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setSystemPref(mq.matches ? "dark" : "light");
+    const onChange = () => setPrefersDark(mq.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
@@ -114,17 +140,29 @@ export const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
   }, [activeTheme, activeId]);
 
   useEffect(() => {
-    applyUiScale(uiScale);
+    applyUiScale(fontScale);
     try {
-      localStorage.setItem(UI_SCALE_STORAGE_KEY, String(uiScale));
+      localStorage.setItem(UI_SCALE_STORAGE_KEY, String(fontScale));
     } catch {
       /* ignore */
     }
-  }, [uiScale]);
+  }, [fontScale]);
+
+  useEffect(() => {
+    applyFontSizes(fontSizes);
+    try {
+      localStorage.setItem(FONT_SIZES_STORAGE_KEY, JSON.stringify(fontSizes));
+    } catch {
+      /* ignore */
+    }
+  }, [fontSizes]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === CUSTOM_THEMES_STORAGE_KEY) setCustomThemes(loadCustomThemes());
+      if (e.key === FONT_SIZES_STORAGE_KEY) setFontSizesState(readFontSizes());
+      if (e.key === UI_SCALE_STORAGE_KEY) setFontScaleState(readUiScale());
+      if (e.key === THEME_ID_STORAGE_KEY && e.newValue) setActiveId(e.newValue);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -146,14 +184,17 @@ export const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
       input: Omit<Theme, "id" | "builtin" | "created_at" | "updated_at"> & { id?: string }
     ) => {
       const now = Date.now();
+      let css = input.css || "";
+      if (input.cover) {
+        css = injectBackgroundCssBlock(css, input.cover);
+      }
       const theme: Theme = {
         id: input.id ?? `custom-${now.toString(36)}`,
         name: input.name.trim() || "Custom theme",
         appearance: input.appearance,
         tokens: input.tokens,
-        css: input.css,
-        backgroundImage: input.backgroundImage,
-        preview: input.preview ?? input.backgroundImage,
+        css,
+        cover: input.cover,
         builtin: false,
         created_at: now,
         updated_at: now,
@@ -165,16 +206,22 @@ export const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
     []
   );
 
-  const deleteTheme = useCallback(
-    async (id: string) => {
-      setCustomThemes((prev) => removeCustomTheme(id, prev));
-      setActiveId((curr) => (curr === id ? DARK_THEME_ID : curr));
-    },
-    []
-  );
+  const deleteTheme = useCallback(async (id: string) => {
+    setCustomThemes((prev) => removeCustomTheme(id, prev));
+    setActiveId((curr) => (curr === id ? DEFAULT_THEME_ID : curr));
+  }, []);
 
-  const setUiScale = useCallback((percent: number) => {
-    setUiScaleState(Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, Math.round(percent))));
+  const setFontScale = useCallback(async (factor: number) => {
+    setFontScaleState(clampUiScale(factor));
+  }, []);
+
+  const setUiScale = useCallback((percentOrFactor: number) => {
+    const factor = percentOrFactor > 3 ? percentOrFactor / 100 : percentOrFactor;
+    setFontScaleState(clampUiScale(factor));
+  }, []);
+
+  const setFontSize = useCallback(async (key: FontSizeKey, px: number) => {
+    setFontSizesState((prev) => ({ ...prev, [key]: clampFontSize(key, px) }));
   }, []);
 
   const value = useMemo(
@@ -188,8 +235,12 @@ export const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
       selectTheme,
       addTheme,
       deleteTheme,
-      uiScale,
+      fontScale,
+      setFontScale,
+      uiScale: Math.round(fontScale * 100),
       setUiScale,
+      fontSizes,
+      setFontSize,
     }),
     [
       activeTheme,
@@ -200,8 +251,11 @@ export const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
       selectTheme,
       addTheme,
       deleteTheme,
-      uiScale,
+      fontScale,
+      setFontScale,
       setUiScale,
+      fontSizes,
+      setFontSize,
     ]
   );
 
@@ -215,3 +269,4 @@ export const useThemeContext = () => {
   }
   return context;
 };
+

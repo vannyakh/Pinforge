@@ -1,0 +1,16 @@
+import {
+  FONT_SIZE_KEYS,
+  FONT_SIZE_SPECS,
+  clampFontSize,
+  type FontSizes,
+} from "@/common/config/fontSizes";
+
+/**
+ * Write font sizes to the root element's CSS variables.
+ */
+export function applyFontSizes(sizes: FontSizes, root: Document = document): void {
+  for (const key of FONT_SIZE_KEYS) {
+    const px = clampFontSize(key, sizes[key]);
+    root.documentElement.style.setProperty(FONT_SIZE_SPECS[key].cssVar, `${px}px`);
+  }
+}

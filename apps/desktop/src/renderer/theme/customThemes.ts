@@ -1,5 +1,29 @@
 import type { Theme } from "@/common/theme/types";
 import { CUSTOM_THEMES_STORAGE_KEY } from "@/common/theme/constants";
+import { injectBackgroundCssBlock } from "@renderer/pages/settings/AppearanceSettings/backgroundUtils";
+
+function normalizeTheme(raw: Theme): Theme | null {
+  if (!raw || typeof raw.id !== "string" || raw.builtin) return null;
+  const legacy = raw as Theme & { backgroundImage?: string; preview?: string };
+  const cover = raw.cover || legacy.preview || legacy.backgroundImage;
+  let css = raw.css || "";
+  if (cover && css && !css.includes("AionUi Theme Background Start")) {
+    css = injectBackgroundCssBlock(css, cover);
+  } else if (cover && !css) {
+    css = injectBackgroundCssBlock("", cover);
+  }
+  return {
+    id: raw.id,
+    name: raw.name || "Custom theme",
+    appearance: raw.appearance === "dark" ? "dark" : "light",
+    cover,
+    tokens: raw.tokens,
+    css,
+    builtin: false,
+    created_at: raw.created_at || Date.now(),
+    updated_at: raw.updated_at || Date.now(),
+  };
+}
 
 export function loadCustomThemes(): Theme[] {
   try {
@@ -7,7 +31,7 @@ export function loadCustomThemes(): Theme[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Theme[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((t) => t && typeof t.id === "string" && !t.builtin);
+    return parsed.map(normalizeTheme).filter((t): t is Theme => Boolean(t));
   } catch {
     return [];
   }

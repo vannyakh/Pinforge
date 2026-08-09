@@ -1,7 +1,8 @@
 import Store from "electron-store";
 import { app } from "electron";
 import { join } from "node:path";
-import type { FormatPreset, PresetName, ProviderId, MediaKind } from "@pinterest-desktop/core";
+import type { FormatPreset, PresetName, ProviderId, MediaKind, EnhanceFeatures } from "@pinterest-desktop/core";
+import { DEFAULT_ENHANCE_FEATURES } from "@pinterest-desktop/core";
 import {
   DEFAULT_REMOTE,
   DEFAULT_TUNNEL,
@@ -71,6 +72,9 @@ export interface AppStoreSchema {
   preset: PresetName;
   delayMs: number;
   enhance: boolean;
+  enhanceFeatures: EnhanceFeatures;
+  /** Skip confirm and start the task after URL detection. */
+  autoDownload: boolean;
   format: FormatPreset;
   extractorUrl: string;
   history: HistoryItem[];
@@ -92,6 +96,8 @@ export function getStore(): Store<AppStoreSchema> {
         preset: "auto",
         delayMs: 1500,
         enhance: true,
+        enhanceFeatures: { ...DEFAULT_ENHANCE_FEATURES },
+        autoDownload: true,
         format: "best",
         extractorUrl: "",
         history: [],
@@ -104,11 +110,17 @@ export function getStore(): Store<AppStoreSchema> {
     migrateFlatHistoryToPacks(store);
     ensureRemoteDefaults(store);
     ensureSystemDefaults(store);
+    ensureEnhanceFeatures(store);
     if (!Array.isArray(store.get("customProviders"))) {
       store.set("customProviders", []);
     }
   }
   return store;
+}
+
+function ensureEnhanceFeatures(s: Store<AppStoreSchema>): void {
+  const cur = s.get("enhanceFeatures");
+  s.set("enhanceFeatures", { ...DEFAULT_ENHANCE_FEATURES, ...cur });
 }
 
 export function resolveSystemPaths(system: SystemConfig): SystemConfig {

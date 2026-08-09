@@ -15,8 +15,7 @@ export interface AddThemePayload {
   name: string;
   appearance: ThemeAppearance;
   css: string;
-  backgroundImage?: string;
-  preview?: string;
+  cover?: string;
   tokens?: Record<string, string>;
 }
 
@@ -39,7 +38,7 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
   const [name, setName] = useState("");
   const [appearance, setAppearance] = useState<ThemeAppearance>("light");
   const [css, setCss] = useState(DEFAULT_CSS);
-  const [backgroundImage, setBackgroundImage] = useState<string | undefined>();
+  const [cover, setCover] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -47,7 +46,7 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
     setName("");
     setAppearance("light");
     setCss(DEFAULT_CSS);
-    setBackgroundImage(undefined);
+    setCover(undefined);
   };
 
   const handleClose = () => {
@@ -57,16 +56,16 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
 
   const previewStyle = useMemo(
     () =>
-      backgroundImage
+      cover
         ? {
-            backgroundImage: `url(${backgroundImage})`,
+            backgroundImage: `url(${cover})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }
         : appearance === "dark"
           ? { background: "linear-gradient(145deg, #1a1a1a, #0e0e0e)" }
           : { background: "linear-gradient(145deg, #f9fafb, #e5e6eb)" },
-    [backgroundImage, appearance]
+    [cover, appearance]
   );
 
   const save = async () => {
@@ -80,8 +79,7 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
         name: name.trim(),
         appearance,
         css: css.trim(),
-        backgroundImage,
-        preview: backgroundImage,
+        cover,
       });
       Message.success("Theme saved");
       handleClose();
@@ -112,14 +110,14 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
     >
       <div className="flex gap-16px mb-18px">
         <div>
-          <div className="text-12px text-t-tertiary mb-8px">Background Image</div>
+          <div className="text-12px text-t-tertiary mb-8px">Cover / Background</div>
           <button
             type="button"
             className="appearance-upload"
             style={previewStyle}
             onClick={() => fileRef.current?.click()}
           >
-            {!backgroundImage && (
+            {!cover && (
               <span className="flex flex-col items-center gap-6px text-t-secondary">
                 <Plus theme="outline" size="20" fill="currentColor" strokeWidth={3} />
                 Upload
@@ -139,19 +137,14 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
                 return;
               }
               try {
-                setBackgroundImage(await fileToDataUrl(file));
+                setCover(await fileToDataUrl(file));
               } catch {
                 Message.error("Failed to read image");
               }
             }}
           />
-          {backgroundImage && (
-            <Button
-              type="text"
-              size="mini"
-              className="mt-4px"
-              onClick={() => setBackgroundImage(undefined)}
-            >
+          {cover && (
+            <Button type="text" size="mini" className="mt-4px" onClick={() => setCover(undefined)}>
               Remove
             </Button>
           )}
@@ -190,7 +183,7 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
         />
         <div className="text-12px text-t-tertiary mt-8px leading-relaxed">
           Use UI tokens like <code>--primary</code>, <code>--bg-1</code>, <code>--text-primary</code>.
-          Background image is applied automatically when uploaded.
+          Cover image is applied as wallpaper when uploaded.
         </div>
       </div>
     </Modal>

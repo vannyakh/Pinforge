@@ -9,6 +9,7 @@ import type {
   ProviderId,
   ResolvedMedia,
 } from "./types";
+import { DEFAULT_ENHANCE_FEATURES } from "./types";
 import {
   detectProvider,
   isBoardUrl,
@@ -40,12 +41,20 @@ async function writeResolved(
   const stamp = Date.now();
 
   if (enhance && media.buffer) {
+    const features = {
+      ...DEFAULT_ENHANCE_FEATURES,
+      ...opts.features,
+    };
     const enhanced = await runPipeline(media.buffer, {
       preset: opts.preset ?? "auto",
+      features,
     });
     const outPath = path.join(opts.outDir, `${base}-${stamp}.${enhanced.ext}`);
-    const originalPath = path.join(opts.outDir, `${base}-${stamp}-original.${media.ext}`);
-    await fs.writeFile(originalPath, media.buffer);
+    let originalPath: string | undefined;
+    if (features.keepOriginal !== false) {
+      originalPath = path.join(opts.outDir, `${base}-${stamp}-original.${media.ext}`);
+      await fs.writeFile(originalPath, media.buffer);
+    }
     await fs.writeFile(outPath, enhanced.buffer);
     return {
       outPath,

@@ -46,7 +46,9 @@
   --font-mono:
     ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Code', 'Roboto Mono', Consolas, 'Liberation Mono',
     monospace;
-  --code-font-size: 13px;
+  --chat-font-size: 14px;
+  --md-font-size: 13px;
+  --code-font-size: 12px;
   --aion-overlay-bg: #ffffff;
   --aion-overlay-text: #1d2129;
   --aion-overlay-border: #e5e6eb;

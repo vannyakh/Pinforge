@@ -1,8 +1,8 @@
 import React from "react";
-import { Button, Input, InputNumber, Message, Select, Switch } from "@arco-design/web-react";
+import { Button, Input, Message, Select, Switch } from "@arco-design/web-react";
 import { FolderOpen } from "@icon-park/react";
 import { useApp } from "@renderer/hooks/context/AppContext";
-import { api, type FormatPreset, type PresetName, type SystemConfig } from "@renderer/api";
+import { api, type SystemConfig } from "@renderer/api";
 
 const Row: React.FC<{
   title: string;
@@ -60,7 +60,7 @@ const SystemSettings: React.FC = () => {
     <div className="max-w-640px w-full">
       <div className="text-22px font-600 text-t-primary mb-6px">System</div>
       <div className="text-t-secondary text-14px mb-24px">
-        App behavior, download defaults, and environment paths.
+        App behavior and environment paths.
       </div>
 
       <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
@@ -71,7 +71,7 @@ const SystemSettings: React.FC = () => {
           <Select
             style={{ width: 160 }}
             value={system.language}
-            onChange={(v) => patchSystem({ language: String(v) })}
+            onChange={(v) => void patchSystem({ language: String(v) })}
           >
             <Select.Option value="en">English</Select.Option>
           </Select>
@@ -80,13 +80,13 @@ const SystemSettings: React.FC = () => {
           title="Start on Boot"
           description="Launch Pinforge automatically when you sign in to Windows or macOS."
         >
-          <Switch checked={system.startOnBoot} onChange={(v) => patchSystem({ startOnBoot: v })} />
+          <Switch checked={system.startOnBoot} onChange={(v) => void patchSystem({ startOnBoot: v })} />
         </Row>
         <Row
           title="Close to Tray"
           description="Hide to the system tray instead of quitting when you close the window."
         >
-          <Switch checked={system.closeToTray} onChange={(v) => patchSystem({ closeToTray: v })} />
+          <Switch checked={system.closeToTray} onChange={(v) => void patchSystem({ closeToTray: v })} />
         </Row>
         <Row
           title="Hardware Acceleration"
@@ -94,76 +94,23 @@ const SystemSettings: React.FC = () => {
         >
           <Switch
             checked={system.hardwareAcceleration}
-            onChange={(v) => patchSystem({ hardwareAcceleration: v })}
+            onChange={(v) => void patchSystem({ hardwareAcceleration: v })}
           />
         </Row>
         <Row title="Notifications" description="Allow desktop notifications from Pinforge.">
           <Switch
             checked={system.notifications}
-            onChange={(v) => patchSystem({ notifications: v })}
+            onChange={(v) => void patchSystem({ notifications: v })}
           />
         </Row>
         {system.notifications && (
           <Row title="Download complete" description="Notify when a download or board job finishes.">
             <Switch
               checked={system.notifyOnDownloadComplete}
-              onChange={(v) => patchSystem({ notifyOnDownloadComplete: v })}
+              onChange={(v) => void patchSystem({ notifyOnDownloadComplete: v })}
             />
           </Row>
         )}
-      </div>
-
-      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-        Download defaults
-      </div>
-      <div className="bg-2 rd-12px border border-b-base px-18px mb-28px">
-        <Row title="Enhance images by default" description="Applies to Pinterest stills.">
-          <Switch checked={settings.enhance} onChange={(v) => updateSettings({ enhance: v })} />
-        </Row>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Enhance preset</div>
-          <div className="text-12px text-t-tertiary mb-8px">Default quality pipeline for stills.</div>
-          <Select
-            className="w-full"
-            value={settings.preset}
-            onChange={(v) => updateSettings({ preset: v as PresetName })}
-          >
-            {(Object.keys(settings.presets) as PresetName[]).map((key) => (
-              <Select.Option key={key} value={key}>
-                {settings.presets[key].label} — {settings.presets[key].description}
-              </Select.Option>
-            ))}
-          </Select>
-        </div>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Default video format</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            YouTube / Instagram / TikTok output preference.
-          </div>
-          <Select
-            className="w-full"
-            value={settings.format}
-            onChange={(v) => updateSettings({ format: v as FormatPreset })}
-          >
-            <Select.Option value="best">best</Select.Option>
-            <Select.Option value="mp4">mp4</Select.Option>
-            <Select.Option value="audio-only">audio-only</Select.Option>
-          </Select>
-        </div>
-        <div className="py-14px">
-          <div className="text-14px text-t-primary mb-4px">Board delay (ms)</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Pause between board items to reduce rate limits.
-          </div>
-          <InputNumber
-            className="w-full"
-            min={500}
-            max={10000}
-            step={100}
-            value={settings.delayMs}
-            onChange={(v) => updateSettings({ delayMs: Number(v) || 1500 })}
-          />
-        </div>
       </div>
 
       <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
@@ -209,7 +156,7 @@ const SystemSettings: React.FC = () => {
           <Input
             placeholder="https://api.piped.example.com"
             value={settings.extractorUrl}
-            onChange={(v) => updateSettings({ extractorUrl: v })}
+            onChange={(v) => void updateSettings({ extractorUrl: v })}
           />
         </div>
       </div>

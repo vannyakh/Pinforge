@@ -1,9 +1,43 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Empty, Progress, Space, Table, Tag, Tooltip, Typography } from "@arco-design/web-react";
+import {
+  Button,
+  Empty,
+  Input,
+  Message,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+} from "@arco-design/web-react";
 import type { ColumnProps, SorterInfo } from "@arco-design/web-react/es/Table/interface";
-import { FolderOpen, Redo } from "@icon-park/react";
+import { FolderOpen, Plus, Redo } from "@icon-park/react";
 import { useApp } from "@renderer/hooks/context/AppContext";
-import { api, type PackStatus } from "@renderer/api";
+import { api, type FormatPreset, type PackStatus, type PresetName } from "@renderer/api";
+
+const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
+
+function extractUrls(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const matches = text.match(URL_RE) ?? [];
+  for (const raw of matches) {
+    const url = raw.replace(/[),.;!?]+$/g, "");
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+  return out;
+}
+
+const FORMAT_OPTIONS: { value: FormatPreset; label: string }[] = [
+  { value: "best", label: "Best" },
+  { value: "mp4", label: "MP4" },
+  { value: "audio-only", label: "Audio only" },
+];
 
 function statusColor(status: PackStatus): string {
   switch (status) {
@@ -108,14 +142,38 @@ function rowPercent(row: Pick<TaskRow, "current" | "total" | "status">): number 
 }
 
 const TasksPage: React.FC = () => {
-  const { tasks, packs, busy, history, processUrl, itemsForPack, settings } = useApp();
+  const { tasks, packs, busy, history, processUrl, itemsForPack, settings, updateSettings } = useApp();
   const cardRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(360);
   const [selectedKeys, setSelectedKeys] = useState<(string | number)[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addText, setAddText] = useState("");
+  const [addOutDir, setAddOutDir] = useState("");
+  const [addFormat, setAddFormat] = useState<FormatPreset>("best");
+  const [addPreset, setAddPreset] = useState<PresetName>("auto");
+  const [addEnhance, setAddEnhance] = useState(true);
   const [sorted, setSorted] = useState<SorterInfo>({
     field: "updatedAt",
     direction: "descend",
   });
+
+  const detectedUrls = useMemo(() => extractUrls(addText), [addText]);
+
+  const openAddModal = () => {
+    if (settings) {
+      setAddOutDir(settings.outDir);
+      setAddFormat(settings.format);
+      setAddPreset(settings.preset);
+      setAddEnhance(settings.enhance);
+    }
+    setAddText("");
+    setAddOpen(true);
+  };
+
+  const closeAddModal = () => {
+    setAddOpen(false);
+    setAddText("");
+  };
 
   useEffect(() => {
     const el = cardRef.current;
@@ -264,6 +322,38 @@ const TasksPage: React.FC = () => {
     setSelectedKeys([]);
   };
 
+  const submitAddTask = () => {
+    const urls = extractUrls(addText);
+    if (urls.length === 0) {
+      Message.warning("Paste one or more media URLs to start.");
+      return;
+    }
+    const outDir = addOutDir.trim() || settings?.outDir;
+    if (!outDir) {
+      Message.warning("Set a download folder first.");
+      return;
+    }
+    const opts = {
+      enhance: addEnhance,
+      format: addFormat,
+      preset: addPreset,
+      outDir,
+    };
+    closeAddModal();
+    void (async () => {
+      for (const url of urls) {
+        await processUrl(url, opts);
+      }
+    })();
+  };
+
+  const pickAddFolder = async () => {
+    const dir = await api.pickFolder();
+    if (!dir) return;
+    setAddOutDir(dir);
+    void updateSettings({ outDir: dir });
+  };
+
   const columns: ColumnProps<TaskRow>[] = [
     {
       title: "#",
@@ -283,12 +373,11 @@ const TasksPage: React.FC = () => {
       ellipsis: true,
       render: (_col, row) => (
         <div className="min-w-0 py-2px tasks-table__task">
-          <div className="text-13px font-500 text-t-primary truncate">
-            {row.title || row.url}
-          </div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
-            {row.url}
-          </Typography.Text>
+          <Tooltip content={row.url}>
+            <div className="text-13px font-500 text-t-primary truncate">
+              {row.title?.trim() || row.url}
+            </div>
+          </Tooltip>
           {row.message && row.status !== "done" && (
             <Tooltip content={row.message}>
               <div className="text-12px text-t-tertiary mt-2px truncate">{row.message}</div>
@@ -428,30 +517,42 @@ const TasksPage: React.FC = () => {
 
   return (
     <div className="tasks-page flex flex-col flex-1 min-h-0 h-full w-full">
-      <div className="shrink-0 mb-14px flex items-end justify-between gap-16px">
-        <div className="min-w-0">
-          <div className="text-22px font-600 text-t-primary mb-6px">Tasks</div>
-          <div className="text-t-secondary text-14px">
-            Download jobs for the tools service. Select rows for batch actions.
-          </div>
-        </div>
-        {selectedKeys.length > 0 && (
+      <div className="shrink-0 mb-14px">
+        <div className="flex items-center justify-between gap-16px mb-6px">
+          <div className="text-22px font-600 text-t-primary">Tasks</div>
           <Space size={8} className="shrink-0">
-            <span className="text-13px text-t-secondary">{selectedKeys.length} selected</span>
-            <Button
-              size="small"
-              type="primary"
-              icon={<Redo theme="outline" size="14" />}
-              disabled={selectedRows.every((r) => r.status === "running")}
-              onClick={() => void batchRetry()}
-            >
-              Retry selected
-            </Button>
-            <Button size="small" onClick={() => setSelectedKeys([])}>
-              Clear
-            </Button>
+            {selectedKeys.length > 0 && (
+              <>
+                <span className="text-13px text-t-secondary">{selectedKeys.length} selected</span>
+                <Button
+                  size="small"
+                  type="outline"
+                  icon={<Redo theme="outline" size="14" />}
+                  disabled={selectedRows.every((r) => r.status === "running") || busy}
+                  onClick={() => void batchRetry()}
+                >
+                  Retry selected
+                </Button>
+                <Button size="small" onClick={() => setSelectedKeys([])}>
+                  Clear
+                </Button>
+              </>
+            )}
+            <Tooltip content="Add links">
+              <Button
+                type="primary"
+                size="small"
+                icon={<Plus theme="outline" size="14" />}
+                disabled={busy}
+                onClick={openAddModal}
+                aria-label="Add links"
+              />
+            </Tooltip>
           </Space>
-        )}
+        </div>
+        <div className="text-t-secondary text-14px">
+          Download jobs for the tools service. Select rows for batch actions.
+        </div>
       </div>
 
       <div className="tasks-table-card flex-1 min-h-0 w-full" ref={cardRef}>
@@ -486,9 +587,96 @@ const TasksPage: React.FC = () => {
               direction: next.direction,
             });
           }}
-          noDataElement={<Empty description="No tasks yet. Paste a URL on Home to start." />}
+          noDataElement={<Empty description="No tasks yet. Use + to add links." />}
         />
       </div>
+
+      <Modal
+        title="Add links"
+        visible={addOpen}
+        onCancel={closeAddModal}
+        onOk={submitAddTask}
+        okText={detectedUrls.length > 1 ? `Start download (${detectedUrls.length})` : "Start download"}
+        okButtonProps={{ disabled: busy || detectedUrls.length === 0 || !addOutDir.trim() }}
+        confirmLoading={busy}
+        style={{ width: 560 }}
+        unmountOnExit
+      >
+        <div className="flex flex-col gap-14px">
+          <div>
+            <div className="text-13px text-t-secondary mb-6px">Links</div>
+            <Input.TextArea
+              autoFocus
+              value={addText}
+              disabled={busy}
+              placeholder={"Paste one or more URLs…\nMixed text is fine — links are extracted automatically."}
+              autoSize={{ minRows: 5, maxRows: 10 }}
+              onChange={setAddText}
+            />
+            <div className="text-12px text-t-tertiary mt-6px">
+              {detectedUrls.length === 0
+                ? "No URLs detected yet"
+                : `${detectedUrls.length} URL${detectedUrls.length === 1 ? "" : "s"} detected`}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-13px text-t-secondary mb-6px">Save to</div>
+            <div className="flex items-center gap-8px">
+              <Input
+                value={addOutDir}
+                disabled={busy}
+                placeholder="Download folder"
+                onChange={setAddOutDir}
+                className="flex-1"
+              />
+              <Button
+                icon={<FolderOpen theme="outline" size="14" />}
+                disabled={busy}
+                onClick={() => void pickAddFolder()}
+              >
+                Browse
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-12px">
+            <div className="flex-1 min-w-0">
+              <div className="text-13px text-t-secondary mb-6px">Format</div>
+              <Select
+                value={addFormat}
+                disabled={busy}
+                onChange={(v) => setAddFormat(v as FormatPreset)}
+                options={FORMAT_OPTIONS}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-13px text-t-secondary mb-6px">Preset</div>
+              <Select
+                value={addPreset}
+                disabled={busy || !addEnhance}
+                onChange={(v) => setAddPreset(v as PresetName)}
+                options={
+                  settings
+                    ? (Object.keys(settings.presets) as PresetName[]).map((key) => ({
+                        value: key,
+                        label: settings.presets[key].label,
+                      }))
+                    : []
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-12px">
+            <div className="flex items-center gap-8px">
+              <Switch checked={addEnhance} disabled={busy} onChange={setAddEnhance} size="small" />
+              <span className="text-13px text-t-secondary">Enhance stills</span>
+            </div>
+            <span className="text-12px text-t-tertiary">Autostart downloads</span>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
