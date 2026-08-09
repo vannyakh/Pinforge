@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, Progress, Select, Switch } from "@arco-design/web-react";
+import { Button, Checkbox, Select, Switch } from "@arco-design/web-react";
 import { ArrowRightUp, Right } from "@icon-park/react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
@@ -30,6 +30,7 @@ import GuidHomeInputCard from "./guid/GuidHomeInputCard";
 import GuidHomeActionRow from "./guid/GuidHomeActionRow";
 import ExtractPickTable from "./ExtractPickTable";
 import { resolveYoutubeExtractUrl, youtubeWatchHasList } from "./youtubeUrl";
+import ShimmerText from "@renderer/components/base/ShimmerText";
 import styles from "./guid/guid.module.css";
 import "./guid/guid-sendbox.css";
 
@@ -894,7 +895,7 @@ const DownloadPage: React.FC = () => {
   const processingChip = showProcessing ? (
     <div className="home-processing">
       <span className="home-processing__text">
-        Processing…
+        <ShimmerText>Processing…</ShimmerText>
         <span className="home-processing__elapsed">({elapsedSec}s)</span>
       </span>
     </div>
@@ -1087,7 +1088,7 @@ const DownloadPage: React.FC = () => {
                                 {showCards && (
                                   <div className="home-result-list">
                                     {cards.map((card) => (
-                                      <DownloadCard
+                                      <DownloadPipeline
                                         key={card.id || `${card.sourceUrl}-${card.status}`}
                                         card={card}
                                       />
@@ -1372,14 +1373,6 @@ function platformMetaFor(id: string) {
   return PLATFORMS.find((p: (typeof PLATFORMS)[number]) => p.id === id) ?? null;
 }
 
-function toMediaUrl(p: string): string {
-  return `pinmedia://${p.replace(/\\/g, "/")}`;
-}
-
-function isImagePath(p: string): boolean {
-  return /\.(png|jpe?g|webp|gif)$/i.test(p);
-}
-
 function fileNameFromPath(p: string): string {
   return p.split(/[/\\]/).filter(Boolean).pop() || p;
 }
@@ -1431,88 +1424,104 @@ function cardStatusLabel(card: ChatDownloadCard): string {
   }
 }
 
-const DownloadCard: React.FC<{ card: ChatDownloadCard }> = ({ card }) => {
-  const [coverFailed, setCoverFailed] = useState(false);
+function downloadPipelineSummary(card: ChatDownloadCard, title: string): string {
+  const short =
+    title.length > 42 ? `${title.slice(0, 40)}…` : title;
+  switch (card.status) {
+    case "extracting":
+      return `Extracting · ${short}`;
+    case "queued":
+      return `Queued · ${short}`;
+    case "ready":
+      return `Ready · ${short}`;
+    case "downloading": {
+      if (typeof card.percent === "number") return `Downloading ${card.percent}% · ${short}`;
+      if (card.phase === "mux") return `Merging · ${short}`;
+      if (card.phase === "convert") return `Converting · ${short}`;
+      return `Downloading · ${short}`;
+    }
+    case "done":
+      return `Saved · ${short}`;
+    case "failed":
+      return `Failed · ${short}`;
+    default:
+      return short;
+  }
+}
+
+const DownloadPipeline: React.FC<{ card: ChatDownloadCard }> = ({ card }) => {
   const title =
     card.title ||
     (card.outPath ? fileNameFromPath(card.outPath) : shortHostPath(card.sourceUrl));
-  const showProgress =
+  const active =
     card.status === "downloading" ||
     card.status === "extracting" ||
-    (card.status === "queued" && typeof card.percent === "number");
-  const percent =
-    card.status === "done"
-      ? 100
-      : typeof card.percent === "number"
-        ? card.percent
-        : card.status === "extracting"
-          ? undefined
-          : 0;
-  const thumbSrc =
-    (card.outPath && isImagePath(card.outPath) ? toMediaUrl(card.outPath) : undefined) ||
-    card.coverUrl ||
-    coverUrlFromMediaUrl(card.sourceUrl);
+    card.status === "queued" ||
+    card.status === "ready";
+  const failed = card.status === "failed";
+  const [open, setOpen] = useState(active || failed);
 
   useEffect(() => {
-    setCoverFailed(false);
-  }, [thumbSrc]);
+    if (active || failed) setOpen(true);
+  }, [active, failed]);
+
+  const metaParts: string[] = [];
+  if (card.status === "done") {
+    metaParts.push(cardStatusLabel(card));
+    if (card.kind) metaParts.push(card.kind);
+    if (card.provider) metaParts.push(card.provider);
+  } else if (active) {
+    metaParts.push(cardStatusLabel(card));
+    metaParts.push(shortHostPath(card.sourceUrl));
+  } else if (failed) {
+    metaParts.push(card.error || "Download failed");
+  }
 
   return (
-    <div className={`home-result-card home-result-card--${card.status}`}>
-      <div className="home-result-card__thumb">
-        {thumbSrc && !coverFailed ? (
-          <img
-            src={thumbSrc}
-            alt=""
-            referrerPolicy="no-referrer"
-            onError={() => setCoverFailed(true)}
-          />
-        ) : (
-          <span className="home-result-card__kind">
-            {(card.kind || (card.status === "done" ? "file" : "url")).toUpperCase()}
-          </span>
-        )}
-      </div>
-      <div className="home-result-card__body">
-        <div className="home-result-card__title" title={title}>
-          {title}
+    <div className={`home-pipeline home-pipeline--result home-pipeline--${card.status}`}>
+      <button
+        type="button"
+        className="home-pipeline__toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <Right
+          theme="outline"
+          size="12"
+          fill="currentColor"
+          strokeWidth={3}
+          className={`home-pipeline__chevron${open ? " is-open" : ""}`}
+        />
+        <span className="home-pipeline__summary">{downloadPipelineSummary(card, title)}</span>
+      </button>
+      {open ? (
+        <div className="home-pipeline__body">
+          {metaParts.length > 0 ? (
+            <div className="home-pipeline__line">{metaParts.join(" · ")}</div>
+          ) : null}
+          {failed && card.error && metaParts[0] !== card.error ? (
+            <div className="home-pipeline__line home-pipeline__line--error">{card.error}</div>
+          ) : null}
+          {card.status === "done" && card.outPath ? (
+            <div className="home-pipeline__actions">
+              <button
+                type="button"
+                className="home-pipeline__link"
+                onClick={() => void api.showItemInFolder(card.outPath!)}
+              >
+                Show in folder
+              </button>
+              <button
+                type="button"
+                className="home-pipeline__link"
+                onClick={() => void api.openPath(card.outPath!)}
+              >
+                Open
+              </button>
+            </div>
+          ) : null}
         </div>
-        <div className="home-result-card__meta">
-          <span className="home-result-card__status">{cardStatusLabel(card)}</span>
-          {card.status === "done" && card.kind ? ` · ${card.kind}` : ""}
-          {card.status === "done" && card.provider ? ` · ${card.provider}` : ""}
-          {(card.status === "extracting" || card.status === "ready" || card.status === "queued") && (
-            <span className="home-result-card__url"> · {shortHostPath(card.sourceUrl)}</span>
-          )}
-        </div>
-        {showProgress && (
-          <div className="home-result-card__progress">
-            <Progress
-              percent={typeof percent === "number" ? percent : card.status === "extracting" ? 30 : 0}
-              showText={false}
-              status={card.status === "failed" ? "error" : undefined}
-              size="small"
-            />
-          </div>
-        )}
-        {card.status === "failed" && card.error && (
-          <div className="home-result-card__error">{card.error}</div>
-        )}
-        {card.status === "done" && card.outPath && (
-          <div className="home-result-card__actions">
-            <Button
-              size="mini"
-              type="secondary"
-              onClick={() => void api.showItemInFolder(card.outPath!)}
-            >
-              Show in folder
-            </Button>
-            <Button size="mini" type="text" onClick={() => void api.openPath(card.outPath!)}>
-              Open
-            </Button>
-          </div>
-        )}
-      </div>
+      ) : null}
     </div>
   );
 };

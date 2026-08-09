@@ -9,6 +9,11 @@ import "./styles/arco-override.css";
 import "./styles/layout.css";
 import App from "./App";
 
+// Inline overflow so Arco Modal/Drawer skip scroll-lock width shrink.
+// With html { zoom }, window.innerWidth − clientWidth is often non-zero even
+// when there is no scrollbar, which left a gap beside the window controls.
+document.body.style.overflow = "hidden";
+
 const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
