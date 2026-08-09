@@ -1,5 +1,5 @@
 .guidLayout {
-  width: clamp(var(--app-min-width, 360px), calc(100% - 32px), 1280px);
+  width: clamp(var(--app-min-width, 360px), calc(100% - 32px), 800px);
   max-width: 100%;
   padding: 0 16px;
   box-sizing: border-box;
@@ -54,9 +54,16 @@
 .actionTools {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 1;
   min-width: 0;
+}
+
+.actionLeftOptions {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .actionEntry {

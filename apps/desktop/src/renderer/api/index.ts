@@ -72,7 +72,10 @@ export const api = {
   processPin: (url: string, preset: PresetName, outDir: string) =>
     window.api.processPin(url, preset, outDir),
   detectProvider: (url: string) => window.api.detectProvider(url),
-  extractPreview: (url: string) => window.api.extractPreview(url),
+  extractPreview: (
+    url: string,
+    opts?: { channelMaxVideos?: number; playlistMaxVideos?: number }
+  ) => window.api.extractPreview(url, opts),
   listProviders: () => window.api.listProviders(),
   pickFolder: () => window.api.pickFolder(),
   pickFolderPath: (defaultPath?: string) => window.api.pickFolderPath(defaultPath),

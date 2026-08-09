@@ -15,6 +15,8 @@ type GuidHomeInputCardProps = {
   isInputActive: boolean;
   disabled?: boolean;
   actionRow: React.ReactNode;
+  /** Optional row under the textarea (e.g. Get playlist checkbox). */
+  optionsRow?: React.ReactNode;
   workspaceDir: string;
   onSelectWorkspace: (dir: string) => void;
   onClearWorkspace?: () => void;
@@ -34,6 +36,7 @@ const GuidHomeInputCard: React.FC<GuidHomeInputCardProps> = ({
   isInputActive,
   disabled,
   actionRow,
+  optionsRow,
   workspaceDir,
   onSelectWorkspace,
   onClearWorkspace,
@@ -81,6 +84,7 @@ const GuidHomeInputCard: React.FC<GuidHomeInputCardProps> = ({
           onKeyDown={onKeyDown}
         />
         <div style={{ height: 12, flexShrink: 0 }} aria-hidden="true" />
+        {optionsRow ? <div className="home-composer-options">{optionsRow}</div> : null}
         {actionRow}
       </div>
 

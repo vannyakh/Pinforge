@@ -12,6 +12,8 @@ type GuidHomeActionRowProps = {
   formats?: FormatPreset[];
   enhance: boolean;
   showEnhance?: boolean;
+  /** Extra controls on the left (e.g. Get playlist checkbox). */
+  leftOptions?: React.ReactNode;
   onPasteOrClear: () => void;
   onFormatChange: (format: FormatPreset) => void;
   onEnhanceChange: (enhance: boolean) => void;
@@ -36,6 +38,7 @@ const GuidHomeActionRow: React.FC<GuidHomeActionRowProps> = ({
   formats = ["best", "mp4", "audio-only"],
   enhance,
   showEnhance = true,
+  leftOptions,
   onPasteOrClear,
   onFormatChange,
   onEnhanceChange,
@@ -84,6 +87,7 @@ const GuidHomeActionRow: React.FC<GuidHomeActionRowProps> = ({
             />
           </Tooltip>
         </div>
+        {leftOptions ? <div className={styles.actionLeftOptions}>{leftOptions}</div> : null}
       </div>
 
       <div className={styles.actionSubmit}>

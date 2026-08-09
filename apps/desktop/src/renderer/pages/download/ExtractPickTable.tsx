@@ -1,7 +1,7 @@
-import React, { useMemo } from "react";
-import { Button, Checkbox, Select, Table, Tag, Tooltip } from "@arco-design/web-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Button, Checkbox, InputNumber, Select, Table, Tag, Tooltip } from "@arco-design/web-react";
 import type { ColumnProps } from "@arco-design/web-react/es/Table/interface";
-import { Download, LinkOne } from "@icon-park/react";
+import { Download, LinkOne, Refresh } from "@icon-park/react";
 import type {
   AudioContainer,
   ExtractPreview,
@@ -34,6 +34,11 @@ type Props = {
   onAudioChange: (v: AudioContainer) => void;
   subs: SubtitleMode;
   onSubsChange: (v: SubtitleMode) => void;
+  /** Default max for playlist / profile list fetch. */
+  listMax: number;
+  onListMaxChange?: (max: number) => void;
+  onReloadList: (max: number) => void | Promise<void>;
+  listLoading?: boolean;
   busy?: boolean;
   onDownloadSelected: () => void;
   onDownloadOne: (item: ExtractPreviewItem) => void;
@@ -81,13 +86,25 @@ const ExtractPickTable: React.FC<Props> = ({
   onAudioChange,
   subs,
   onSubsChange,
+  listMax,
+  onListMaxChange,
+  onReloadList,
+  listLoading,
   busy,
   onDownloadSelected,
   onDownloadOne,
 }) => {
+  const [maxDraft, setMaxDraft] = useState(listMax);
+  useEffect(() => {
+    setMaxDraft(listMax);
+  }, [listMax]);
+
+  const showMaxControl =
+    showYoutube && (extract.mode === "playlist" || extract.mode === "profile");
+
   const rows: ExtractPickRow[] = useMemo(
     () =>
-      extract.items.slice(0, 100).map((item) => ({
+      extract.items.map((item) => ({
         ...item,
         key: `${item.index}-${item.url}`,
         cover: item.coverUrl || coverUrlFromMediaUrl(item.url),
@@ -335,11 +352,46 @@ const ExtractPickTable: React.FC<Props> = ({
                 </Select>
               </div>
             )}
+            {showMaxControl && (
+              <div className="home-extract-pick__field">
+                <span className="home-extract-pick__field-label">Max</span>
+                <div className="home-extract-pick__max-row">
+                  <InputNumber
+                    size="small"
+                    style={{ width: 88 }}
+                    min={1}
+                    max={500}
+                    step={10}
+                    value={maxDraft}
+                    disabled={Boolean(listLoading || busy)}
+                    onChange={(v) => {
+                      const next = Math.max(1, Math.min(500, Number(v) || listMax));
+                      setMaxDraft(next);
+                      onListMaxChange?.(next);
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    type="secondary"
+                    loading={listLoading}
+                    disabled={busy}
+                    icon={<Refresh theme="outline" size="14" />}
+                    onClick={() => void onReloadList(maxDraft)}
+                  >
+                    Get list
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="home-extract-pick__config-actions">
-              <span className="home-extract__sel-count">{selectedCount} selected</span>
+              <span className="home-extract__sel-count">
+                {selectedCount} selected
+                {extract.truncated ? " · truncated" : ""}
+              </span>
               <Button
                 size="mini"
                 onClick={() => onSelectionChange(rows.map((r) => r.url))}
+                disabled={rows.length === 0}
               >
                 All
               </Button>
@@ -357,6 +409,11 @@ const ExtractPickTable: React.FC<Props> = ({
               </Button>
             </div>
           </div>
+          {showMaxControl && (
+            <div className="home-extract-pick__hint">
+              Set Max, then Get list. Use checkboxes to pick videos to download.
+            </div>
+          )}
         </div>
 
         <div className="tasks-table-card home-extract-pick__card">

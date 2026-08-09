@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Progress, Select, Spin, Switch } from "@arco-design/web-react";
+import { Button, Checkbox, Progress, Select, Spin, Switch } from "@arco-design/web-react";
 import { ArrowRightUp } from "@icon-park/react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
@@ -27,6 +27,7 @@ import {
 import GuidHomeInputCard from "./guid/GuidHomeInputCard";
 import GuidHomeActionRow from "./guid/GuidHomeActionRow";
 import ExtractPickTable from "./ExtractPickTable";
+import { resolveYoutubeExtractUrl, youtubeWatchHasList } from "./youtubeUrl";
 import styles from "./guid/guid.module.css";
 import "./guid/guid-sendbox.css";
 
@@ -101,6 +102,7 @@ const DownloadPage: React.FC = () => {
   const confirmAudio = useHomeChatStore((s) => s.confirmAudio);
   const confirmSubs = useHomeChatStore((s) => s.confirmSubs);
   const extracting = useHomeChatStore((s) => s.extracting);
+  const getPlaylistList = useHomeChatStore((s) => s.getPlaylistList);
   const setUrl = useHomeChatStore((s) => s.setUrl);
   const setFilter = useHomeChatStore((s) => s.setFilter);
   const setConfirmFormat = useHomeChatStore((s) => s.setConfirmFormat);
@@ -109,12 +111,15 @@ const DownloadPage: React.FC = () => {
   const setConfirmAudio = useHomeChatStore((s) => s.setConfirmAudio);
   const setConfirmSubs = useHomeChatStore((s) => s.setConfirmSubs);
   const setExtracting = useHomeChatStore((s) => s.setExtracting);
+  const setGetPlaylistList = useHomeChatStore((s) => s.setGetPlaylistList);
   const appendMessages = useHomeChatStore((s) => s.appendMessages);
   const mapMessages = useHomeChatStore((s) => s.mapMessages);
   const patchDownloadCard = useHomeChatStore((s) => s.patchDownloadCard);
 
   const [inputFocused, setInputFocused] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [listMax, setListMax] = useState(50);
+  const [listReloadingId, setListReloadingId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const progressTargetRef = useRef<{ assistantId: string; activeUrl: string } | null>(
@@ -131,6 +136,12 @@ const DownloadPage: React.FC = () => {
       setConfirmYtQuality(settings.youtube?.quality ?? "best");
       setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
       setConfirmSubs(settings.youtube?.subtitles ?? "separate");
+      setListMax(
+        Math.max(
+          settings.youtube?.playlistMaxVideos ?? 50,
+          settings.youtube?.channelMaxVideos ?? 50
+        )
+      );
     }
   }, [
     settings,
@@ -341,11 +352,14 @@ const DownloadPage: React.FC = () => {
   };
 
   const handleExtract = async (raw: string) => {
-    const urls = parseMediaUrls(raw);
-    if (urls.length === 0 || !settings.outDir || busy || extracting) return;
+    const parsed = parseMediaUrls(raw);
+    if (parsed.length === 0 || !settings.outDir || busy || extracting) return;
 
+    const preferPlaylist = getPlaylistList;
+    const urls = parsed.map((u) => resolveYoutubeExtractUrl(u, preferPlaylist));
     const displayText = raw.trim();
     setUrl("");
+    setGetPlaylistList(false);
     setExtracting(true);
 
     const userMsg: ChatMessage = {
@@ -656,6 +670,51 @@ const DownloadPage: React.FC = () => {
     );
   };
 
+  const reloadExtractList = async (msg: ChatMessage, max: number) => {
+    if (!msg.extract?.sourceUrl) return;
+    const capped = Math.max(1, Math.min(500, max));
+    setListMax(capped);
+    setListReloadingId(msg.id);
+    try {
+      const mode = msg.extract.mode;
+      const next = await api.extractPreview(msg.extract.sourceUrl, {
+        channelMaxVideos: capped,
+        playlistMaxVideos: capped,
+      });
+      const extract =
+        mode === "playlist" || mode === "profile"
+          ? { ...next, mode: mode as typeof next.mode }
+          : next;
+      const selectedItemUrls = extract.items.map((i) => i.url);
+      mapMessages((prev) =>
+        prev.map((m) =>
+          m.id === msg.id
+            ? {
+                ...m,
+                extract,
+                selectedItemUrls,
+                text: extract.message
+                  ? `${extract.message}\nSelect items below, then download.`
+                  : m.text,
+                status: "ready",
+                pendingConfirm: true,
+              }
+            : m
+        )
+      );
+      if (msg.detected?.id === "youtube") {
+        void updateSettings({
+          youtube:
+            mode === "playlist"
+              ? { playlistMaxVideos: capped }
+              : { channelMaxVideos: capped },
+        });
+      }
+    } finally {
+      setListReloadingId(null);
+    }
+  };
+
   const applySuggestion = (s: (typeof SUGGESTIONS)[number]) => {
     if (s.filter === "auto") setFilter("auto");
     else setFilter(s.filter);
@@ -704,6 +763,23 @@ const DownloadPage: React.FC = () => {
       format={confirmFormat}
       enhance={confirmEnhance}
       showEnhance={showEnhanceToolbar}
+      leftOptions={
+        youtubeWatchHasList(url.trim()) ? (
+          <label className="home-composer-playlist-opt">
+            <Checkbox
+              checked={getPlaylistList}
+              disabled={busy || extracting}
+              onChange={(checked) => setGetPlaylistList(checked)}
+            />
+            <span className="home-composer-playlist-opt__text">
+              Get playlist
+              <span className="home-composer-playlist-opt__hint">
+                {getPlaylistList ? " · list" : " · this video"}
+              </span>
+            </span>
+          </label>
+        ) : null
+      }
       onPasteOrClear={() => {
         if (hasUrl) clearUrl();
         else void pasteFromClipboard();
@@ -726,7 +802,12 @@ const DownloadPage: React.FC = () => {
       {hasChat && processingChip}
       <GuidHomeInputCard
         input={url}
-        onInputChange={setUrl}
+        onInputChange={(v) => {
+          setUrl(v);
+          if (!youtubeWatchHasList(v.trim()) && getPlaylistList) {
+            setGetPlaylistList(false);
+          }
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -866,6 +947,16 @@ const DownloadPage: React.FC = () => {
                               onAudioChange={setConfirmAudio}
                               subs={confirmSubs}
                               onSubsChange={setConfirmSubs}
+                              listMax={
+                                extract.mode === "playlist"
+                                  ? settings.youtube?.playlistMaxVideos ?? listMax
+                                  : extract.mode === "profile"
+                                    ? settings.youtube?.channelMaxVideos ?? listMax
+                                    : listMax
+                              }
+                              onListMaxChange={setListMax}
+                              onReloadList={(max) => reloadExtractList(msg, max)}
+                              listLoading={listReloadingId === msg.id}
                               busy={busy}
                               onDownloadSelected={() => beginSelectedDownload(msg)}
                               onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}

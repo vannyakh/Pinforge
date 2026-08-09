@@ -305,8 +305,10 @@ const api = {
     ipcRenderer.invoke("pin:process", { url, preset, outDir }),
   detectProvider: (url: string): Promise<DetectedProvider | null> =>
     ipcRenderer.invoke("media:detect", url),
-  extractPreview: (url: string): Promise<ExtractPreview> =>
-    ipcRenderer.invoke("media:extract", url),
+  extractPreview: (
+    url: string,
+    opts?: { channelMaxVideos?: number; playlistMaxVideos?: number }
+  ): Promise<ExtractPreview> => ipcRenderer.invoke("media:extract", url, opts),
   listProviders: (): Promise<ProviderInfo[]> => ipcRenderer.invoke("media:providers"),
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke("pin:pickFolder"),
   pickFolderPath: (defaultPath?: string): Promise<string | null> =>

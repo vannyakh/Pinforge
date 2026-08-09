@@ -68,6 +68,8 @@ type HomeChatState = {
   confirmAudio: AudioContainer;
   confirmSubs: SubtitleMode;
   extracting: boolean;
+  /** When watch URL has &list=, opt in to extract the playlist instead of the single video. */
+  getPlaylistList: boolean;
 
   setUrl: (url: string) => void;
   setFilter: (filter: PlatformFilter) => void;
@@ -77,6 +79,7 @@ type HomeChatState = {
   setConfirmAudio: (audio: AudioContainer) => void;
   setConfirmSubs: (subs: SubtitleMode) => void;
   setExtracting: (extracting: boolean) => void;
+  setGetPlaylistList: (getPlaylistList: boolean) => void;
   appendMessages: (messages: ChatMessage[]) => void;
   updateMessage: (id: string, patch: Partial<ChatMessage>) => void;
   mapMessages: (fn: (messages: ChatMessage[]) => ChatMessage[]) => void;
@@ -99,6 +102,7 @@ const initialState = {
   confirmAudio: "m4a" as AudioContainer,
   confirmSubs: "separate" as SubtitleMode,
   extracting: false,
+  getPlaylistList: false,
 };
 
 function urlsMatch(a: string, b: string): boolean {
@@ -117,6 +121,7 @@ export const useHomeChatStore = create<HomeChatState>((set) => ({
   setConfirmAudio: (confirmAudio) => set({ confirmAudio }),
   setConfirmSubs: (confirmSubs) => set({ confirmSubs }),
   setExtracting: (extracting) => set({ extracting }),
+  setGetPlaylistList: (getPlaylistList) => set({ getPlaylistList }),
 
   appendMessages: (messages) =>
     set((s) => ({ messages: [...s.messages, ...messages] })),
@@ -158,10 +163,13 @@ export function selectPendingConfirm(messages: ChatMessage[]) {
   return messages.find((m) => m.pendingConfirm && m.status === "ready");
 }
 
-/** Profile / board / multi-item extracts that need a pick list. */
+/** Profile / playlist / board / multi-item extracts that need a pick list. */
 export function isSelectableExtract(extract: ExtractPreview | null | undefined): boolean {
-  if (!extract) return false;
-  return extract.itemCount > 1 || (extract.mode !== "single" && extract.items.length > 0);
+  if (!extract?.modeSupported) return false;
+  if (extract.mode === "profile" || extract.mode === "playlist" || extract.mode === "board") {
+    return true;
+  }
+  return extract.itemCount > 1;
 }
 
 export function makeDownloadCards(

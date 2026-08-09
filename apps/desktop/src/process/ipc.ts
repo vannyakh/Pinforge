@@ -349,7 +349,13 @@ export function registerIpc(): void {
     }
   });
 
-  ipcMain.handle("media:extract", async (_e, url: string) => {
+  ipcMain.handle(
+    "media:extract",
+    async (
+      _e,
+      url: string,
+      opts?: { channelMaxVideos?: number; playlistMaxVideos?: number }
+    ) => {
     try {
       const store = getStore();
       const youtube = {
@@ -357,8 +363,8 @@ export function registerIpc(): void {
         ...store.get("youtube"),
       };
       return await extractMediaPreview(url, {
-        channelMaxVideos: youtube.channelMaxVideos,
-        playlistMaxVideos: youtube.playlistMaxVideos,
+        channelMaxVideos: opts?.channelMaxVideos ?? youtube.channelMaxVideos,
+        playlistMaxVideos: opts?.playlistMaxVideos ?? youtube.playlistMaxVideos,
       });
     } catch (err) {
       return {
