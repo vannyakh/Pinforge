@@ -4,6 +4,8 @@ Local multi-source media downloader: **Electron desktop** + **CLI**, shared `@pi
 
 Personal / local use only. Respect site terms and rate limits.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) / [AGENTS.md](AGENTS.md) for local setup conventions.
+
 ## Setup
 
 ```bash

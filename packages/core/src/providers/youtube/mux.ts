@@ -156,3 +156,31 @@ export async function remuxCopy(inputPath: string, outPath: string): Promise<voi
   }
   await runFfmpeg(bin, ["-y", "-i", inputPath, "-c", "copy", outPath]);
 }
+
+/** Remux an HLS master/media playlist to a local MP4 (stream copy when possible). */
+export async function remuxHlsToMp4(
+  m3u8Url: string,
+  outPath: string,
+  opts?: { referer?: string; userAgent?: string; headers?: Record<string, string> }
+): Promise<void> {
+  const bin = await resolveFfmpeg();
+  if (!bin) throw new Error(requireFfmpegMessage());
+  await fs.mkdir(path.dirname(outPath), { recursive: true });
+
+  const headerLines: string[] = [];
+  if (opts?.userAgent) headerLines.push(`User-Agent: ${opts.userAgent}`);
+  if (opts?.referer) headerLines.push(`Referer: ${opts.referer}`);
+  if (opts?.headers) {
+    for (const [k, v] of Object.entries(opts.headers)) {
+      if (!v) continue;
+      headerLines.push(`${k}: ${v}`);
+    }
+  }
+
+  const args = ["-y"];
+  if (headerLines.length) {
+    args.push("-headers", `${headerLines.join("\r\n")}\r\n`);
+  }
+  args.push("-i", m3u8Url, "-c", "copy", "-bsf:a", "aac_adtstoasc", outPath);
+  await runFfmpeg(bin, args);
+}

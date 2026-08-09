@@ -1,0 +1,15 @@
+node_modules
+dist
+out
+release
+coverage
+pnpm-lock.yaml
+*.min.js
+*.min.css
+apps/desktop/out
+apps/desktop/dist
+packages/core/dist
+rust/target
+.tmp-aionui
+playwright-report
+test-results

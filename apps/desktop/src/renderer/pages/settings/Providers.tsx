@@ -286,7 +286,7 @@ const ProvidersSettings: React.FC = () => {
                 value={search}
                 onChange={setSearch}
               />
-              <div className="provider-list flex flex-col gap-10px max-h-520px overflow-y-auto">
+              <div className="provider-list flex flex-col gap-10px h-auto">
                 {registryFiltered.map((item) => (
                   <div key={item.id} className="provider-row">
                     <div className="provider-row__main">

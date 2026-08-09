@@ -1030,17 +1030,19 @@ const DownloadPage: React.FC = () => {
                                 </span>
                               )}
                               <span className="home-chat__status">
-                                {msg.status === "detecting"
-                                  ? "Extracting"
-                                  : msg.status === "started"
-                                    ? "Downloading"
-                                    : msg.status === "done"
-                                      ? "Done"
-                                      : msg.status === "failed"
-                                        ? "Failed"
-                                        : extract?.modeSupported
-                                          ? "Ready"
-                                          : "Unsupported"}
+                                {msg.status === "detecting" ? (
+                                  <ShimmerText>Extracting</ShimmerText>
+                                ) : msg.status === "started" ? (
+                                  <ShimmerText>Downloading</ShimmerText>
+                                ) : msg.status === "done" ? (
+                                  "Done"
+                                ) : msg.status === "failed" ? (
+                                  "Failed"
+                                ) : extract?.modeSupported ? (
+                                  "Ready"
+                                ) : (
+                                  "Unsupported"
+                                )}
                               </span>
                             </div>
                           )}
@@ -1350,7 +1352,9 @@ function BatchPipeline({
           strokeWidth={3}
           className={`home-pipeline__chevron${open ? " is-open" : ""}`}
         />
-        <span className="home-pipeline__summary">{summary}</span>
+        <span className="home-pipeline__summary">
+          {running ? <ShimmerText>{summary}</ShimmerText> : summary}
+        </span>
       </button>
       {open ? (
         <div className="home-pipeline__body">
@@ -1492,7 +1496,13 @@ const DownloadPipeline: React.FC<{ card: ChatDownloadCard }> = ({ card }) => {
           strokeWidth={3}
           className={`home-pipeline__chevron${open ? " is-open" : ""}`}
         />
-        <span className="home-pipeline__summary">{downloadPipelineSummary(card, title)}</span>
+        <span className="home-pipeline__summary">
+          {active ? (
+            <ShimmerText>{downloadPipelineSummary(card, title)}</ShimmerText>
+          ) : (
+            downloadPipelineSummary(card, title)
+          )}
+        </span>
       </button>
       {open ? (
         <div className="home-pipeline__body">
