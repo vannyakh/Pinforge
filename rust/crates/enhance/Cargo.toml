@@ -1,0 +1,15 @@
+[package]
+name = "enhance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "High-performance image enhance pipeline for Pinforge (Rust worker)."
+
+[dependencies]
+bridge = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+image = { workspace = true }
+
+[lib]
+path = "src/lib.rs"

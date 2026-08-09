@@ -6,6 +6,8 @@ import { fetchBinary, toResolved } from "./http";
 type YtdlApi = any;
 
 let ytdlMod: YtdlApi | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let innertubeMod: any = null;
 
 async function getYtdl(): Promise<YtdlApi> {
   if (!ytdlMod) {
@@ -15,12 +17,21 @@ async function getYtdl(): Promise<YtdlApi> {
   return ytdlMod;
 }
 
-/** Public Invidious / Piped-compatible bases (best-effort; override in settings). */
+async function getInnertube() {
+  if (!innertubeMod) {
+    innertubeMod = await import("youtubei.js");
+  }
+  return innertubeMod as typeof import("youtubei.js");
+}
+
+/** Curated Piped / Invidious bases (public instances change often). */
 const DEFAULT_EXTRACTOR_INSTANCES = [
-  "https://inv.nadeko.net",
-  "https://invidious.nerdvpn.de",
-  "https://yewtu.be",
+  "https://api.piped.private.coffee",
+  "https://pipedapi.leptons.xyz",
+  "https://api.piped.yt",
   "https://pipedapi.kavin.rocks",
+  "https://pipedapi-libre.kavin.rocks",
+  "https://inv.nadeko.net",
 ];
 
 export async function extractYouTubeId(url: string): Promise<string | null> {
@@ -52,12 +63,17 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 }
 
 /**
- * YouTube via built-in JS extractor, then Invidious/Piped service fallbacks.
- * Set `extractorUrl` to force a specific service instance.
+ * YouTube via Innertube (Android client) → ytdl → Piped/Invidious.
+ * Set `extractorUrl` to force a specific service instance first.
  */
 export async function extractYouTubeViaPiped(
   url: string,
-  opts: { format?: FormatPreset; extractorUrl?: string } = {}
+  opts: {
+    format?: FormatPreset;
+    extractorUrl?: string;
+    fragmentConcurrency?: number;
+    signal?: AbortSignal;
+  } = {}
 ): Promise<ResolvedMedia> {
   const format = opts.format ?? "best";
   const id = await extractYouTubeId(url);
@@ -67,10 +83,16 @@ export async function extractYouTubeViaPiped(
 
   if (opts.extractorUrl?.trim()) {
     try {
-      return await extractViaService(id, url, format, opts.extractorUrl.trim());
+      return await extractViaService(id, url, format, opts.extractorUrl.trim(), opts);
     } catch (e) {
-      errors.push(e instanceof Error ? e.message : String(e));
+      errors.push(`custom: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  try {
+    return await extractViaInnertube(id, url, format, opts);
+  } catch (e) {
+    errors.push(`innertube: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   try {
@@ -79,19 +101,149 @@ export async function extractYouTubeViaPiped(
     errors.push(`local: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  if (!opts.extractorUrl?.trim()) {
-    for (const instance of DEFAULT_EXTRACTOR_INSTANCES) {
-      try {
-        return await extractViaService(id, url, format, instance);
-      } catch (e) {
-        errors.push(`${instance}: ${e instanceof Error ? e.message : String(e)}`);
-      }
+  const instances = await listExtractorInstances();
+  for (const instance of instances) {
+    if (opts.extractorUrl?.trim() && instance === opts.extractorUrl.trim().replace(/\/$/, "")) {
+      continue;
+    }
+    try {
+      return await extractViaService(id, url, format, instance, opts);
+    } catch (e) {
+      errors.push(`${instance}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
   throw new Error(
-    `YouTube download failed. Set a working extractor API URL in Settings → Output & format. (${errors.slice(-2).join(" · ")})`
+    `YouTube download failed. Set a working Piped/Invidious API URL in Settings → System (Extractor API). (${summarizeErrors(errors)})`
   );
+}
+
+function summarizeErrors(errors: string[]): string {
+  const preferred = errors.filter(
+    (e) => e.startsWith("innertube:") || e.startsWith("local:") || e.startsWith("custom:")
+  );
+  const pick = preferred.length ? preferred : errors;
+  return pick.slice(0, 3).join(" · ");
+}
+
+async function listExtractorInstances(): Promise<string[]> {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (u: string) => {
+    const base = u.replace(/\/$/, "");
+    if (!base || seen.has(base)) return;
+    seen.add(base);
+    out.push(base);
+  };
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch("https://piped-instances.kavin.rocks/", {
+      headers: { Accept: "application/json" },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const list = (await res.json()) as Array<{ api_url?: string; uptime_24h?: number }>;
+      list
+        .filter((i) => i.api_url && (i.uptime_24h ?? 0) > 50)
+        .sort((a, b) => (b.uptime_24h ?? 0) - (a.uptime_24h ?? 0))
+        .forEach((i) => add(i.api_url!));
+    }
+  } catch {
+    /* use curated list */
+  }
+
+  for (const u of DEFAULT_EXTRACTOR_INSTANCES) add(u);
+  return out;
+}
+
+type YtFormatLike = {
+  itag?: number;
+  url?: string;
+  mime_type?: string;
+  quality_label?: string;
+  has_video?: boolean;
+  has_audio?: boolean;
+  bitrate?: number;
+  average_bitrate?: number;
+};
+
+async function extractViaInnertube(
+  id: string,
+  sourceUrl: string,
+  format: FormatPreset,
+  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {}
+): Promise<ResolvedMedia> {
+  const { Innertube, ClientType, UniversalCache } = await getInnertube();
+  const clients = ["ANDROID", "ANDROID_VR", "IOS"] as const;
+
+  let lastError: Error | null = null;
+  for (const client of clients) {
+    try {
+      const yt = await Innertube.create({
+        cache: new UniversalCache(false),
+        client_type: ClientType[client],
+      });
+      const info = await yt.getBasicInfo(id, { client });
+      const title = info.basic_info?.title ?? id;
+      const formats: YtFormatLike[] = [
+        ...(info.streaming_data?.formats ?? []),
+        ...(info.streaming_data?.adaptive_formats ?? []),
+      ].filter((f: YtFormatLike) => Boolean(f.url));
+
+      if (!formats.length) {
+        throw new Error(`No direct stream URLs (${String(client)})`);
+      }
+
+      const pick = pickInnertubeFormat(formats, format);
+      if (!pick?.url) throw new Error("No matching format URL");
+
+      const { buffer, ext } = await fetchBinary(pick.url, {
+        referer: "https://www.youtube.com/",
+        accept: format === "audio-only" ? "audio/*,*/*;q=0.8" : "video/mp4,video/*,*/*;q=0.8",
+        concurrency: opts.fragmentConcurrency ?? 4,
+        signal: opts.signal,
+      });
+      if (!buffer.length) throw new Error("Empty download");
+
+      const outExt =
+        extFromMime(pick.mime_type) ||
+        (format === "audio-only" ? "m4a" : ext || "mp4");
+      return toResolved("youtube", sourceUrl, buffer, outExt, title, format);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+    }
+  }
+  throw lastError ?? new Error("Innertube extraction failed");
+}
+
+function pickInnertubeFormat(formats: YtFormatLike[], format: FormatPreset): YtFormatLike | undefined {
+  const bitrate = (f: YtFormatLike) => Number(f.average_bitrate ?? f.bitrate ?? 0);
+  if (format === "audio-only") {
+    const audio = formats
+      .filter((f) => f.has_audio && !f.has_video)
+      .sort((a, b) => bitrate(b) - bitrate(a));
+    if (audio[0]) return audio[0];
+    // Progressive muxed still has audio — usable fallback
+    return formats
+      .filter((f) => f.has_audio)
+      .sort((a, b) => bitrate(b) - bitrate(a))[0];
+  }
+
+  const muxed = formats
+    .filter((f) => f.has_video && f.has_audio)
+    .sort((a, b) => bitrate(b) - bitrate(a));
+  if (muxed[0]) return muxed[0];
+  return formats.find((f) => f.has_video) ?? formats[0];
+}
+
+function extFromMime(mime?: string): string | undefined {
+  if (!mime) return undefined;
+  if (/webm/i.test(mime)) return "webm";
+  if (/mp4|m4a|aac/i.test(mime)) return /audio\//i.test(mime) ? "m4a" : "mp4";
+  return undefined;
 }
 
 async function extractViaYtdl(url: string, format: FormatPreset): Promise<ResolvedMedia> {
@@ -122,10 +274,13 @@ async function extractViaYtdl(url: string, format: FormatPreset): Promise<Resolv
   }
   if (!formats.length) throw new Error("No downloadable formats");
 
-  const chosen = formats.sort(
-    (a: { bitrate?: number }, b: { bitrate?: number }) =>
-      (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0)
-  )[0]!;
+  const chosen = formats
+    .filter((f: { url?: string }) => Boolean(f.url))
+    .sort(
+      (a: { bitrate?: number }, b: { bitrate?: number }) =>
+        (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0)
+    )[0];
+  if (!chosen) throw new Error("No format with a direct URL");
 
   const stream = ytdl.downloadFromInfo(info, { format: chosen });
   const buffer = await streamToBuffer(stream);
@@ -151,45 +306,62 @@ type ServiceFormat = {
   mimeType?: string;
 };
 
+async function fetchJson(url: string): Promise<unknown> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12_000);
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": "Pinforge/0.1" },
+      signal: ctrl.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!/^\s*[{[]/.test(text)) throw new Error("Unexpected token (HTML response)");
+    return JSON.parse(text) as unknown;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function extractViaService(
   id: string,
   sourceUrl: string,
   format: FormatPreset,
-  baseUrl: string
+  baseUrl: string,
+  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {}
 ): Promise<ResolvedMedia> {
   const base = baseUrl.replace(/\/$/, "");
 
   try {
-    const res = await fetch(`${base}/api/v1/videos/${encodeURIComponent(id)}`, {
-      headers: { Accept: "application/json", "User-Agent": "Pinforge/0.1" },
-    });
-    if (res.ok) {
-      const data = (await res.json()) as {
-        title?: string;
-        formatStreams?: ServiceFormat[];
-        adaptiveFormats?: ServiceFormat[];
-      };
-      return pickAndDownload(
-        sourceUrl,
-        data.title ?? id,
-        format,
-        data.formatStreams ?? [],
-        data.adaptiveFormats ?? []
-      );
-    }
+    const data = (await fetchJson(`${base}/api/v1/videos/${encodeURIComponent(id)}`)) as {
+      title?: string;
+      formatStreams?: ServiceFormat[];
+      adaptiveFormats?: ServiceFormat[];
+      error?: string;
+    };
+    if (data.error) throw new Error(data.error);
+    return pickAndDownload(
+      sourceUrl,
+      data.title ?? id,
+      format,
+      data.formatStreams ?? [],
+      data.adaptiveFormats ?? [],
+      opts
+    );
   } catch {
     /* try Piped next */
   }
 
-  const res = await fetch(`${base}/streams/${encodeURIComponent(id)}`, {
-    headers: { Accept: "application/json", "User-Agent": "Pinforge/0.1" },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = (await res.json()) as {
+  const data = (await fetchJson(`${base}/streams/${encodeURIComponent(id)}`)) as {
     title?: string;
     videoStreams?: ServiceFormat[];
     audioStreams?: ServiceFormat[];
+    error?: string;
+    message?: string;
   };
+  if (data.error || data.message === "Error 502: Bad gateway") {
+    throw new Error(data.error || data.message || "Upstream error");
+  }
   const combined = [
     ...(data.videoStreams ?? []).map((s) => ({
       ...s,
@@ -198,7 +370,7 @@ async function extractViaService(
     })),
     ...(data.audioStreams ?? []).map((s) => ({ ...s, audioOnly: true })),
   ];
-  return pickAndDownload(sourceUrl, data.title ?? id, format, combined, []);
+  return pickAndDownload(sourceUrl, data.title ?? id, format, combined, [], opts);
 }
 
 async function pickAndDownload(
@@ -206,7 +378,8 @@ async function pickAndDownload(
   title: string,
   format: FormatPreset,
   muxed: ServiceFormat[],
-  adaptive: ServiceFormat[]
+  adaptive: ServiceFormat[],
+  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {}
 ): Promise<ResolvedMedia> {
   let pick: ServiceFormat | undefined;
 
@@ -228,6 +401,8 @@ async function pickAndDownload(
   const { buffer, ext } = await fetchBinary(pick.url, {
     referer: "https://www.youtube.com/",
     accept: format === "audio-only" ? "audio/*,*/*;q=0.8" : "video/mp4,video/*,*/*;q=0.8",
+    concurrency: opts.fragmentConcurrency ?? 4,
+    signal: opts.signal,
   });
   const outExt = pick.container || (format === "audio-only" ? "m4a" : ext || "mp4");
   return toResolved("youtube", sourceUrl, buffer, outExt, title, format);

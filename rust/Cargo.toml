@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/bridge",
+  "crates/enhance",
+  "crates/download",
+  "crates/worker",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pinforge"]
+
+[workspace.dependencies]
+bridge = { path = "crates/bridge" }
+enhance = { path = "crates/enhance" }
+download = { path = "crates/download" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+futures = "0.3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+bytes = "1"

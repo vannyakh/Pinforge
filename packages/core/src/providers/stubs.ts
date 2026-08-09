@@ -21,6 +21,7 @@ function makeStub(id: ProviderId, label: string, hosts: RegExp): MediaProvider {
     id,
     label,
     live: false,
+    modes: ["single"],
     match: (url) => {
       try {
         return hosts.test(new URL(url.trim()).hostname);

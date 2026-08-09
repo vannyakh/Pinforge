@@ -38,7 +38,8 @@ function pickPlayAddr(html: string): string | null {
  */
 export async function extractTikTok(
   url: string,
-  format: FormatPreset = "best"
+  format: FormatPreset = "best",
+  opts?: { fragmentConcurrency?: number; signal?: AbortSignal }
 ): Promise<ResolvedMedia> {
   const { html, meta } = await fetchHtmlOrPlaywrightMeta(url.trim(), {
     referer: "https://www.tiktok.com/",
@@ -61,6 +62,8 @@ export async function extractTikTok(
   const { buffer, ext } = await fetchBinary(cleanUrl(videoUrl), {
     referer: "https://www.tiktok.com/",
     accept: "video/mp4,video/*,*/*;q=0.8",
+    concurrency: opts?.fragmentConcurrency,
+    signal: opts?.signal,
   });
   const title =
     meta?.ogTitle ||

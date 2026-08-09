@@ -1,4 +1,5 @@
 import type { FormatPreset, MediaKind, ProviderId, ResolvedMedia } from "../../types";
+import { downloadToBuffer } from "../../download/fragment";
 
 export const EXTRACTOR_HEADERS: Record<string, string> = {
   "User-Agent":
@@ -26,21 +27,22 @@ export async function fetchText(url: string, headers?: Record<string, string>): 
 
 export async function fetchBinary(
   url: string,
-  opts?: { referer?: string; accept?: string }
-): Promise<{ buffer: Buffer; ext: string; contentType: string | null }> {
-  const res = await fetch(url, {
-    headers: {
-      ...EXTRACTOR_HEADERS,
-      Accept: opts?.accept ?? "*/*",
-      ...(opts?.referer ? { Referer: opts.referer } : {}),
-    },
-    redirect: "follow",
+  opts?: {
+    referer?: string;
+    accept?: string;
+    /** Parallel Range fragments for large files (default 4). */
+    concurrency?: number;
+    signal?: AbortSignal;
+  }
+): Promise<{ buffer: Buffer; ext: string; contentType: string | null; usedFragments?: boolean }> {
+  const { buffer, contentType, usedFragments } = await downloadToBuffer(url, {
+    referer: opts?.referer,
+    accept: opts?.accept ?? "*/*",
+    concurrency: opts?.concurrency ?? 4,
+    signal: opts?.signal,
   });
-  if (!res.ok) throw new Error(`Failed to download media (${res.status}): ${url}`);
-  const buffer = Buffer.from(await res.arrayBuffer());
-  const contentType = res.headers.get("content-type");
   const ext = extFromUrlOrType(url, contentType);
-  return { buffer, ext, contentType };
+  return { buffer, ext, contentType, usedFragments };
 }
 
 export function extFromUrlOrType(url: string, contentType: string | null): string {

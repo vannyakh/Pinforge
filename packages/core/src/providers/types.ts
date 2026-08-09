@@ -1,10 +1,12 @@
-import type { FormatPreset, ProviderId, ResolvedMedia } from "../types";
+import type { DownloadMode, FormatPreset, ProviderId, ResolvedMedia } from "../types";
 
 export interface ResolveContext {
   format?: FormatPreset;
   outDir?: string;
   /** Piped-compatible API base for YouTube (optional). */
   extractorUrl?: string;
+  fragmentConcurrency?: number;
+  signal?: AbortSignal;
 }
 
 export interface MediaProvider {
@@ -13,6 +15,8 @@ export interface MediaProvider {
   /** false = stub / coming soon */
   live: boolean;
   formats?: FormatPreset[];
+  /** Supported download shapes for this site. */
+  modes?: DownloadMode[];
   match: (url: string) => boolean;
   resolve: (url: string, ctx?: ResolveContext) => Promise<ResolvedMedia | ResolvedMedia[]>;
 }

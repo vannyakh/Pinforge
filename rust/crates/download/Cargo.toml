@@ -1,0 +1,18 @@
+[package]
+name = "download"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Concurrent fragment / Range download engine for Pinforge worker."
+
+[dependencies]
+bridge = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+
+[lib]
+path = "src/lib.rs"

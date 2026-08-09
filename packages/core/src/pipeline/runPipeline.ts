@@ -3,12 +3,32 @@ import { autoLevels } from "./steps/autoLevels";
 import { denoise } from "./steps/denoise";
 import { sharpen } from "./steps/sharpen";
 import { upscale } from "./steps/upscale";
+import { rustEnhance } from "../worker/rustWorker";
 
 /**
  * ONE function: buffer in → enhanced buffer out.
- * Order: auto-levels → denoise → upscale → sharpen (sharpen last so edges stay crisp).
+ * Prefers Pinforge Rust worker (OpenCut-style native crate) when built;
+ * falls back to sharp JS pipeline.
  */
 export async function runPipeline(
+  buffer: Buffer,
+  opts: PipelineOptions
+): Promise<EnhancedAsset> {
+  const presetName = opts.preset ?? "auto";
+
+  try {
+    const rust = await rustEnhance(buffer, presetName);
+    if (rust) {
+      return { buffer: rust.buffer, ext: rust.ext };
+    }
+  } catch {
+    /* fall through to sharp */
+  }
+
+  return runSharpPipeline(buffer, opts);
+}
+
+async function runSharpPipeline(
   buffer: Buffer,
   opts: PipelineOptions
 ): Promise<EnhancedAsset> {

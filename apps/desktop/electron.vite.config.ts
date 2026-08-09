@@ -15,6 +15,7 @@ const MAIN_EXTERNALS = [
   "playwright",
   "playwright-core",
   "@distube/ytdl-core",
+  "youtubei.js",
   "undici",
   "electron-store",
   "conf",

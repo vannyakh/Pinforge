@@ -16,6 +16,9 @@ export {
 } from "./providers";
 export type { PageMeta, ScrapeMetaOptions } from "./providers";
 export { runPipeline } from "./pipeline/runPipeline";
+export { mapPool, runPool, downloadToFile, downloadToBuffer } from "./download";
+export type { FragmentDownloadOptions, FragmentDownloadResult, MapPoolOptions } from "./download";
+export { resolveWorkerBinary, rustPing, rustEnhance, rustDownload } from "./worker/rustWorker";
 export { PRESETS } from "./types";
 export type {
   PresetName,
@@ -28,6 +31,7 @@ export type {
   ProviderId,
   MediaKind,
   FormatPreset,
+  DownloadMode,
   DownloadResult,
   ResolvedMedia,
   ProviderInfo,

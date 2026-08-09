@@ -20,6 +20,9 @@ export type ProviderId =
 
 export type FormatPreset = "best" | "mp4" | "audio-only";
 
+/** What kinds of URLs / jobs a provider can handle. */
+export type DownloadMode = "single" | "board" | "profile" | "playlist" | "story";
+
 export interface ProcessOptions {
   preset: PresetName;
   outDir: string;
@@ -29,6 +32,11 @@ export interface ProcessOptions {
   format?: FormatPreset;
   /** Piped-compatible extractor API base (YouTube). */
   extractorUrl?: string;
+  /** Concurrent item downloads for boards/batches (default 3). */
+  itemConcurrency?: number;
+  /** Parallel Range fragments per file (default 4). */
+  fragmentConcurrency?: number;
+  signal?: AbortSignal;
 }
 
 export interface PinAsset {
@@ -89,6 +97,8 @@ export interface ProviderInfo {
   label: string;
   status: "live" | "stub";
   formats?: FormatPreset[];
+  /** Supported download modes (single media, board, profile, …). */
+  modes?: DownloadMode[];
 }
 
 export const PRESETS: Record<

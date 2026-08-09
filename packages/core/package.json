@@ -12,12 +12,15 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "smoke": "tsx scripts/smoke.mts",
-    "playwright:install": "playwright install chromium"
+    "playwright:install": "playwright install chromium",
+    "worker:build": "cargo build -p pinforge-worker --release --manifest-path ../../rust/Cargo.toml",
+    "worker:ping": "cargo run -p pinforge-worker --manifest-path ../../rust/Cargo.toml -- ping"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
     "playwright": "^1.62.1",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "youtubei.js": "17.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -12,7 +12,8 @@ function cleanUrl(raw: string): string {
  */
 export async function extractInstagram(
   url: string,
-  format: FormatPreset = "best"
+  format: FormatPreset = "best",
+  opts?: { fragmentConcurrency?: number; signal?: AbortSignal }
 ): Promise<ResolvedMedia> {
   const pageUrl = url.trim().split("?")[0]!.replace(/\/$/, "") + "/";
   const { html, meta } = await fetchHtmlOrPlaywrightMeta(pageUrl, {
@@ -50,6 +51,8 @@ export async function extractInstagram(
       const { buffer, ext } = await fetchBinary(cleanUrl(ogImage), {
         referer: "https://www.instagram.com/",
         accept: "image/*,*/*;q=0.8",
+        concurrency: opts?.fragmentConcurrency,
+        signal: opts?.signal,
       });
       return toResolved("instagram", url, buffer, ext, title, format);
     }
@@ -61,6 +64,8 @@ export async function extractInstagram(
   const { buffer, ext } = await fetchBinary(videoUrl, {
     referer: "https://www.instagram.com/",
     accept: "video/mp4,video/*,*/*;q=0.8",
+    concurrency: opts?.fragmentConcurrency,
+    signal: opts?.signal,
   });
   return toResolved("instagram", url, buffer, ext || "mp4", title, format);
 }

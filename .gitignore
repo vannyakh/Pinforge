@@ -13,3 +13,4 @@ Thumbs.db
 apps/desktop/dist
 apps/desktop/out
 packages/core/dist
+rust/target

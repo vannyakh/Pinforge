@@ -203,10 +203,11 @@ const SystemSettings: React.FC = () => {
         <div className="py-14px">
           <div className="text-14px text-t-primary mb-4px">Extractor API (optional)</div>
           <div className="text-12px text-t-tertiary mb-8px">
-            Piped-compatible base URL for YouTube. Leave empty for the built-in extractor.
+            Optional Piped/Invidious API base for YouTube fallbacks. Leave empty to use the built-in
+            extractor first.
           </div>
           <Input
-            placeholder="https://piped.example.com"
+            placeholder="https://api.piped.example.com"
             value={settings.extractorUrl}
             onChange={(v) => updateSettings({ extractorUrl: v })}
           />

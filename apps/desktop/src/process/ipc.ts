@@ -143,6 +143,8 @@ async function runProcess(
       format,
       extractorUrl,
       delayMs: store.get("delayMs"),
+      itemConcurrency: 3,
+      fragmentConcurrency: 4,
       onProgress: (info) => {
         emitProgress(e, {
           packId,

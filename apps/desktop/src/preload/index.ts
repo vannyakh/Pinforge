@@ -65,6 +65,7 @@ export interface ProviderInfo {
   label: string;
   status: "live" | "stub";
   formats?: FormatPreset[];
+  modes?: Array<"single" | "board" | "profile" | "playlist" | "story">;
 }
 
 export interface DetectedProvider {

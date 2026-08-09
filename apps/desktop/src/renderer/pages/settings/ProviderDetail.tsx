@@ -481,10 +481,10 @@ const ProviderDetailPage: React.FC = () => {
         {showExtractor && (
           <FieldRow
             label="Extractor API"
-            hint="Piped-compatible base URL. Leave empty for the built-in default."
+            hint="Piped/Invidious base URL used as fallback. Leave empty for the built-in extractor."
           >
             <Input
-              placeholder="https://piped.example.com"
+              placeholder="https://api.piped.example.com"
               value={form.extractorUrl}
               onChange={(v) => setForm((f) => (f ? { ...f, extractorUrl: v } : f))}
             />

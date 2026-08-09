@@ -17,6 +17,7 @@ import {
   type MediaProvider,
 } from "./providers";
 import { sanitizeFilename, sleep } from "./utils";
+import { mapPool } from "./download/pool";
 
 export interface ProcessBoardOptions extends ProcessOptions {
   onProgress?: (info: {
@@ -72,14 +73,21 @@ async function writeResolved(
   };
 }
 
+type ItemOutcome =
+  | { ok: true; index: number; result: ProcessResult; url: string }
+  | { ok: false; index: number; error: string; url: string };
+
 /**
  * Detect provider → resolve → save (enhance images when enabled).
+ * Batch / board items run with limited concurrency; each file may use
+ * multi-fragment Range downloads.
  */
 export async function processMedia(
   url: string,
   opts: ProcessBoardOptions
 ): Promise<DownloadResult> {
   const provider = detectProvider(url);
+  const itemConcurrency = Math.max(1, opts.itemConcurrency ?? 3);
 
   if (provider.id === "pinterest" && isBoardUrl(url)) {
     return processPinterestBoard(url, opts, provider.id);
@@ -89,33 +97,40 @@ export async function processMedia(
     format: opts.format,
     outDir: opts.outDir,
     extractorUrl: opts.extractorUrl,
+    fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+    signal: opts.signal,
   });
 
   const list = Array.isArray(resolved) ? resolved : [resolved];
-  const results: ProcessResult[] = [];
-  const errors: { url: string; error: string }[] = [];
-
-  for (let i = 0; i < list.length; i++) {
-    const item = list[i]!;
+  const outcomes = await mapPool(list, itemConcurrency, async (item, i) => {
     try {
       const result = await writeResolved(item, opts);
-      results.push(result);
+      const outcome: ItemOutcome = { ok: true, index: i, result, url: item.sourceUrl };
       opts.onProgress?.({
         current: i + 1,
         total: list.length,
         url: item.sourceUrl,
         result,
       });
+      return outcome;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      errors.push({ url: item.sourceUrl, error: message });
+      const outcome: ItemOutcome = { ok: false, index: i, error: message, url: item.sourceUrl };
       opts.onProgress?.({
         current: i + 1,
         total: list.length,
         url: item.sourceUrl,
         error: message,
       });
+      return outcome;
     }
+  });
+
+  const results: ProcessResult[] = [];
+  const errors: { url: string; error: string }[] = [];
+  for (const o of outcomes) {
+    if (o.ok) results.push(o.result);
+    else errors.push({ url: o.url, error: o.error });
   }
 
   return {
@@ -132,16 +147,14 @@ async function processPinterestBoard(
   providerId: ProviderId
 ): Promise<DownloadResult> {
   const { pinUrls, boardName } = await resolveBoard(url);
-  const delayMs = opts.delayMs ?? 1500;
+  const delayMs = opts.delayMs ?? 400;
+  const itemConcurrency = Math.max(1, opts.itemConcurrency ?? 3);
   const outDir = boardName
     ? path.join(opts.outDir, sanitizeFilename(boardName))
     : opts.outDir;
 
-  const results: ProcessResult[] = [];
-  const errors: { url: string; error: string }[] = [];
-
-  for (let i = 0; i < pinUrls.length; i++) {
-    const pinUrl = pinUrls[i]!;
+  const outcomes = await mapPool(pinUrls, itemConcurrency, async (pinUrl, i) => {
+    if (i > 0 && delayMs > 0) await sleep(Math.min(delayMs, 250));
     try {
       const asset = await resolvePin(pinUrl);
       const result = await writeResolved(
@@ -155,24 +168,30 @@ async function processPinterestBoard(
         },
         { ...opts, outDir }
       );
-      results.push(result);
       opts.onProgress?.({
         current: i + 1,
         total: pinUrls.length,
         url: pinUrl,
         result,
       });
+      return { ok: true as const, index: i, result, url: pinUrl };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      errors.push({ url: pinUrl, error: message });
       opts.onProgress?.({
         current: i + 1,
         total: pinUrls.length,
         url: pinUrl,
         error: message,
       });
+      return { ok: false as const, index: i, error: message, url: pinUrl };
     }
-    if (i < pinUrls.length - 1) await sleep(delayMs);
+  });
+
+  const results: ProcessResult[] = [];
+  const errors: { url: string; error: string }[] = [];
+  for (const o of outcomes) {
+    if (o.ok) results.push(o.result);
+    else errors.push({ url: o.url, error: o.error });
   }
 
   return { results, errors, provider: providerId, kind: "batch" };

@@ -10,6 +10,7 @@ export const pinterestProvider: MediaProvider = {
   label: "Pinterest",
   live: true,
   formats: ["best"],
+  modes: ["single", "board"],
   match: (url) => isPinterestUrl(url),
   async resolve(url: string): Promise<ResolvedMedia | ResolvedMedia[]> {
     if (isBoardUrl(url)) {

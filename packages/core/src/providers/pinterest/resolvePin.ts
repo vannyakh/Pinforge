@@ -1,4 +1,5 @@
 import type { PinAsset } from "../../types";
+import { downloadToBuffer } from "../../download/fragment";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -167,22 +168,16 @@ async function downloadBinary(
   mediaUrl: string,
   accept: string
 ): Promise<{ buffer: Buffer; ext: string }> {
-  const res = await fetch(mediaUrl, {
+  const { buffer, contentType } = await downloadToBuffer(mediaUrl, {
+    accept,
+    referer: "https://www.pinterest.com/",
+    concurrency: 4,
     headers: {
-      ...FETCH_HEADERS,
-      Accept: accept,
-      Referer: "https://www.pinterest.com/",
+      "User-Agent": USER_AGENT,
+      "Accept-Language": "en-US,en;q=0.9",
     },
-    redirect: "follow",
   });
-
-  if (!res.ok) {
-    throw new Error(`Failed to download media (${res.status}): ${mediaUrl}`);
-  }
-
-  const ab = await res.arrayBuffer();
-  const buffer = Buffer.from(ab);
-  const ext = extFromContentType(res.headers.get("content-type"), mediaUrl);
+  const ext = extFromContentType(contentType, mediaUrl);
   return { buffer, ext };
 }
 

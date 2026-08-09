@@ -1,0 +1,13 @@
+[package]
+name = "bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "OpenCut-style shared surface markers for Pinforge Rust crates."
+
+[features]
+default = []
+wasm = []
+
+[lib]
+path = "src/lib.rs"

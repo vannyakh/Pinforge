@@ -16,6 +16,7 @@ export function listProviders(): ProviderInfo[] {
     label: p.label,
     status: p.live ? "live" : "stub",
     formats: p.formats,
+    modes: p.modes,
   }));
 }
 
