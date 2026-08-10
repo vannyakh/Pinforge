@@ -1,8 +1,16 @@
+<div align="center">
+
+<img src="resources/icon.png" alt="Pinforge" width="128" height="128" />
+
 # Pinforge
 
-Local multi-source media downloader: **Electron desktop** + **CLI**, shared `@pinterest-desktop/core`.
+Local multi-source media downloader — **Electron desktop** + **CLI**, shared `@pinterest-desktop/core`.
 
 Personal / local use only. Respect site terms and rate limits.
+
+[Setup](#setup) · [Providers](#providers) · [CLI](#cli) · [Contributing](CONTRIBUTING.md)
+
+</div>
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) / [AGENTS.md](AGENTS.md) for local setup conventions.
 
@@ -43,6 +51,7 @@ Root shortcut: `pnpm cli -- providers`
 apps/desktop/     Electron (AionUi-style shell + settings sidebar)
 apps/cli/         pinforge CLI
 packages/core/    provider registry + extractors + processMedia + enhance
+resources/        App icon and shared assets
 ```
 
 ## Scripts

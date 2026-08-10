@@ -82,6 +82,21 @@ export type {
 export { resolveWorkerBinary, rustPing, rustEnhance, rustDownload } from "./worker/rustWorker";
 export { configureFfmpeg, clearFfmpegCache, resolveFfmpeg } from "./providers/youtube/mux";
 export {
+  configureYtdlp,
+  clearYtdlpCache,
+  resolveYtdlp,
+  requireYtdlpMessage,
+  previewYtdlp,
+  resolveYtdlpMedia,
+} from "./providers/ytdlp";
+export {
+  youtubeQualityChoices,
+  fragmentConcurrencyForQuality,
+  qualityCap,
+  qualityFromFormat,
+} from "./providers/youtube/formats";
+export { muxAvCopyArgs, muxAvRemuxArgs } from "./providers/youtube/muxArgs";
+export {
   configurePinterestCookies,
   getPinterestCookieHeader,
 } from "./providers/pinterest/session";

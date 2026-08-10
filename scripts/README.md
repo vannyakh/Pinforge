@@ -68,8 +68,25 @@ pnpm --filter @pinterest-desktop/core exec playwright install chromium
 
 Add `apps/desktop/resources/icon.png` (and `.ico` / `.icns` if desired) before shipping branded installers. Builds work without custom icons (Electron default).
 
+## CI / Release
+
+| Workflow | Trigger | What it does |
+| -------- | ------- | ------------ |
+| `.github/workflows/release.yml` | Push tag `v*` (or manual dispatch) | Cross-platform build (Windows x64, macOS arm64/x64, Linux x64) → draft Release → upload assets + `SHA256SUMS.txt` → publish |
+| `.github/workflows/build-manual.yml` | `workflow_dispatch` | Same platform matrix; uploads Actions artifacts only (no GitHub Release) |
+
+Release checklist:
+
+1. Set `apps/desktop/package.json` `"version"` to the release version (e.g. `0.1.0`).
+2. Commit and push to the default branch.
+3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`
+4. Watch **Release** workflow; GitHub Release is published when all platform jobs finish.
+
+Optional signing / notarization secrets (macOS): `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (and code-sign certs if configured). Unsigned CI builds set `CSC_IDENTITY_AUTO_DISCOVERY=false`.
+
 ## Related
 
 - `apps/desktop/electron-builder.yml`
 - `apps/desktop/electron.vite.config.ts`
 - `.github/workflows/release.yml`
+- `.github/workflows/build-manual.yml`

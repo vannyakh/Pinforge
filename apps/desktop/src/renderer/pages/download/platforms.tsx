@@ -5,7 +5,8 @@ export type PlatformId =
   | "youtube"
   | "instagram"
   | "tiktok"
-  | "facebook";
+  | "facebook"
+  | "ytdlp";
 
 export interface PlatformDef {
   id: PlatformId;
@@ -51,6 +52,13 @@ export const PLATFORMS: PlatformDef[] = [
     accent: "#1877F2",
     tint: "rgba(24, 119, 242, 0.14)",
   },
+  {
+    id: "ytdlp",
+    label: "yt-dlp",
+    live: true,
+    accent: "#F59E0B",
+    tint: "rgba(245, 158, 11, 0.14)",
+  },
 ];
 
 export const PlatformIcon: React.FC<{ id: PlatformId; size?: number }> = ({
@@ -87,6 +95,12 @@ export const PlatformIcon: React.FC<{ id: PlatformId; size?: number }> = ({
       return (
         <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
           <path d="M22 12.1C22 6.5 17.5 2 11.9 2S2 6.5 2 12.1c0 5 3.7 9.1 8.4 9.9v-7H7.9v-2.9h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.5v1.8h2.8l-.4 2.9h-2.3v7c4.7-.8 8.4-4.9 8.4-9.9z" />
+        </svg>
+      );
+    case "ytdlp":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <path d="M12 3a1 1 0 0 1 1 1v9.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L11 13.6V4a1 1 0 0 1 1-1zM5 18a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z" />
         </svg>
       );
     default:

@@ -43,6 +43,25 @@ import {
   type SubtitleMode,
 } from "@renderer/api";
 
+/**
+ * Min table content width (column mins + sticky left/right).
+ * Must stay ≥ sum of column widths or Arco crushes cols instead of scrolling.
+ */
+const TASKS_TABLE_MIN_X =
+  44 + // No.
+  40 + // check
+  240 + // Task min
+  100 + // Source
+  112 + // Prog
+  96 + // Downloaded
+  96 + // Estimate
+  88 + // Status
+  72 + // Files
+  80 + // Preset
+  100 + // Updated
+  88; // Actions
+  // = 1156
+
 const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
 
 function extractUrls(text: string): string[] {
@@ -345,6 +364,7 @@ const TasksPage: React.FC = () => {
   } = useApp();
   const cardRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(360);
+  const [scrollX, setScrollX] = useState(TASKS_TABLE_MIN_X);
   const [selectedKeys, setSelectedKeys] = useState<(string | number)[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<(string | number)[]>([]);
   const [addOpen, setAddOpen] = useState(false);
@@ -503,7 +523,14 @@ const TasksPage: React.FC = () => {
     if (!el) return;
     const measure = () => {
       const batchBar = selectedKeys.length > 0 ? 44 : 0;
-      setScrollY(Math.max(180, el.clientHeight - 48 - batchBar));
+      const height = Math.max(180, el.clientHeight - 48 - batchBar);
+      // scroll.x must be the CONTENT width, never squeezed to the card width —
+      // otherwise fixed-layout columns collapse and Actions clips with no scrollbar.
+      const contentX = Math.max(TASKS_TABLE_MIN_X, Math.floor(el.clientWidth));
+      setScrollY(height);
+      setScrollX(contentX);
+      el.style.setProperty("--tasks-table-min-width", `${TASKS_TABLE_MIN_X}px`);
+      el.style.setProperty("--tasks-table-scroll-x", `${contentX}px`);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -1248,8 +1275,8 @@ const TasksPage: React.FC = () => {
     {
       title: "Task",
       dataIndex: "url",
-      // Flexible column — fills remaining width for a clean full-width table
-      width: 280,
+      // Flexible within scroll.x; CSS enforces min-width so content stays readable
+      width: 240,
       sorter: true,
       ellipsis: true,
       className: "tasks-table__col-task",
@@ -1328,8 +1355,9 @@ const TasksPage: React.FC = () => {
     {
       title: "Source",
       dataIndex: "provider",
-      width: 120,
+      width: 100,
       sorter: true,
+      ellipsis: true,
       render: (_col, row) => {
         if (row.isChild) {
           return (
@@ -1349,7 +1377,7 @@ const TasksPage: React.FC = () => {
     {
       title: "Prog.",
       dataIndex: "percent",
-      width: 140,
+      width: 112,
       sorter: true,
       render: (_col, row) => (
         <div className="tasks-table__prog">
@@ -1359,7 +1387,7 @@ const TasksPage: React.FC = () => {
             showText={false}
             status={row.status === "failed" ? "error" : undefined}
           />
-          <div className="text-11px text-t-secondary mt-2px tabular-nums">
+          <div className="text-11px text-t-secondary mt-2px tabular-nums truncate">
             {row.isChild
               ? `${row.percent}%`
               : row.status === "running"
@@ -1376,7 +1404,7 @@ const TasksPage: React.FC = () => {
     {
       title: "Downloaded",
       dataIndex: "downloadedBytes",
-      width: 110,
+      width: 96,
       sorter: true,
       render: (_col, row) => (
         <div className="tasks-table__size leading-tight">
@@ -1398,7 +1426,7 @@ const TasksPage: React.FC = () => {
     {
       title: "Estimate",
       dataIndex: "estimateBytes",
-      width: 110,
+      width: 96,
       sorter: true,
       render: (_col, row) => (
         <div className="tasks-table__size leading-tight">
@@ -1420,7 +1448,7 @@ const TasksPage: React.FC = () => {
     {
       title: "Status",
       dataIndex: "status",
-      width: 100,
+      width: 88,
       align: "center",
       sorter: true,
       render: (_col, row) => (
@@ -1432,7 +1460,7 @@ const TasksPage: React.FC = () => {
     {
       title: "Files",
       dataIndex: "files",
-      width: 88,
+      width: 72,
       align: "center",
       sorter: true,
       render: (_col, row) =>
@@ -1454,7 +1482,8 @@ const TasksPage: React.FC = () => {
     {
       title: "Preset",
       dataIndex: "preset",
-      width: 100,
+      width: 80,
+      ellipsis: true,
       render: (_col, row) =>
         row.isChild ? (
           <span className="text-12px text-t-tertiary">—</span>
@@ -1467,7 +1496,7 @@ const TasksPage: React.FC = () => {
     {
       title: "Updated",
       dataIndex: "updatedAt",
-      width: 120,
+      width: 100,
       sorter: true,
       defaultSortOrder: "descend",
       render: (_col, row) => {
@@ -1801,7 +1830,7 @@ const TasksPage: React.FC = () => {
           border={false}
           hover
           tableLayoutFixed
-          scroll={{ x: 1348, y: scrollY }}
+          scroll={{ x: scrollX, y: scrollY }}
           onRow={onRow}
           childrenColumnName="children"
           indentSize={0}

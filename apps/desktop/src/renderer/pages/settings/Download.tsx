@@ -1,7 +1,7 @@
 import React from "react";
 import { Input, InputNumber, Select, Switch } from "@arco-design/web-react";
 import { useApp } from "@renderer/hooks/context/AppContext";
-import type { FormatPreset, PresetName } from "@renderer/api";
+import type { FormatPreset, PresetName, YoutubeQuality } from "@renderer/api";
 
 const Row: React.FC<{
   title: string;
@@ -111,6 +111,27 @@ const DownloadSettings: React.FC = () => {
             <Select.Option value="best">best</Select.Option>
             <Select.Option value="mp4">mp4</Select.Option>
             <Select.Option value="audio-only">audio-only</Select.Option>
+          </Select>
+        </div>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">YouTube quality</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            Default max height for YouTube downloads (Best = highest available).
+          </div>
+          <Select
+            className="w-full"
+            value={settings.youtube?.quality ?? "best"}
+            onChange={(v) =>
+              void updateSettings({ youtube: { quality: v as YoutubeQuality } })
+            }
+          >
+            {(
+              ["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]
+            ).map((q) => (
+              <Select.Option key={q} value={q}>
+                {q === "best" ? "Best" : `${q}p`}
+              </Select.Option>
+            ))}
           </Select>
         </div>
         <div className="py-14px border-b border-b-base">

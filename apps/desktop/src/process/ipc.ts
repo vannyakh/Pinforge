@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from "electron";
+import { app, ipcMain, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import {
   listProviders,
   extractMediaPreview,
@@ -7,6 +7,8 @@ import {
   DEFAULT_YOUTUBE_OPTIONS,
   DEFAULT_PINTEREST_OPTIONS,
   configurePinterestCookies,
+  configureFfmpeg,
+  configureYtdlp,
   zipFolder,
   jobStatusToPackStatus,
   type PresetName,
@@ -46,6 +48,14 @@ import {
 } from "./providerResolve";
 import { PROVIDER_REGISTRY } from "../common/providers/types";
 import { getFfmpegStatus, installFfmpeg, resolveConfiguredFfmpeg } from "./ffmpegInstall";
+import { getYtdlpStatus, installYtdlp, resolveConfiguredYtdlp } from "./ytdlpInstall";
+import { getPlaywrightStatus, installPlaywrightChromium } from "./playwrightInstall";
+import {
+  completeEnvironmentSetup,
+  getEnvironmentSetupStatus,
+  runEnvironmentSetup,
+} from "./environmentSetup";
+import { enterInstallerWindow, exitInstallerWindow } from "./windowInstaller";
 import {
   checkForUpdates,
   downloadUpdate,
@@ -210,8 +220,8 @@ async function runProcess(
   await core.init();
 
   try {
-    const { configureFfmpeg } = await import("@pinterest-desktop/core");
     const ffPath = await resolveConfiguredFfmpeg();
+    const ytdlpPath = await resolveConfiguredYtdlp();
     const system = store.get("system");
     configureFfmpeg({
       path: ffPath ?? system.ffmpegPath ?? undefined,
@@ -220,6 +230,14 @@ async function runProcess(
     core.tools.configureFfmpeg({
       path: ffPath ?? system.ffmpegPath ?? undefined,
       enabled: Boolean(system.ffmpegEnabled) && Boolean(ffPath),
+    });
+    configureYtdlp({
+      path: ytdlpPath ?? system.ytdlpPath ?? undefined,
+      enabled: Boolean(system.ytdlpEnabled) && Boolean(ytdlpPath),
+    });
+    core.tools.configureYtdlp({
+      path: ytdlpPath ?? system.ytdlpPath ?? undefined,
+      enabled: Boolean(system.ytdlpEnabled) && Boolean(ytdlpPath),
     });
 
     const progressStartedAt = Date.now();
@@ -580,6 +598,12 @@ export function registerIpc(): void {
         ...store.get("pinterest"),
       };
       configurePinterestCookies(pinterest.cookies);
+      const system = store.get("system");
+      const ytdlpPath = await resolveConfiguredYtdlp();
+      configureYtdlp({
+        path: ytdlpPath ?? system.ytdlpPath ?? undefined,
+        enabled: Boolean(system.ytdlpEnabled) && Boolean(ytdlpPath),
+      });
       return await extractMediaPreview(url, {
         channelMaxVideos: opts?.channelMaxVideos ?? youtube.channelMaxVideos,
         playlistMaxVideos: opts?.playlistMaxVideos ?? youtube.playlistMaxVideos,
@@ -648,6 +672,11 @@ export function registerIpc(): void {
     if (res.canceled || !res.filePaths[0]) return null;
     return res.filePaths[0];
   });
+
+  ipcMain.handle("app:getInfo", () => ({
+    version: app.getVersion(),
+    isPackaged: app.isPackaged,
+  }));
 
   ipcMain.handle("settings:get", async () => {
     const store = getStore();
@@ -738,6 +767,13 @@ export function registerIpc(): void {
           const check = await getFfmpegStatus();
           if (!check.available) {
             next.ffmpegEnabled = false;
+            store.set("system", next);
+          }
+        }
+        if (next.ytdlpEnabled) {
+          const check = await getYtdlpStatus();
+          if (!check.available) {
+            next.ytdlpEnabled = false;
             store.set("system", next);
           }
         }
@@ -1153,6 +1189,14 @@ export function registerIpc(): void {
     return BrowserWindow.fromWebContents(e.sender)?.isMaximized() ?? false;
   });
 
+  ipcMain.handle("window:setInstallerMode", (e, active: boolean) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return { ok: false };
+    if (active) enterInstallerWindow(win);
+    else exitInstallerWindow(win);
+    return { ok: true };
+  });
+
   ipcMain.handle("tools:ffmpegStatus", async () => getFfmpegStatus());
 
   ipcMain.handle("tools:ffmpegInstall", async (e) => {
@@ -1182,6 +1226,67 @@ export function registerIpc(): void {
     const status = await getFfmpegStatus();
     return status;
   });
+
+  ipcMain.handle("tools:ytdlpStatus", async () => getYtdlpStatus());
+
+  ipcMain.handle("tools:ytdlpInstall", async (e) => {
+    const send = (payload: {
+      phase: string;
+      percent: number;
+      message: string;
+    }) => {
+      e.sender.send("tools:ytdlpProgress", payload);
+    };
+    return installYtdlp((ev) => send(ev));
+  });
+
+  ipcMain.handle("tools:ytdlpPick", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters:
+        process.platform === "win32"
+          ? [{ name: "yt-dlp", extensions: ["exe"] }]
+          : [{ name: "yt-dlp", extensions: ["*"] }],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const bin = res.filePaths[0];
+    const store = getStore();
+    const system = store.get("system");
+    store.set("system", { ...system, ytdlpPath: bin, ytdlpEnabled: true });
+    return getYtdlpStatus();
+  });
+
+  ipcMain.handle("tools:playwrightStatus", async () => getPlaywrightStatus());
+
+  ipcMain.handle("tools:playwrightInstall", async (e) => {
+    const send = (payload: {
+      phase: string;
+      percent: number;
+      message: string;
+    }) => {
+      e.sender.send("tools:playwrightProgress", payload);
+    };
+    return installPlaywrightChromium((ev) => send(ev));
+  });
+
+  ipcMain.handle("tools:environmentSetupStatus", async () => getEnvironmentSetupStatus());
+
+  ipcMain.handle("tools:environmentSetupStart", async (e) => {
+    const send = (payload: {
+      step: string;
+      stepIndex: number;
+      stepCount: number;
+      phase: string;
+      percent: number;
+      message: string;
+      toolAvailable?: boolean;
+    }) => {
+      e.sender.send("tools:environmentSetupProgress", payload);
+    };
+    return runEnvironmentSetup((ev) => send(ev));
+  });
+
+  ipcMain.handle("tools:environmentSetupComplete", async () => completeEnvironmentSetup());
 
   ipcMain.handle("update:getStatus", () => getUpdateStatus());
   ipcMain.handle(

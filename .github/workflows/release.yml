@@ -4,57 +4,242 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build (e.g. v0.1.0). Leave empty to use the push tag."
+        required: false
+        type: string
+      prerelease:
+        description: Mark GitHub Release as prerelease
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "9"
+
 jobs:
-  release:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Resolve tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.tag }}" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag must look like v1.2.3 (got: $TAG)"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          PRERELEASE="false"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.prerelease }}" == "true" ]]; then
+            PRERELEASE="true"
+          elif [[ "$VERSION" == *-* ]]; then
+            PRERELEASE="true"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Release tag=$TAG version=$VERSION prerelease=$PRERELEASE"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - name: Verify package version matches tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_VERSION="$(node -p "require('./apps/desktop/package.json').version")"
+          EXPECTED="${{ steps.meta.outputs.version }}"
+          if [[ "$PKG_VERSION" != "$EXPECTED" ]]; then
+            echo "::error::apps/desktop/package.json version ($PKG_VERSION) does not match tag v$EXPECTED"
+            echo "Bump the desktop package version before tagging."
+            exit 1
+          fi
+          echo "Version OK: $PKG_VERSION"
+
+      - name: Create draft GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(--draft --generate-notes --title "$TAG" --verify-tag)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            ARGS+=(--prerelease)
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — keeping it draft until publish."
+            gh release edit "$TAG" --draft=true ${PRERELEASE:+--prerelease}
+          else
+            gh release create "$TAG" "${ARGS[@]}"
+          fi
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            dist_args: auto --win
-          - os: macos-latest
-            dist_args: auto --mac
-          - os: ubuntu-latest
-            dist_args: auto --linux
+          - platform: windows-x64
+            os: windows-latest
+            args: x64 --win --x64
+          - platform: macos-arm64
+            os: macos-14
+            args: arm64 --mac --arm64
+          - platform: macos-x64
+            os: macos-14
+            args: x64 --mac --x64
+          - platform: linux-x64
+            os: ubuntu-latest
+            args: x64 --linux --x64
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfuse2 \
+            rpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @pinterest-desktop/core exec playwright install chromium
+        run: pnpm --filter @pinterest-desktop/core exec playwright install --with-deps chromium
 
       - name: Build distributables
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
-        run: node scripts/build-with-builder.js ${{ matrix.dist_args }}
+          # Unsigned CI builds unless Apple / Windows signing secrets are configured.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/build-with-builder.js ${{ matrix.args }}
 
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+      - name: Collect release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-out
+          shopt -s nullglob
+          for f in \
+            apps/desktop/release/*.exe \
+            apps/desktop/release/*.dmg \
+            apps/desktop/release/*.zip \
+            apps/desktop/release/*.AppImage \
+            apps/desktop/release/*.yml \
+            apps/desktop/release/*.blockmap \
+            apps/desktop/release/*.deb \
+            apps/desktop/release/*.rpm
+          do
+            # Skip unpacked dirs / builder junk accidentally matched
+            [[ -f "$f" ]] || continue
+            cp -a "$f" dist-out/
+          done
+          ls -lah dist-out || true
+          if [[ -z "$(ls -A dist-out 2>/dev/null || true)" ]]; then
+            echo "::error::No release artifacts found for ${{ matrix.platform }}"
+            ls -lah apps/desktop/release || true
+            exit 1
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            apps/desktop/release/*.exe
-            apps/desktop/release/*.dmg
-            apps/desktop/release/*.zip
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.yml
-            apps/desktop/release/*.blockmap
-          fail_on_unmatched_files: false
+          name: pinforge-${{ matrix.platform }}
+          path: dist-out/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: pinforge-*
+          merge-multiple: true
+
+      - name: List assets + checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          ls -lah
+          if command -v sha256sum >/dev/null; then
+            sha256sum * > SHA256SUMS.txt
+          else
+            shasum -a 256 * > SHA256SUMS.txt
+          fi
+          cat SHA256SUMS.txt
+
+      - name: Upload assets and publish release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          FILES=(release-assets/*)
+          if [[ ${#FILES[@]} -eq 0 ]]; then
+            echo "::error::No assets to upload"
+            exit 1
+          fi
+          gh release upload "$TAG" "${FILES[@]}" --clobber
+          EDIT_ARGS=(--draft=false)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            EDIT_ARGS+=(--prerelease)
+          else
+            EDIT_ARGS+=(--prerelease=false)
+          fi
+          gh release edit "$TAG" "${EDIT_ARGS[@]}"
+          echo "Published https://github.com/${{ github.repository }}/releases/tag/${TAG}"

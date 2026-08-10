@@ -23,4 +23,15 @@ if (root) {
       </ConfigProvider>
     </React.StrictMode>
   );
+
+  // Tell main the stylesheet modules + React tree are mounted before showing.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        window.api?.rendererReady?.();
+      } catch {
+        /* preload may not expose yet in tests */
+      }
+    });
+  });
 }

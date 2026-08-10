@@ -59,6 +59,12 @@ export interface SystemConfig {
   ffmpegPath: string;
   /** When true and available, YouTube mux/convert/tag tools use ffmpeg. */
   ffmpegEnabled: boolean;
+  /** Absolute path to yt-dlp binary (optional). */
+  ytdlpPath: string;
+  /** When true and available, catch-all yt-dlp provider can download. */
+  ytdlpEnabled: boolean;
+  /** First-run CapCut-style environment setup completed (or skipped). */
+  environmentSetupDone: boolean;
 }
 
 export const DEFAULT_SYSTEM: SystemConfig = {
@@ -72,6 +78,9 @@ export const DEFAULT_SYSTEM: SystemConfig = {
   logDir: "",
   ffmpegPath: "",
   ffmpegEnabled: false,
+  ytdlpPath: "",
+  ytdlpEnabled: false,
+  environmentSetupDone: false,
 };
 
 export interface AppStoreSchema {

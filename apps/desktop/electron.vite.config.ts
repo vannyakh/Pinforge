@@ -22,7 +22,7 @@ const MAIN_EXTERNALS = [
 ];
 
 /** Bundle these into main so pnpm nested deps (e.g. conf) are not required at runtime. */
-const MAIN_BUNDLE_DEPS = ["@pinterest-desktop/core", "electron-store", "electron-log", "electron-updater"];
+const MAIN_BUNDLE_DEPS = ["@pinterest-desktop/core", "electron-store", "electron-updater"];
 
 export default defineConfig({
   main: {
@@ -47,6 +47,10 @@ export default defineConfig({
           index: resolve("src/index.ts"),
         },
         external: MAIN_EXTERNALS,
+        output: {
+          // Avoid chunks that `require` the main entry (re-executes side-effectful deps).
+          inlineDynamicImports: true,
+        },
       },
     },
   },
@@ -78,6 +82,7 @@ export default defineConfig({
         "@": desktopSrc,
         "@common": resolve("src/common"),
         "@renderer": rendererRoot,
+        "@resources": resolve("resources"),
       },
       extensions: [".ts", ".tsx", ".js", ".jsx", ".css"],
       dedupe: ["react", "react-dom", "react-router-dom"],

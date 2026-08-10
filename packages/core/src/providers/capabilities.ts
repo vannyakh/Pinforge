@@ -138,12 +138,31 @@ export const STUB_FEATURES: ProviderFeatureMatrix = {
   resume: "no",
 };
 
+/** Generic sites via external yt-dlp (depends on site + installed binary). */
+export const YTDLP_FEATURES: ProviderFeatureMatrix = {
+  singleVideo: "yes",
+  audioOnly: "yes",
+  photo: "limited",
+  carousel: "limited",
+  story: "limited",
+  reelsShorts: "yes",
+  playlist: "limited",
+  profileBatch: "limited",
+  subtitles: "limited",
+  thumbnail: "limited",
+  metadata: "yes",
+  qualitySelect: "yes",
+  watermarkRemoval: "limited",
+  resume: "limited",
+};
+
 export const PROVIDER_FEATURE_MATRIX: Record<string, ProviderFeatureMatrix> = {
   youtube: YOUTUBE_FEATURES,
   tiktok: TIKTOK_FEATURES,
   facebook: FACEBOOK_FEATURES,
   instagram: INSTAGRAM_FEATURES,
   pinterest: PINTEREST_FEATURES,
+  ytdlp: YTDLP_FEATURES,
 };
 
 export function featuresForProvider(id: string): ProviderFeatureMatrix {

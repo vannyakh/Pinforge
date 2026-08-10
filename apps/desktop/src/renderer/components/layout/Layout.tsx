@@ -95,7 +95,7 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
               <img
                 src={logoUrl}
                 alt="Pinforge"
-                className="shrink-0 size-32px rd-full object-cover"
+                className="shrink-0 size-32px"
                 draggable={false}
                 onClick={isSettings ? handleBrandHome : undefined}
                 style={isSettings ? { cursor: "pointer" } : undefined}

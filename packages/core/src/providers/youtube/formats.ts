@@ -20,6 +20,17 @@ export function heightFromLabel(label?: string, height?: number): number {
   return m ? Number(m[1]) : 0;
 }
 
+/** Infer A/V flags when Innertube omits has_video / has_audio. */
+export function normalizeStreamFlags(f: YtStreamFormat): YtStreamFormat {
+  const mime = f.mime_type ?? "";
+  const hasVideo =
+    f.has_video ??
+    (/^video\//i.test(mime) || Boolean(f.height) || Boolean(f.quality_label));
+  const hasAudio =
+    f.has_audio ?? (/^audio\//i.test(mime) || (/audio/i.test(mime) && !hasVideo));
+  return { ...f, has_video: Boolean(hasVideo), has_audio: Boolean(hasAudio) };
+}
+
 export function bitrateOf(f: YtStreamFormat): number {
   return Number(f.average_bitrate ?? f.bitrate ?? 0);
 }
@@ -42,6 +53,44 @@ export function qualityCap(quality: YoutubeQuality): number | null {
 export function qualityFromFormat(format: FormatPreset, quality?: YoutubeQuality): YoutubeQuality {
   if (format === "audio-only") return "best";
   return quality ?? "best";
+}
+
+const KNOWN_HEIGHT_QUALITIES = ["4320", "2160", "1440", "1080", "720", "480", "360"] as const;
+
+const DEFAULT_QUALITY_CHOICES: YoutubeQuality[] = [
+  "best",
+  "2160",
+  "1440",
+  "1080",
+  "720",
+  "480",
+  "360",
+];
+
+/** UI options: Best + heights from preview, or the default ladder (includes 4320 only when available). */
+export function youtubeQualityChoices(availableHeights?: number[]): YoutubeQuality[] {
+  if (!availableHeights?.length) return [...DEFAULT_QUALITY_CHOICES];
+  const known = new Set<string>(KNOWN_HEIGHT_QUALITIES);
+  const fromPreview: YoutubeQuality[] = [];
+  for (const h of availableHeights) {
+    const key = String(h);
+    if (!known.has(key)) continue;
+    const q = key as YoutubeQuality;
+    if (!fromPreview.includes(q)) fromPreview.push(q);
+  }
+  return fromPreview.length ? (["best", ...fromPreview] as YoutubeQuality[]) : [...DEFAULT_QUALITY_CHOICES];
+}
+
+/** Default fragment concurrency for a quality target (higher for 1080p+ / best). */
+export function fragmentConcurrencyForQuality(
+  quality: YoutubeQuality,
+  override?: number
+): number {
+  if (typeof override === "number" && override > 0) return override;
+  if (quality === "best") return 6;
+  const cap = qualityCap(quality);
+  if (cap != null && cap >= 1080) return 6;
+  return 4;
 }
 
 export function pickAudioOnly(

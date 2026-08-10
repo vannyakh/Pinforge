@@ -11,6 +11,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
+    "test": "tsx --test tests/unit/**/*.test.ts",
     "smoke": "tsx scripts/smoke.mts",
     "playwright:install": "playwright install chromium",
     "worker:build": "cargo build -p pinforge-worker --release --manifest-path ../../rust/Cargo.toml",

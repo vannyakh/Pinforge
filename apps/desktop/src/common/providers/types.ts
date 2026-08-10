@@ -5,7 +5,8 @@ export type ProviderEngineId =
   | "http-meta"
   | "piped"
   | "script"
-  | "playwright";
+  | "playwright"
+  | "ytdlp";
 
 export type ProviderCapability =
   | "video.download"
@@ -65,6 +66,11 @@ export const PROVIDER_ENGINES: ProviderEngineInfo[] = [
     id: "script",
     label: "Script package",
     description: "Run the uploaded extension’s main entry from the manifest.",
+  },
+  {
+    id: "ytdlp",
+    label: "yt-dlp",
+    description: "Download via the yt-dlp binary for sites without a built-in extractor.",
   },
 ];
 
@@ -283,6 +289,21 @@ export const BUILTIN_PROVIDER_META: Record<
       "metadata.fetch",
     ],
     category: "social",
+    version: "1.0.0",
+  },
+  ytdlp: {
+    description:
+      "Catch-all for other http(s) sites via yt-dlp (Vimeo, Twitch, SoundCloud, news, etc.).",
+    hosts: "*",
+    formats: ["best", "mp4", "audio-only"],
+    engine: "ytdlp",
+    capabilities: [
+      "video.download",
+      "audio.download",
+      "playlist.download",
+      "metadata.fetch",
+    ],
+    category: "utilities",
     version: "1.0.0",
   },
 };

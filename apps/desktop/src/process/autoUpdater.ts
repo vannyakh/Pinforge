@@ -6,7 +6,7 @@
 import { app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
 import type { ProgressInfo, UpdateInfo } from "electron-updater";
-import log from "electron-log";
+import log from "electron-log/main";
 import semver from "semver";
 import type { AutoUpdateStatus, UpdateCheckRequest } from "../common/update/types";
 

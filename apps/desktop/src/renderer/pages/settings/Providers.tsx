@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Input, Message, Switch, Tabs, Tag } from "@arco-design/web-react";
-import { Plus, Right, Search } from "@icon-park/react";
+import { Avatar, Button, Dropdown, Input, Menu, Message, Switch, Tag, Tooltip } from "@arco-design/web-react";
+import { Down, Plus, Search } from "@icon-park/react";
+import classNames from "classnames";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import {
@@ -8,47 +9,43 @@ import {
   type InstalledProviderView,
   type RegistryListItem,
 } from "@renderer/api";
-import {
-  BUILTIN_PROVIDER_META,
-  CAPABILITY_LABELS,
-  type ProviderCapability,
-} from "@common/providers/types";
 import { PROVIDER_LOGOS } from "./providerLogos";
+
+type TabKey = "builtin" | "installed" | "registry";
 
 const ProviderLogo: React.FC<{ id: string; label: string }> = ({ id, label }) => {
   const logo = PROVIDER_LOGOS[id];
-  if (logo) {
-    return <img className="provider-logo" src={logo.src} alt={logo.alt} draggable={false} />;
-  }
   return (
-    <span className="provider-logo provider-logo--fallback" aria-hidden>
-      {(label[0] ?? "?").toUpperCase()}
-    </span>
+    <Avatar
+      size={32}
+      shape="square"
+      style={{
+        flexShrink: 0,
+        backgroundColor: logo ? "transparent" : "var(--color-fill-2, var(--bg-3))",
+      }}
+    >
+      {logo ? (
+        <img src={logo.src} alt={logo.alt} className="provider-logo" draggable={false} />
+      ) : (
+        <span className="provider-logo-fallback">{(label[0] ?? "?").toUpperCase()}</span>
+      )}
+    </Avatar>
   );
 };
 
-const CapBadges: React.FC<{ caps: string[] }> = ({ caps }) => {
-  if (!caps.length) return null;
-  return (
-    <div className="flex flex-wrap gap-4px mt-4px">
-      {caps.slice(0, 4).map((c) => (
-        <Tag key={c} size="small" color="gray">
-          {CAPABILITY_LABELS[c as ProviderCapability] ?? c}
-        </Tag>
-      ))}
-      {caps.length > 4 && (
-        <Tag size="small" color="gray">
-          +{caps.length - 4}
-        </Tag>
-      )}
-    </div>
-  );
+const statusTag = (
+  item: InstalledProviderView
+): { color: "green" | "red" | "orangered" | "gray"; label: string } => {
+  if (item.updateAvailable) return { color: "orangered", label: "Update" };
+  if (!item.live) return { color: "red", label: "Coming soon" };
+  if (item.enabled) return { color: "green", label: "Available" };
+  return { color: "gray", label: "Disabled" };
 };
 
 const ProvidersSettings: React.FC = () => {
   const { settings, refresh } = useApp();
   const navigate = useNavigate();
-  const [tab, setTab] = useState("builtin");
+  const [tab, setTab] = useState<TabKey>("builtin");
   const [installed, setInstalled] = useState<InstalledProviderView[]>([]);
   const [registry, setRegistry] = useState<RegistryListItem[]>([]);
   const [search, setSearch] = useState("");
@@ -74,10 +71,6 @@ const ProvidersSettings: React.FC = () => {
   const added = useMemo(
     () => installed.filter((p) => !p.builtin && p.origin !== "builtin"),
     [installed]
-  );
-  const readyCount = useMemo(
-    () => builtins.filter((p) => p.live && p.enabled).length,
-    [builtins]
   );
 
   const registryFiltered = useMemo(() => {
@@ -157,171 +150,217 @@ const ProvidersSettings: React.FC = () => {
     }
   };
 
-  const renderBuiltinRow = (item: InstalledProviderView) => (
-    <div key={item.id} className="provider-row provider-row--clickable">
-      <button type="button" className="provider-row__main" onClick={() => openDetail(item.id)}>
-        <ProviderLogo id={item.id} label={item.label} />
-        <div className="min-w-0 text-left">
-          <div className="text-14px font-500 text-t-primary truncate">{item.label}</div>
-          <div className="text-12px text-t-tertiary mt-2px truncate">
-            {item.hosts || BUILTIN_PROVIDER_META[item.id]?.hosts || "Open to configure"}
-            {item.version ? ` · v${item.version}` : ""}
-          </div>
-          <CapBadges caps={item.capabilities} />
-        </div>
-      </button>
-      <div className="flex items-center gap-8px shrink-0" onClick={(e) => e.stopPropagation()}>
-        {item.updateAvailable && (
-          <Tag size="small" color="orangered">
-            Update
-          </Tag>
-        )}
-        <Tag color={item.live ? (item.enabled ? "green" : "gray") : "orangered"} size="small">
-          {!item.live ? "Coming soon" : item.enabled ? "Available" : "Disabled"}
-        </Tag>
-        {item.live && (
-          <Switch
-            size="small"
-            checked={item.enabled}
-            disabled={saving}
-            onChange={(v) => void toggleEnabled(item.id, v)}
-          />
-        )}
-        <button type="button" className="provider-row__chevron" onClick={() => openDetail(item.id)}>
-          <Right theme="outline" size="16" fill="currentColor" />
-        </button>
-      </div>
-    </div>
-  );
+  const stop = (event: React.MouseEvent) => event.stopPropagation();
 
-  const renderInstalledRow = (item: InstalledProviderView) => (
-    <div key={item.id} className="provider-row">
-      <button type="button" className="provider-row__main" onClick={() => openDetail(item.id)}>
-        <ProviderLogo id={item.id} label={item.label} />
-        <div className="min-w-0 text-left">
-          <div className="flex items-center gap-8px flex-wrap">
-            <span className="text-14px font-500 text-t-primary truncate">{item.label}</span>
-            <Tag size="small" color="gray">
-              {item.origin}
+  const renderInstalledRow = (item: InstalledProviderView, opts?: { showUninstall?: boolean }) => {
+    const status = statusTag(item);
+    const disabledLook = item.live && !item.enabled;
+    return (
+      <div
+        key={item.id}
+        className={classNames("provider-row", disabledLook && "provider-row--dim")}
+        onClick={() => openDetail(item.id)}
+      >
+        <div className="provider-row__main">
+          <ProviderLogo id={item.id} label={item.label} />
+          <div className="provider-row__meta">
+            <span className="provider-row__name">{item.label}</span>
+            <Tag size="small" color={status.color} className="provider-row__tag">
+              {status.label}
             </Tag>
-            {item.updateAvailable && (
-              <Tag size="small" color="orangered">
-                Update
+            {!item.builtin && item.origin !== "builtin" && (
+              <Tag size="small" color="gray" className="provider-row__tag">
+                {item.origin}
               </Tag>
             )}
+            {item.hosts ? (
+              <Tooltip content={item.hosts}>
+                <span className="provider-row__info" aria-label="Hosts">
+                  ⓘ
+                </span>
+              </Tooltip>
+            ) : null}
           </div>
-          <div className="text-12px text-t-tertiary mt-2px truncate">
-            {item.hosts || "No hosts"}
-            {item.version ? ` · v${item.version}` : ""}
-          </div>
-          <CapBadges caps={item.capabilities} />
         </div>
-      </button>
-      <div className="flex items-center gap-8px shrink-0">
-        <Switch
-          size="small"
-          checked={item.enabled}
-          disabled={saving}
-          onChange={(v) => void toggleEnabled(item.id, v)}
-        />
-        <Button size="mini" status="danger" disabled={saving} onClick={() => void uninstall(item.id)}>
-          Uninstall
-        </Button>
+        <div className="provider-row__actions" onClick={stop}>
+          {item.live && (
+            <Switch
+              size="small"
+              checked={item.enabled}
+              disabled={saving}
+              onChange={(v) => void toggleEnabled(item.id, v)}
+            />
+          )}
+          {opts?.showUninstall && (
+            <Button
+              size="small"
+              type="outline"
+              status="danger"
+              disabled={saving}
+              className="provider-row__btn"
+              onClick={() => void uninstall(item.id)}
+            >
+              Uninstall
+            </Button>
+          )}
+          <Button
+            size="small"
+            type="outline"
+            className="provider-row__btn"
+            onClick={() => openDetail(item.id)}
+          >
+            Edit
+          </Button>
+        </div>
       </div>
-    </div>
+    );
+  };
+
+  const tabs: { key: TabKey; label: string; count: number }[] = [
+    { key: "builtin", label: "Built-in", count: builtins.length },
+    { key: "installed", label: "Installed", count: added.length },
+    { key: "registry", label: "Registry", count: registry.length },
+  ];
+
+  const addMenu = (
+    <Menu
+      onClickMenuItem={(key) => {
+        if (key === "package") void uploadSource();
+        if (key === "registry") setTab("registry");
+      }}
+    >
+      <Menu.Item key="registry">
+        <span className="inline-flex items-center gap-8px">
+          <Plus theme="outline" size="14" />
+          Browse registry
+        </span>
+      </Menu.Item>
+      <Menu.Item key="package">Install package…</Menu.Item>
+    </Menu>
   );
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between gap-16px mb-6px w-full">
-        <div className="flex items-center gap-10px min-w-0">
-          <div className="text-22px font-600 text-t-primary">Providers</div>
-          <Tag color="green" size="small" className="shrink-0">
-            {readyCount} ready
-          </Tag>
-        </div>
-        <div className="flex items-center gap-8px">
-          <Button loading={saving} onClick={() => void uploadSource()}>
-            Install package
-          </Button>
-          <Button
-            type="primary"
-            loading={saving}
-            icon={<Plus theme="outline" size="14" />}
-            onClick={() => setTab("registry")}
-          >
-            Browse registry
-          </Button>
-        </div>
-      </div>
-      <div className="text-t-secondary text-14px mb-18px">
-        Built-in extractors ship with the app. Registry and local packages install separately and can
-        be enabled, updated, or removed.
-      </div>
-
-      <div className="max-w-720px mx-auto w-full">
-        <Tabs activeTab={tab} onChange={setTab}>
-          <Tabs.TabPane key="builtin" title={`Built-in (${builtins.length})`}>
-            <div className="provider-list flex flex-col gap-10px pt-12px">
-              {builtins.map(renderBuiltinRow)}
-            </div>
-          </Tabs.TabPane>
-          <Tabs.TabPane key="installed" title={`Installed (${added.length})`}>
-            <div className="provider-list flex flex-col gap-10px pt-12px">
-              {added.length === 0 ? (
-                <div className="text-13px text-t-tertiary py-24px text-center">
-                  No registry or local packages yet. Browse the registry or install a ZIP.
-                </div>
-              ) : (
-                added.map(renderInstalledRow)
-              )}
-            </div>
-          </Tabs.TabPane>
-          <Tabs.TabPane key="registry" title="Registry">
-            <div className="pt-12px flex flex-col gap-12px">
+    <div className="providers-page">
+      <div className="providers-page__chrome">
+        <div className="providers-page__header">
+          <h1 className="providers-page__title">Providers</h1>
+          <div className="providers-page__actions">
+            {tab === "registry" && (
               <Input
                 allowClear
+                className="providers-page__search"
                 prefix={<Search theme="outline" size="14" />}
                 placeholder="Search providers…"
                 value={search}
                 onChange={setSearch}
               />
-              <div className="provider-list flex flex-col gap-10px h-auto">
-                {registryFiltered.map((item) => (
-                  <div key={item.id} className="provider-row">
-                    <div className="provider-row__main">
-                      <ProviderLogo id={item.id} label={item.label} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-8px flex-wrap">
-                          <span className="text-14px font-500 text-t-primary">{item.label}</span>
-                          <Tag
-                            size="small"
-                            color={item.status === "official" ? "arcoblue" : "gray"}
-                          >
-                            {item.status}
-                          </Tag>
-                          {item.verified && (
-                            <Tag size="small" color="green">
-                              verified
-                            </Tag>
-                          )}
-                          {item.updateAvailable && (
-                            <Tag size="small" color="orangered">
-                              Update
-                            </Tag>
-                          )}
-                        </div>
-                        <div className="text-12px text-t-tertiary mt-2px">{item.description}</div>
-                        <div className="text-11px text-t-tertiary mt-2px tabular-nums">
-                          v{item.version}
-                          {item.installedVersion ? ` · installed ${item.installedVersion}` : ""}
-                        </div>
-                        <CapBadges caps={item.capabilities} />
-                      </div>
+            )}
+            <Dropdown droplist={addMenu} position="br" trigger="click">
+              <Button className="providers-page__add-btn" loading={saving}>
+                Add provider
+                <Down theme="outline" size="14" />
+              </Button>
+            </Dropdown>
+          </div>
+        </div>
+        <p className="providers-page__desc">
+          Manage built-in and installed download providers. Enable the ones you use, install more
+          from the registry, or add a local package.
+        </p>
+
+        <div className="providers-page__tabs" role="tablist">
+          {tabs.map((item) => {
+            const active = item.key === tab;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={classNames(
+                  "providers-page__tab",
+                  active && "providers-page__tab--active"
+                )}
+                onClick={() => setTab(item.key)}
+              >
+                <span>{item.label}</span>
+                <span className="providers-page__tab-count">{item.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="providers-page__body">
+        <div className="providers-page__panel">
+          {tab === "builtin" &&
+            (builtins.length > 0 ? (
+              builtins.map((item) => renderInstalledRow(item))
+            ) : (
+              <div className="providers-page__empty">No built-in providers.</div>
+            ))}
+
+          {tab === "installed" &&
+            (added.length > 0 ? (
+              added.map((item) => renderInstalledRow(item, { showUninstall: true }))
+            ) : (
+              <div className="providers-page__empty">
+                No registry or local packages yet. Use Add provider to browse the registry or
+                install a ZIP.
+              </div>
+            ))}
+
+          {tab === "registry" &&
+            (registryFiltered.length > 0 ? (
+              registryFiltered.map((item) => (
+                <div
+                  key={item.id}
+                  className="provider-row"
+                  onClick={() => {
+                    if (item.installed) openDetail(item.id);
+                  }}
+                  style={{ cursor: item.installed ? "pointer" : "default" }}
+                >
+                  <div className="provider-row__main">
+                    <ProviderLogo id={item.id} label={item.label} />
+                    <div className="provider-row__meta">
+                      <span className="provider-row__name">{item.label}</span>
+                      <Tag
+                        size="small"
+                        color={
+                          item.installed
+                            ? item.updateAvailable
+                              ? "orangered"
+                              : "green"
+                            : "red"
+                        }
+                        className="provider-row__tag"
+                      >
+                        {item.installed
+                          ? item.updateAvailable
+                            ? "Update"
+                            : "Installed"
+                          : "Not installed"}
+                      </Tag>
+                      {item.status === "official" && (
+                        <Tag size="small" color="gray" className="provider-row__tag">
+                          official
+                        </Tag>
+                      )}
+                      {item.description ? (
+                        <Tooltip content={item.description}>
+                          <span className="provider-row__info" aria-label="Description">
+                            ⓘ
+                          </span>
+                        </Tooltip>
+                      ) : null}
                     </div>
+                  </div>
+                  <div className="provider-row__actions" onClick={stop}>
                     <Button
                       size="small"
-                      type={item.installed ? "secondary" : "primary"}
+                      type="outline"
+                      className="provider-row__btn"
                       disabled={saving || (item.installed && !item.updateAvailable)}
                       onClick={() => void installFromRegistry(item.id)}
                     >
@@ -331,17 +370,27 @@ const ProvidersSettings: React.FC = () => {
                           : "Installed"
                         : "Install"}
                     </Button>
+                    {item.installed && (
+                      <Button
+                        size="small"
+                        type="outline"
+                        className="provider-row__btn"
+                        onClick={() => openDetail(item.id)}
+                      >
+                        Edit
+                      </Button>
+                    )}
                   </div>
-                ))}
-                {registryFiltered.length === 0 && (
-                  <div className="text-13px text-t-tertiary py-16px text-center">
-                    No providers match “{search}”.
-                  </div>
-                )}
+                </div>
+              ))
+            ) : (
+              <div className="providers-page__empty">
+                {search.trim()
+                  ? `No providers match “${search.trim()}”.`
+                  : "Registry is empty."}
               </div>
-            </div>
-          </Tabs.TabPane>
-        </Tabs>
+            ))}
+        </div>
       </div>
     </div>
   );

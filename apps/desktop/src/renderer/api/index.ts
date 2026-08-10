@@ -79,6 +79,8 @@ export type {
 };
 
 export const api = {
+  rendererReady: () => window.api.rendererReady(),
+  getAppInfo: () => window.api.getAppInfo(),
   processMedia: (payload: {
     url: string;
     preset: PresetName;
@@ -147,6 +149,32 @@ export const api = {
   onFfmpegProgress: (
     cb: (event: { phase: string; percent: number; message: string }) => void
   ) => window.api.onFfmpegProgress(cb),
+  ytdlpStatus: () => window.api.ytdlpStatus(),
+  ytdlpInstall: () => window.api.ytdlpInstall(),
+  ytdlpPick: () => window.api.ytdlpPick(),
+  onYtdlpProgress: (
+    cb: (event: { phase: string; percent: number; message: string }) => void
+  ) => window.api.onYtdlpProgress(cb),
+  playwrightStatus: () => window.api.playwrightStatus(),
+  playwrightInstall: () => window.api.playwrightInstall(),
+  onPlaywrightProgress: (
+    cb: (event: { phase: string; percent: number; message: string }) => void
+  ) => window.api.onPlaywrightProgress(cb),
+  environmentSetupStatus: () => window.api.environmentSetupStatus(),
+  environmentSetupStart: () => window.api.environmentSetupStart(),
+  environmentSetupComplete: () => window.api.environmentSetupComplete(),
+  onEnvironmentSetupProgress: (
+    cb: (event: {
+      step: string;
+      stepIndex: number;
+      stepCount: number;
+      phase: string;
+      percent: number;
+      message: string;
+      toolAvailable?: boolean;
+    }) => void
+  ) => window.api.onEnvironmentSetupProgress(cb),
+  setInstallerMode: (active: boolean) => window.api.setInstallerMode(active),
   getUpdateStatus: () => window.api.getUpdateStatus(),
   checkForUpdates: (req?: UpdateCheckRequest) => window.api.checkForUpdates(req),
   downloadUpdate: () => window.api.downloadUpdate(),

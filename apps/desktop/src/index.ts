@@ -1,15 +1,21 @@
-import { app, BrowserWindow, shell, protocol, net } from "electron";
+import { app, BrowserWindow, ipcMain, shell, protocol, net } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerIpc } from "./process/ipc";
 import { getStore } from "./process/store";
 import { initAutoUpdater } from "./process/autoUpdater";
+import { recoverJobsOnStartup } from "./process/mediacore";
 import {
   applyLoginItem,
   markAppQuitting,
   wireCloseToTray,
 } from "./process/systemPrefs";
+import {
+  INSTALLER_HEIGHT,
+  INSTALLER_WIDTH,
+  markInstallerWindowStarted,
+} from "./process/windowInstaller";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -37,19 +43,26 @@ function createWindow(): void {
   const store = getStore();
   const bounds = store.get("windowBounds");
   const iconPath = join(__dirname, "../../resources/icon.png");
+  const needsInstaller = !Boolean(store.get("system")?.environmentSetupDone);
 
   const win = new BrowserWindow({
-    width: bounds?.width ?? 1180,
-    height: bounds?.height ?? 780,
-    x: bounds?.x,
-    y: bounds?.y,
-    minWidth: 860,
-    minHeight: 600,
+    width: needsInstaller ? INSTALLER_WIDTH : (bounds?.width ?? 1180),
+    height: needsInstaller ? INSTALLER_HEIGHT : (bounds?.height ?? 780),
+    x: needsInstaller ? undefined : bounds?.x,
+    y: needsInstaller ? undefined : bounds?.y,
+    minWidth: needsInstaller ? INSTALLER_WIDTH : 860,
+    minHeight: needsInstaller ? INSTALLER_HEIGHT : 600,
     show: false,
     frame: false,
-    title: "Pinforge",
+    title: needsInstaller ? "Pinforge desktop installer" : "Pinforge",
+    resizable: !needsInstaller,
+    maximizable: !needsInstaller,
+    closable: !needsInstaller,
+    // Transparent so splash / installer can use CSS rounded corners.
+    // Critical CSS in index.html keeps an opaque fill until React paints.
+    transparent: true,
     ...(existsSync(iconPath) ? { icon: iconPath } : {}),
-    backgroundColor: "#0e0e0e",
+    backgroundColor: "#00000000",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: process.platform === "darwin" ? { x: 14, y: 14 } : undefined,
     webPreferences: {
@@ -60,7 +73,29 @@ function createWindow(): void {
     },
   });
 
-  win.on("ready-to-show", () => win.show());
+  if (needsInstaller) {
+    markInstallerWindowStarted();
+    win.center();
+  }
+
+  // Wait for renderer styles+UI before showing (avoids unstyled FOUC on first load).
+  let shown = false;
+  const showOnce = () => {
+    if (shown || win.isDestroyed()) return;
+    shown = true;
+    win.show();
+  };
+  const onRendererReady = (event: Electron.IpcMainEvent) => {
+    if (event.sender === win.webContents) showOnce();
+  };
+  ipcMain.on("renderer:ready", onRendererReady);
+  win.on("closed", () => {
+    ipcMain.removeListener("renderer:ready", onRendererReady);
+  });
+  // Fallback if the ready ping is missed
+  win.once("ready-to-show", () => {
+    setTimeout(showOnce, 2500);
+  });
 
   const emitMaximized = () => {
     win.webContents.send("window:maximizedChanged", win.isMaximized());
@@ -120,9 +155,7 @@ app.whenReady().then(() => {
   initAutoUpdater();
 
   // Mark crash-interrupted downloads as paused for resume UI
-  void import("./process/mediacore")
-    .then(({ recoverJobsOnStartup }) => recoverJobsOnStartup())
-    .catch(() => undefined);
+  void recoverJobsOnStartup().catch(() => undefined);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -116,10 +116,10 @@ const Titlebar: React.FC<{ hideSiderToggle?: boolean }> = ({ hideSiderToggle = f
         )}
       </div>
 
-      <div className="app-titlebar__brand">
-        <img src={logoUrl} alt="" className="size-16px rd-full object-cover" draggable={false} />
+      {/* <div className="app-titlebar__brand">
+        <img src={logoUrl} alt="" className="size-16px" draggable={false} />
         <span>Pinforge</span>
-      </div>
+      </div> */}
 
       <div className="app-titlebar__toolbar">{!isMac && <WindowControls />}</div>
     </div>

@@ -45,6 +45,8 @@ export interface ExtractPreview {
   itemCount: number;
   truncated?: boolean;
   message?: string;
+  /** Available video heights (px), highest first — YouTube single preview. */
+  qualities?: number[];
 }
 
 function pathOf(url: string): string {
@@ -130,6 +132,42 @@ export function coverUrlFromMediaUrl(url: string): string | undefined {
     /* ignore */
   }
   return undefined;
+}
+
+/** Pure builder for single-YouTube Home extract (qualities drive the quality picker). */
+export function buildYoutubeSingleExtract(
+  base: Omit<ExtractPreview, "items" | "itemCount" | "title" | "truncated" | "message" | "qualities">,
+  sourceUrl: string,
+  preview: {
+    title: string;
+    channel?: string;
+    thumbnailUrl?: string;
+    durationText?: string;
+    durationSec?: number;
+    qualities: number[];
+  }
+): ExtractPreview {
+  const qualityHint =
+    preview.qualities.length > 0 ? ` · up to ${preview.qualities[0]}p` : "";
+  return {
+    ...base,
+    mode: "single",
+    modeSupported: true,
+    title: preview.title,
+    items: [
+      {
+        index: 1,
+        url: sourceUrl,
+        title: preview.title,
+        coverUrl: preview.thumbnailUrl || coverUrlFromMediaUrl(sourceUrl),
+        durationText: preview.durationText,
+        durationSec: preview.durationSec,
+      },
+    ],
+    itemCount: 1,
+    qualities: preview.qualities,
+    message: `${preview.channel ? `${preview.channel} · ` : ""}${preview.title}${qualityHint}`,
+  };
 }
 
 export interface ExtractPreviewOptions {
@@ -420,10 +458,17 @@ export async function extractMediaPreview(
     try {
       const { previewYouTubeVideo } = await import("./providers/youtube/service");
       const preview = await previewYouTubeVideo(sourceUrl);
-      const qualityHint =
-        preview.qualities.length > 0
-          ? ` · up to ${preview.qualities[0]}p`
-          : "";
+      return buildYoutubeSingleExtract(base, sourceUrl, preview);
+    } catch {
+      /* fall through to generic single */
+    }
+  }
+
+  // yt-dlp catch-all — probe metadata when binary is available
+  if (provider.id === "ytdlp" && mode === "single") {
+    try {
+      const { previewYtdlp } = await import("./providers/ytdlp");
+      const preview = await previewYtdlp(sourceUrl);
       return {
         ...base,
         mode: "single",
@@ -435,15 +480,32 @@ export async function extractMediaPreview(
             url: sourceUrl,
             title: preview.title,
             coverUrl: preview.thumbnailUrl || coverUrlFromMediaUrl(sourceUrl),
-            durationText: preview.durationText,
             durationSec: preview.durationSec,
           },
         ],
         itemCount: 1,
-        message: `${preview.channel ? `${preview.channel} · ` : ""}${preview.title}${qualityHint}`,
+        message: `${preview.channel ? `${preview.channel} · ` : ""}${preview.title} · via yt-dlp`,
       };
-    } catch {
-      /* fall through to generic single */
+    } catch (err) {
+      const hint = err instanceof Error ? err.message : String(err);
+      return {
+        ...base,
+        mode: "single",
+        modeSupported: true,
+        title: shortTitleFromUrl(sourceUrl),
+        items: [
+          {
+            index: 1,
+            url: sourceUrl,
+            title: shortTitleFromUrl(sourceUrl),
+            coverUrl: coverUrlFromMediaUrl(sourceUrl),
+          },
+        ],
+        itemCount: 1,
+        message: hint.includes("yt-dlp is not available")
+          ? "yt-dlp provider matched this URL. Install yt-dlp in Settings → System to download."
+          : `yt-dlp · ${hint}`,
+      };
     }
   }
 

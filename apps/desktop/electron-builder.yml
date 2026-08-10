@@ -48,7 +48,7 @@ win:
   icon: icon.png
   target:
     - nsis
-  artifactName: ${productName}-${version}-Setup.${ext}
+  artifactName: ${productName}-${version}-Setup-${arch}.${ext}
 
 mac:
   # zip is required for electron-updater on macOS
@@ -81,7 +81,7 @@ linux:
   target:
     - AppImage
   category: Utility
-  artifactName: ${productName}-${version}.${ext}
+  artifactName: ${productName}-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false

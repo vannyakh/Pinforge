@@ -1,5 +1,7 @@
 import "./pinterest";
 import "./extractorProviders";
+// Catch-all last — detectProvider is first-match-wins.
+import "./ytdlp";
 
 export { registerProvider, listProviders, getProvider, detectProvider } from "./registry";
 export type { MediaProvider, ResolveContext } from "./types";
@@ -13,6 +15,7 @@ export {
   FACEBOOK_FEATURES,
   INSTAGRAM_FEATURES,
   PINTEREST_FEATURES,
+  YTDLP_FEATURES,
   STUB_FEATURES,
 } from "./capabilities";
 export type {
@@ -77,3 +80,14 @@ export {
   closePlaywrightBrowser,
 } from "./extractors/playwrightMeta";
 export type { PageMeta, ScrapeMetaOptions } from "./extractors/playwrightMeta";
+export {
+  configureYtdlp,
+  clearYtdlpCache,
+  resolveYtdlp,
+  requireYtdlpMessage,
+  resolveYtdlpMedia,
+  previewYtdlp,
+  ytdlpProvider,
+  isHttpUrl,
+} from "./ytdlp";
+export type { YtdlpResolveOpts, YtdlpPreview } from "./ytdlp";

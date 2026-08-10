@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { muxAvCopyArgs, muxAvRemuxArgs } from "./muxArgs";
+
+export { muxAvCopyArgs, muxAvRemuxArgs } from "./muxArgs";
 
 let ffmpegPathCache: string | null | undefined;
 let configuredPath: string | undefined;
@@ -70,21 +73,16 @@ export async function muxAv(
   const bin = await resolveFfmpeg();
   if (!bin) throw new Error(requireFfmpegMessage());
   await fs.mkdir(path.dirname(outPath), { recursive: true });
-  await runFfmpeg(bin, [
-    "-y",
-    "-i",
-    videoPath,
-    "-i",
-    audioPath,
-    "-c",
-    "copy",
-    "-map",
-    "0:v:0",
-    "-map",
-    "1:a:0?",
-    "-shortest",
-    outPath,
-  ]);
+  try {
+    await runFfmpeg(bin, muxAvCopyArgs(videoPath, audioPath, outPath));
+  } catch (err) {
+    // Container / codec mismatch — retry with audio re-encode once.
+    try {
+      await runFfmpeg(bin, muxAvRemuxArgs(videoPath, audioPath, outPath));
+    } catch {
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+  }
 }
 
 export async function convertAudio(

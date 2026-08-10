@@ -83,6 +83,9 @@ export type ChatSession = {
   confirmYtQuality: YoutubeQuality;
   confirmAudio: AudioContainer;
   confirmSubs: SubtitleMode;
+  confirmSaveVideo: boolean;
+  confirmSaveAudio: boolean;
+  confirmSaveThumbnail: boolean;
   getPlaylistList: boolean;
 };
 
@@ -95,6 +98,9 @@ type LiveChatFields = {
   confirmYtQuality: YoutubeQuality;
   confirmAudio: AudioContainer;
   confirmSubs: SubtitleMode;
+  confirmSaveVideo: boolean;
+  confirmSaveAudio: boolean;
+  confirmSaveThumbnail: boolean;
   extracting: boolean;
   getPlaylistList: boolean;
 };
@@ -110,6 +116,9 @@ type HomeChatState = LiveChatFields & {
   setConfirmYtQuality: (quality: YoutubeQuality) => void;
   setConfirmAudio: (audio: AudioContainer) => void;
   setConfirmSubs: (subs: SubtitleMode) => void;
+  setConfirmSaveVideo: (save: boolean) => void;
+  setConfirmSaveAudio: (save: boolean) => void;
+  setConfirmSaveThumbnail: (save: boolean) => void;
   setExtracting: (extracting: boolean) => void;
   setGetPlaylistList: (getPlaylistList: boolean) => void;
   appendMessages: (messages: ChatMessage[]) => void;
@@ -141,6 +150,9 @@ const liveDefaults: LiveChatFields = {
   confirmYtQuality: "best",
   confirmAudio: "m4a",
   confirmSubs: "separate",
+  confirmSaveVideo: true,
+  confirmSaveAudio: true,
+  confirmSaveThumbnail: true,
   extracting: false,
   getPlaylistList: false,
 };
@@ -178,6 +190,9 @@ function snapshotFromLive(s: LiveChatFields & { activeId: string | null }): Chat
     confirmYtQuality: s.confirmYtQuality,
     confirmAudio: s.confirmAudio,
     confirmSubs: s.confirmSubs,
+    confirmSaveVideo: s.confirmSaveVideo,
+    confirmSaveAudio: s.confirmSaveAudio,
+    confirmSaveThumbnail: s.confirmSaveThumbnail,
     getPlaylistList: s.getPlaylistList,
   };
 }
@@ -209,6 +224,9 @@ function withSyncedSession(
     confirmYtQuality: live.confirmYtQuality ?? s.confirmYtQuality,
     confirmAudio: live.confirmAudio ?? s.confirmAudio,
     confirmSubs: live.confirmSubs ?? s.confirmSubs,
+    confirmSaveVideo: live.confirmSaveVideo ?? s.confirmSaveVideo,
+    confirmSaveAudio: live.confirmSaveAudio ?? s.confirmSaveAudio,
+    confirmSaveThumbnail: live.confirmSaveThumbnail ?? s.confirmSaveThumbnail,
     extracting: live.extracting ?? s.extracting,
     getPlaylistList: live.getPlaylistList ?? s.getPlaylistList,
     activeId: s.activeId,
@@ -242,6 +260,9 @@ export const useHomeChatStore = create<HomeChatState>()(
       setConfirmYtQuality: (confirmYtQuality) => set({ confirmYtQuality }),
       setConfirmAudio: (confirmAudio) => set({ confirmAudio }),
       setConfirmSubs: (confirmSubs) => set({ confirmSubs }),
+      setConfirmSaveVideo: (confirmSaveVideo) => set({ confirmSaveVideo }),
+      setConfirmSaveAudio: (confirmSaveAudio) => set({ confirmSaveAudio }),
+      setConfirmSaveThumbnail: (confirmSaveThumbnail) => set({ confirmSaveThumbnail }),
       setExtracting: (extracting) => set({ extracting }),
       setGetPlaylistList: (getPlaylistList) => set({ getPlaylistList }),
 
@@ -319,6 +340,9 @@ export const useHomeChatStore = create<HomeChatState>()(
           confirmYtQuality: s.confirmYtQuality,
           confirmAudio: s.confirmAudio,
           confirmSubs: s.confirmSubs,
+          confirmSaveVideo: s.confirmSaveVideo,
+          confirmSaveAudio: s.confirmSaveAudio,
+          confirmSaveThumbnail: s.confirmSaveThumbnail,
         });
       },
 
@@ -343,6 +367,9 @@ export const useHomeChatStore = create<HomeChatState>()(
           confirmYtQuality: session.confirmYtQuality,
           confirmAudio: session.confirmAudio,
           confirmSubs: session.confirmSubs,
+          confirmSaveVideo: session.confirmSaveVideo ?? true,
+          confirmSaveAudio: session.confirmSaveAudio ?? true,
+          confirmSaveThumbnail: session.confirmSaveThumbnail ?? true,
           getPlaylistList: session.getPlaylistList,
           extracting: false,
         });
@@ -361,6 +388,9 @@ export const useHomeChatStore = create<HomeChatState>()(
             confirmYtQuality: s.confirmYtQuality,
             confirmAudio: s.confirmAudio,
             confirmSubs: s.confirmSubs,
+            confirmSaveVideo: s.confirmSaveVideo,
+            confirmSaveAudio: s.confirmSaveAudio,
+            confirmSaveThumbnail: s.confirmSaveThumbnail,
           };
         }),
 
@@ -375,6 +405,9 @@ export const useHomeChatStore = create<HomeChatState>()(
           confirmYtQuality: s.confirmYtQuality,
           confirmAudio: s.confirmAudio,
           confirmSubs: s.confirmSubs,
+          confirmSaveVideo: s.confirmSaveVideo,
+          confirmSaveAudio: s.confirmSaveAudio,
+          confirmSaveThumbnail: s.confirmSaveThumbnail,
         });
       },
     }),
@@ -391,6 +424,9 @@ export const useHomeChatStore = create<HomeChatState>()(
         confirmYtQuality: s.confirmYtQuality,
         confirmAudio: s.confirmAudio,
         confirmSubs: s.confirmSubs,
+        confirmSaveVideo: s.confirmSaveVideo,
+        confirmSaveAudio: s.confirmSaveAudio,
+        confirmSaveThumbnail: s.confirmSaveThumbnail,
         getPlaylistList: s.getPlaylistList,
       }),
     }

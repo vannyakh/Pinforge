@@ -21,6 +21,7 @@ import type {
 } from "@renderer/api";
 import { api } from "@renderer/api";
 import { coverUrlFromMediaUrl } from "./homeChatStore";
+import { youtubeQualityChoices } from "./youtubeQuality";
 
 export type ExtractPickRow = ExtractPreviewItem & {
   key: string;
@@ -424,12 +425,14 @@ const ExtractPickTable: React.FC<Props> = ({
                   <Select
                     size="small"
                     style={{ width: 110 }}
-                    value={ytQuality}
+                    value={
+                      youtubeQualityChoices(extract.qualities).includes(ytQuality)
+                        ? ytQuality
+                        : "best"
+                    }
                     onChange={(v) => onYtQualityChange(v as YoutubeQuality)}
                   >
-                    {(
-                      ["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]
-                    ).map((q) => (
+                    {youtubeQualityChoices(extract.qualities).map((q) => (
                       <Select.Option key={q} value={q}>
                         {q === "best" ? "Best" : `${q}p`}
                       </Select.Option>

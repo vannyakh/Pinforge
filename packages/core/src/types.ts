@@ -25,7 +25,9 @@ export type ProviderId =
   | "youtube"
   | "instagram"
   | "tiktok"
-  | "facebook";
+  | "facebook"
+  /** Catch-all via external yt-dlp binary for non-builtin sites. */
+  | "ytdlp";
 
 export type FormatPreset = "best" | "mp4" | "audio-only";
 
@@ -55,6 +57,12 @@ export interface YoutubeDownloadOptions {
   channelMaxVideos?: number;
   /** Max videos to pull from a playlist / mix (default 50, max 500). */
   playlistMaxVideos?: number;
+  /** Save merged video file (default true; ignored for audio-only). */
+  saveVideo?: boolean;
+  /** Also save a separate audio track file (default true). */
+  saveAudio?: boolean;
+  /** Save thumbnail as a sidecar image (default true). */
+  saveThumbnail?: boolean;
 }
 
 export const DEFAULT_YOUTUBE_OPTIONS: Required<YoutubeDownloadOptions> = {
@@ -67,6 +75,9 @@ export const DEFAULT_YOUTUBE_OPTIONS: Required<YoutubeDownloadOptions> = {
   resume: true,
   channelMaxVideos: 50,
   playlistMaxVideos: 50,
+  saveVideo: true,
+  saveAudio: true,
+  saveThumbnail: true,
 };
 
 export interface PinterestOptions {
@@ -134,6 +145,12 @@ export interface ResolvedMedia {
   id?: string;
   /** Sidecar subtitle paths written next to the media. */
   subtitlePaths?: string[];
+  /** Sidecar audio file when saveAudio is enabled. */
+  audioPath?: string;
+  /** Sidecar thumbnail file when saveThumbnail is enabled. */
+  thumbnailPath?: string;
+  /** Selected stream height (px) when known. */
+  height?: number;
 }
 
 export interface EnhancedAsset {

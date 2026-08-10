@@ -1,4 +1,5 @@
-import type { FormatPreset, ResolvedMedia } from "../../types";
+import type { FormatPreset, ResolvedMedia, YoutubeQuality } from "../../types";
+import { heightFromLabel, qualityCap } from "../youtube/formats";
 import { fetchBinary, toResolved } from "./http";
 
 // Dynamic import — avoid bundling undici/node:sqlite into Electron main.
@@ -70,12 +71,14 @@ export async function extractYouTubeViaPiped(
   url: string,
   opts: {
     format?: FormatPreset;
+    quality?: YoutubeQuality;
     extractorUrl?: string;
     fragmentConcurrency?: number;
     signal?: AbortSignal;
   } = {}
 ): Promise<ResolvedMedia> {
   const format = opts.format ?? "best";
+  const quality = opts.quality ?? "best";
   const id = await extractYouTubeId(url);
   if (!id) throw new Error("Could not parse YouTube video id from URL");
 
@@ -83,20 +86,20 @@ export async function extractYouTubeViaPiped(
 
   if (opts.extractorUrl?.trim()) {
     try {
-      return await extractViaService(id, url, format, opts.extractorUrl.trim(), opts);
+      return await extractViaService(id, url, format, opts.extractorUrl.trim(), opts, quality);
     } catch (e) {
       errors.push(`custom: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
   try {
-    return await extractViaInnertube(id, url, format, opts);
+    return await extractViaInnertube(id, url, format, opts, quality);
   } catch (e) {
     errors.push(`innertube: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   try {
-    return await extractViaYtdl(url, format);
+    return await extractViaYtdl(url, format, quality);
   } catch (e) {
     errors.push(`local: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -107,7 +110,7 @@ export async function extractYouTubeViaPiped(
       continue;
     }
     try {
-      return await extractViaService(id, url, format, instance, opts);
+      return await extractViaService(id, url, format, instance, opts, quality);
     } catch (e) {
       errors.push(`${instance}: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -168,13 +171,16 @@ type YtFormatLike = {
   has_audio?: boolean;
   bitrate?: number;
   average_bitrate?: number;
+  width?: number;
+  height?: number;
 };
 
 async function extractViaInnertube(
   id: string,
   sourceUrl: string,
   format: FormatPreset,
-  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {}
+  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {},
+  quality: YoutubeQuality = "best"
 ): Promise<ResolvedMedia> {
   const { Innertube, ClientType, UniversalCache } = await getInnertube();
   const clients = ["ANDROID", "ANDROID_VR", "IOS"] as const;
@@ -197,7 +203,7 @@ async function extractViaInnertube(
         throw new Error(`No direct stream URLs (${String(client)})`);
       }
 
-      const pick = pickInnertubeFormat(formats, format);
+      const pick = pickInnertubeFormat(formats, format, quality);
       if (!pick?.url) throw new Error("No matching format URL");
 
       const { buffer, ext } = await fetchBinary(pick.url, {
@@ -219,8 +225,18 @@ async function extractViaInnertube(
   throw lastError ?? new Error("Innertube extraction failed");
 }
 
-function pickInnertubeFormat(formats: YtFormatLike[], format: FormatPreset): YtFormatLike | undefined {
+function pickInnertubeFormat(
+  formats: YtFormatLike[],
+  format: FormatPreset,
+  quality: YoutubeQuality = "best"
+): YtFormatLike | undefined {
   const bitrate = (f: YtFormatLike) => Number(f.average_bitrate ?? f.bitrate ?? 0);
+  const cap = qualityCap(quality);
+  const heightOk = (f: YtFormatLike) => {
+    if (cap == null) return true;
+    const h = heightFromLabel(f.quality_label, f.height);
+    return h <= 0 || h <= cap;
+  };
   if (format === "audio-only") {
     const audio = formats
       .filter((f) => f.has_audio && !f.has_video)
@@ -233,10 +249,18 @@ function pickInnertubeFormat(formats: YtFormatLike[], format: FormatPreset): YtF
   }
 
   const muxed = formats
+    .filter((f) => f.has_video && f.has_audio && heightOk(f))
+    .sort(
+      (a, b) =>
+        heightFromLabel(b.quality_label, b.height) - heightFromLabel(a.quality_label, a.height) ||
+        bitrate(b) - bitrate(a)
+    );
+  if (muxed[0]) return muxed[0];
+  const anyMuxed = formats
     .filter((f) => f.has_video && f.has_audio)
     .sort((a, b) => bitrate(b) - bitrate(a));
-  if (muxed[0]) return muxed[0];
-  return formats.find((f) => f.has_video) ?? formats[0];
+  if (anyMuxed[0]) return anyMuxed[0];
+  return formats.find((f) => f.has_video && heightOk(f)) ?? formats.find((f) => f.has_video) ?? formats[0];
 }
 
 function extFromMime(mime?: string): string | undefined {
@@ -246,10 +270,15 @@ function extFromMime(mime?: string): string | undefined {
   return undefined;
 }
 
-async function extractViaYtdl(url: string, format: FormatPreset): Promise<ResolvedMedia> {
+async function extractViaYtdl(
+  url: string,
+  format: FormatPreset,
+  quality: YoutubeQuality = "best"
+): Promise<ResolvedMedia> {
   const ytdl = await getYtdl();
   const info = await ytdl.getInfo(url);
   const title = info.videoDetails.title ?? info.videoDetails.videoId;
+  const cap = qualityCap(quality);
 
   let formats =
     format === "audio-only"
@@ -274,12 +303,30 @@ async function extractViaYtdl(url: string, format: FormatPreset): Promise<Resolv
   }
   if (!formats.length) throw new Error("No downloadable formats");
 
-  const chosen = formats
-    .filter((f: { url?: string }) => Boolean(f.url))
-    .sort(
-      (a: { bitrate?: number }, b: { bitrate?: number }) =>
-        (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0)
-    )[0];
+  const heightOf = (f: { qualityLabel?: string; height?: number }) =>
+    heightFromLabel(f.qualityLabel, f.height);
+  const withinCap = (f: { qualityLabel?: string; height?: number }) => {
+    if (cap == null || format === "audio-only") return true;
+    const h = heightOf(f);
+    return h <= 0 || h <= cap;
+  };
+
+  const chosen =
+    formats
+      .filter((f: { url?: string }) => Boolean(f.url))
+      .filter(withinCap)
+      .sort(
+        (
+          a: { bitrate?: number; qualityLabel?: string; height?: number },
+          b: { bitrate?: number; qualityLabel?: string; height?: number }
+        ) => heightOf(b) - heightOf(a) || (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0)
+      )[0] ??
+    formats
+      .filter((f: { url?: string }) => Boolean(f.url))
+      .sort(
+        (a: { bitrate?: number }, b: { bitrate?: number }) =>
+          (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0)
+      )[0];
   if (!chosen) throw new Error("No format with a direct URL");
 
   const stream = ytdl.downloadFromInfo(info, { format: chosen });
@@ -328,7 +375,8 @@ async function extractViaService(
   sourceUrl: string,
   format: FormatPreset,
   baseUrl: string,
-  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {}
+  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {},
+  quality: YoutubeQuality = "best"
 ): Promise<ResolvedMedia> {
   const base = baseUrl.replace(/\/$/, "");
 
@@ -346,7 +394,8 @@ async function extractViaService(
       format,
       data.formatStreams ?? [],
       data.adaptiveFormats ?? [],
-      opts
+      opts,
+      quality
     );
   } catch {
     /* try Piped next */
@@ -370,7 +419,7 @@ async function extractViaService(
     })),
     ...(data.audioStreams ?? []).map((s) => ({ ...s, audioOnly: true })),
   ];
-  return pickAndDownload(sourceUrl, data.title ?? id, format, combined, [], opts);
+  return pickAndDownload(sourceUrl, data.title ?? id, format, combined, [], opts, quality);
 }
 
 async function pickAndDownload(
@@ -379,9 +428,16 @@ async function pickAndDownload(
   format: FormatPreset,
   muxed: ServiceFormat[],
   adaptive: ServiceFormat[],
-  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {}
+  opts: { fragmentConcurrency?: number; signal?: AbortSignal } = {},
+  quality: YoutubeQuality = "best"
 ): Promise<ResolvedMedia> {
   let pick: ServiceFormat | undefined;
+  const cap = qualityCap(quality);
+  const withinCap = (s: ServiceFormat) => {
+    if (cap == null || format === "audio-only") return true;
+    const h = heightFromLabel(s.qualityLabel ?? s.quality);
+    return h <= 0 || h <= cap;
+  };
 
   if (format === "audio-only") {
     pick = [...adaptive, ...muxed]
@@ -389,10 +445,17 @@ async function pickAndDownload(
       .sort((a, b) => Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0))[0];
   } else {
     pick = muxed
-      .filter((s) => s.url && !s.videoOnly)
-      .sort((a, b) => Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0))[0];
+      .filter((s) => s.url && !s.videoOnly && withinCap(s))
+      .sort(
+        (a, b) =>
+          heightFromLabel(b.qualityLabel ?? b.quality) - heightFromLabel(a.qualityLabel ?? a.quality) ||
+          Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0)
+      )[0];
     if (!pick) {
-      pick = muxed.find((s) => s.url) ?? adaptive.find((s) => s.url && !s.audioOnly);
+      pick =
+        muxed.filter((s) => s.url && !s.videoOnly).sort((a, b) => Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0))[0] ??
+        muxed.find((s) => s.url) ??
+        adaptive.find((s) => s.url && !s.audioOnly);
     }
   }
 

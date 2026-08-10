@@ -30,6 +30,7 @@ import GuidHomeInputCard from "./guid/GuidHomeInputCard";
 import GuidHomeActionRow from "./guid/GuidHomeActionRow";
 import ExtractPickTable from "./ExtractPickTable";
 import { resolveYoutubeExtractUrl, youtubeWatchHasList } from "./youtubeUrl";
+import { youtubeQualityChoices } from "./youtubeQuality";
 import ShimmerText from "@renderer/components/base/ShimmerText";
 import styles from "./guid/guid.module.css";
 import "./guid/guid-sendbox.css";
@@ -104,6 +105,9 @@ const DownloadPage: React.FC = () => {
   const confirmYtQuality = useHomeChatStore((s) => s.confirmYtQuality);
   const confirmAudio = useHomeChatStore((s) => s.confirmAudio);
   const confirmSubs = useHomeChatStore((s) => s.confirmSubs);
+  const confirmSaveVideo = useHomeChatStore((s) => s.confirmSaveVideo);
+  const confirmSaveAudio = useHomeChatStore((s) => s.confirmSaveAudio);
+  const confirmSaveThumbnail = useHomeChatStore((s) => s.confirmSaveThumbnail);
   const extracting = useHomeChatStore((s) => s.extracting);
   const getPlaylistList = useHomeChatStore((s) => s.getPlaylistList);
   const setUrl = useHomeChatStore((s) => s.setUrl);
@@ -113,6 +117,9 @@ const DownloadPage: React.FC = () => {
   const setConfirmYtQuality = useHomeChatStore((s) => s.setConfirmYtQuality);
   const setConfirmAudio = useHomeChatStore((s) => s.setConfirmAudio);
   const setConfirmSubs = useHomeChatStore((s) => s.setConfirmSubs);
+  const setConfirmSaveVideo = useHomeChatStore((s) => s.setConfirmSaveVideo);
+  const setConfirmSaveAudio = useHomeChatStore((s) => s.setConfirmSaveAudio);
+  const setConfirmSaveThumbnail = useHomeChatStore((s) => s.setConfirmSaveThumbnail);
   const setExtracting = useHomeChatStore((s) => s.setExtracting);
   const setGetPlaylistList = useHomeChatStore((s) => s.setGetPlaylistList);
   const appendMessages = useHomeChatStore((s) => s.appendMessages);
@@ -165,6 +172,9 @@ const DownloadPage: React.FC = () => {
       setConfirmYtQuality(settings.youtube?.quality ?? "best");
       setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
       setConfirmSubs(settings.youtube?.subtitles ?? "separate");
+      setConfirmSaveVideo(settings.youtube?.saveVideo !== false);
+      setConfirmSaveAudio(settings.youtube?.saveAudio !== false);
+      setConfirmSaveThumbnail(settings.youtube?.saveThumbnail !== false);
       setListMax(
         Math.max(
           settings.youtube?.playlistMaxVideos ?? 50,
@@ -179,6 +189,9 @@ const DownloadPage: React.FC = () => {
     setConfirmYtQuality,
     setConfirmAudio,
     setConfirmSubs,
+    setConfirmSaveVideo,
+    setConfirmSaveAudio,
+    setConfirmSaveThumbnail,
   ]);
 
   const updateChatFade = () => {
@@ -546,6 +559,9 @@ const DownloadPage: React.FC = () => {
     setConfirmYtQuality(settings.youtube?.quality ?? "best");
     setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
     setConfirmSubs(settings.youtube?.subtitles ?? "separate");
+    setConfirmSaveVideo(settings.youtube?.saveVideo !== false);
+    setConfirmSaveAudio(settings.youtube?.saveAudio !== false);
+    setConfirmSaveThumbnail(settings.youtube?.saveThumbnail !== false);
 
     if (downloadable.length === 0) {
       mapMessages((prev) =>
@@ -599,7 +615,11 @@ const DownloadPage: React.FC = () => {
       ? extractForMsg.items.map((i) => i.url)
       : undefined;
     // Profile / bulk: always pick from the list (skip auto-start of whole channel).
-    const shouldAuto = autoDownload && !selectable;
+    // Single YouTube: always confirm so the user can pick height quality.
+    const shouldAuto =
+      autoDownload &&
+      !selectable &&
+      !(detected.id === "youtube" && extractForMsg.mode === "single");
 
     const downloadUrls = selectable
       ? extractForMsg.items.map((i) => i.url)
@@ -650,6 +670,9 @@ const DownloadPage: React.FC = () => {
                   quality: settings.youtube?.quality ?? "best",
                   audioContainer: settings.youtube?.audioContainer ?? "m4a",
                   subtitles: settings.youtube?.subtitles ?? "separate",
+                  saveVideo: settings.youtube?.saveVideo !== false,
+                  saveAudio: settings.youtube?.saveAudio !== false,
+                  saveThumbnail: settings.youtube?.saveThumbnail !== false,
                 }
               : undefined,
         })
@@ -765,6 +788,9 @@ const DownloadPage: React.FC = () => {
                 quality: confirmYtQuality,
                 audioContainer: confirmAudio,
                 subtitles: confirmSubs,
+                saveVideo: confirmSaveVideo,
+                saveAudio: confirmSaveAudio,
+                saveThumbnail: confirmSaveThumbnail,
               }
             : undefined,
       })
@@ -776,6 +802,9 @@ const DownloadPage: React.FC = () => {
           quality: confirmYtQuality,
           audioContainer: confirmAudio,
           subtitles: confirmSubs,
+          saveVideo: confirmSaveVideo,
+          saveAudio: confirmSaveAudio,
+          saveThumbnail: confirmSaveThumbnail,
         },
       });
     }
@@ -1173,25 +1202,70 @@ const DownloadPage: React.FC = () => {
                                   <Select
                                     size="small"
                                     style={{ width: 140 }}
-                                    value={confirmYtQuality}
+                                    value={
+                                      youtubeQualityChoices(extract.qualities).includes(
+                                        confirmYtQuality
+                                      )
+                                        ? confirmYtQuality
+                                        : "best"
+                                    }
                                     onChange={(v) => setConfirmYtQuality(v as YoutubeQuality)}
                                   >
-                                    {(
-                                      [
-                                        "best",
-                                        "2160",
-                                        "1440",
-                                        "1080",
-                                        "720",
-                                        "480",
-                                        "360",
-                                      ] as YoutubeQuality[]
-                                    ).map((q) => (
+                                    {youtubeQualityChoices(extract.qualities).map((q) => (
                                       <Select.Option key={q} value={q}>
-                                        {q === "best" ? "Best" : `${q}p`}
+                                        {q === "best"
+                                          ? extract.qualities?.[0]
+                                            ? `Best (up to ${extract.qualities[0]}p)`
+                                            : "Best (DASH streams)"
+                                          : `${q}p`}
                                       </Select.Option>
                                     ))}
                                   </Select>
+                                </div>
+                              )}
+                              {showYoutubeConfirm && extract.qualities && extract.qualities.length > 0 && (
+                                <div className="home-chat-confirm__hint">
+                                  Adaptive streams: {extract.qualities.slice(0, 6).map((h) => `${h}p`).join(" · ")}
+                                  {extract.qualities.length > 6 ? " · …" : ""}
+                                  {" · ffmpeg merges video + audio"}
+                                </div>
+                              )}
+                              {showYoutubeConfirm && (
+                                <div className="home-chat-confirm__row home-chat-confirm__row--assets">
+                                  <span className="home-chat-confirm__label">Save</span>
+                                  <div className="home-chat-confirm__checks">
+                                    {confirmFormat !== "audio-only" && (
+                                      <Checkbox
+                                        checked={confirmSaveVideo}
+                                        onChange={setConfirmSaveVideo}
+                                      >
+                                        Video
+                                      </Checkbox>
+                                    )}
+                                    <Checkbox
+                                      checked={
+                                        confirmFormat === "audio-only" ? true : confirmSaveAudio
+                                      }
+                                      disabled={confirmFormat === "audio-only"}
+                                      onChange={setConfirmSaveAudio}
+                                    >
+                                      Audio
+                                    </Checkbox>
+                                    <Checkbox
+                                      checked={confirmSaveThumbnail}
+                                      onChange={setConfirmSaveThumbnail}
+                                    >
+                                      Thumbnail
+                                    </Checkbox>
+                                    <Checkbox
+                                      checked={confirmSubs !== "none"}
+                                      onChange={(v) =>
+                                        setConfirmSubs(v ? "separate" : "none")
+                                      }
+                                    >
+                                      Subtitles
+                                    </Checkbox>
+                                  </div>
                                 </div>
                               )}
                               {showYoutubeConfirm && confirmFormat === "audio-only" && (
@@ -1211,7 +1285,7 @@ const DownloadPage: React.FC = () => {
                                   </Select>
                                 </div>
                               )}
-                              {showYoutubeConfirm && (
+                              {showYoutubeConfirm && confirmSubs !== "none" && (
                                 <div className="home-chat-confirm__row">
                                   <span className="home-chat-confirm__label">Subtitles</span>
                                   <Select
@@ -1220,7 +1294,6 @@ const DownloadPage: React.FC = () => {
                                     value={confirmSubs}
                                     onChange={(v) => setConfirmSubs(v as SubtitleMode)}
                                   >
-                                    <Select.Option value="none">None</Select.Option>
                                     <Select.Option value="separate">Separate file</Select.Option>
                                     <Select.Option value="embed">Embed</Select.Option>
                                   </Select>

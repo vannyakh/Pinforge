@@ -53,6 +53,12 @@ export interface YoutubeDownloadOptions {
   channelMaxVideos?: number;
   /** Max videos from a playlist / mix URL (default 50). */
   playlistMaxVideos?: number;
+  /** Save merged video file (default true). */
+  saveVideo?: boolean;
+  /** Also save a separate audio track (default true). */
+  saveAudio?: boolean;
+  /** Save thumbnail as a sidecar image (default true). */
+  saveThumbnail?: boolean;
 }
 
 export interface PinterestOptions {
@@ -177,6 +183,8 @@ export interface ExtractPreview {
   itemCount: number;
   truncated?: boolean;
   message?: string;
+  /** Available video heights (px), highest first — YouTube single preview. */
+  qualities?: number[];
 }
 
 export interface SystemConfig {
@@ -190,6 +198,10 @@ export interface SystemConfig {
   logDir: string;
   ffmpegPath: string;
   ffmpegEnabled: boolean;
+  ytdlpPath: string;
+  ytdlpEnabled: boolean;
+  /** First-run CapCut-style environment setup completed (or skipped). */
+  environmentSetupDone: boolean;
 }
 
 export interface FormatPluginConfig {
@@ -392,6 +404,14 @@ export interface SystemResourcesInfo {
 }
 
 const api = {
+  /** Signal main that CSS + React have mounted — used to show the window. */
+  rendererReady: (): void => {
+    ipcRenderer.send("renderer:ready");
+  },
+
+  getAppInfo: (): Promise<{ version: string; isPackaged: boolean }> =>
+    ipcRenderer.invoke("app:getInfo"),
+
   processMedia: (payload: {
     url: string;
     preset: PresetName;
@@ -559,6 +579,121 @@ const api = {
     return () => ipcRenderer.removeListener("tools:ffmpegProgress", listener);
   },
 
+  ytdlpStatus: (): Promise<{
+    available: boolean;
+    enabled: boolean;
+    path: string;
+    version?: string;
+    source: "custom" | "bundled" | "path" | "none";
+    installing: boolean;
+  }> => ipcRenderer.invoke("tools:ytdlpStatus"),
+  ytdlpInstall: (): Promise<{
+    available: boolean;
+    enabled: boolean;
+    path: string;
+    version?: string;
+    source: "custom" | "bundled" | "path" | "none";
+    installing: boolean;
+  }> => ipcRenderer.invoke("tools:ytdlpInstall"),
+  ytdlpPick: (): Promise<{
+    available: boolean;
+    enabled: boolean;
+    path: string;
+    version?: string;
+    source: "custom" | "bundled" | "path" | "none";
+    installing: boolean;
+  } | null> => ipcRenderer.invoke("tools:ytdlpPick"),
+  onYtdlpProgress: (
+    cb: (event: { phase: string; percent: number; message: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      payload: { phase: string; percent: number; message: string }
+    ) => cb(payload);
+    ipcRenderer.on("tools:ytdlpProgress", listener);
+    return () => ipcRenderer.removeListener("tools:ytdlpProgress", listener);
+  },
+
+  playwrightStatus: (): Promise<{
+    available: boolean;
+    path: string;
+    version?: string;
+    installing: boolean;
+  }> => ipcRenderer.invoke("tools:playwrightStatus"),
+  playwrightInstall: (): Promise<{
+    available: boolean;
+    path: string;
+    version?: string;
+    installing: boolean;
+  }> => ipcRenderer.invoke("tools:playwrightInstall"),
+  onPlaywrightProgress: (
+    cb: (event: { phase: string; percent: number; message: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      payload: { phase: string; percent: number; message: string }
+    ) => cb(payload);
+    ipcRenderer.on("tools:playwrightProgress", listener);
+    return () => ipcRenderer.removeListener("tools:playwrightProgress", listener);
+  },
+
+  environmentSetupStatus: (): Promise<{
+    needed: boolean;
+    done: boolean;
+    running: boolean;
+    tools: {
+      ffmpeg: { available: boolean; path?: string; version?: string };
+      ytdlp: { available: boolean; path?: string; version?: string };
+      playwright: { available: boolean; path?: string; version?: string };
+    };
+  }> => ipcRenderer.invoke("tools:environmentSetupStatus"),
+  environmentSetupStart: (): Promise<{
+    needed: boolean;
+    done: boolean;
+    running: boolean;
+    tools: {
+      ffmpeg: { available: boolean; path?: string; version?: string };
+      ytdlp: { available: boolean; path?: string; version?: string };
+      playwright: { available: boolean; path?: string; version?: string };
+    };
+  }> => ipcRenderer.invoke("tools:environmentSetupStart"),
+  environmentSetupComplete: (): Promise<{
+    needed: boolean;
+    done: boolean;
+    running: boolean;
+    tools: {
+      ffmpeg: { available: boolean; path?: string; version?: string };
+      ytdlp: { available: boolean; path?: string; version?: string };
+      playwright: { available: boolean; path?: string; version?: string };
+    };
+  }> => ipcRenderer.invoke("tools:environmentSetupComplete"),
+  onEnvironmentSetupProgress: (
+    cb: (event: {
+      step: string;
+      stepIndex: number;
+      stepCount: number;
+      phase: string;
+      percent: number;
+      message: string;
+      toolAvailable?: boolean;
+    }) => void
+  ): (() => void) => {
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      payload: {
+        step: string;
+        stepIndex: number;
+        stepCount: number;
+        phase: string;
+        percent: number;
+        message: string;
+        toolAvailable?: boolean;
+      }
+    ) => cb(payload);
+    ipcRenderer.on("tools:environmentSetupProgress", listener);
+    return () => ipcRenderer.removeListener("tools:environmentSetupProgress", listener);
+  },
+
   getUpdateStatus: (): Promise<AutoUpdateStatus> =>
     ipcRenderer.invoke("update:getStatus"),
   checkForUpdates: (req?: UpdateCheckRequest): Promise<AutoUpdateStatus> =>
@@ -601,6 +736,8 @@ const api = {
   windowToggleMaximize: (): Promise<void> => ipcRenderer.invoke("window:toggleMaximize"),
   windowClose: (): Promise<void> => ipcRenderer.invoke("window:close"),
   windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke("window:isMaximized"),
+  setInstallerMode: (active: boolean): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke("window:setInstallerMode", active),
   onWindowMaximizedChanged: (cb: (maximized: boolean) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, maximized: boolean) => cb(maximized);
     ipcRenderer.on("window:maximizedChanged", listener);

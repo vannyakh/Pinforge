@@ -159,7 +159,6 @@ export async function downloadToFile(
   const headers = buildHeaders(opts);
   const concurrency = Math.max(1, opts.concurrency ?? 4);
   const minSize = opts.minSizeForFragments ?? 2 * 1024 * 1024;
-  const fragmentSize = opts.fragmentSize ?? 4 * 1024 * 1024;
   const resume = Boolean(opts.resume);
   const statePath = `${destPath}.part.json`;
 
@@ -177,6 +176,10 @@ export async function downloadToFile(
     }
 
     const total = probe.length;
+    // Larger fragments for high-bitrate / long streams improve throughput.
+    const fragmentSize =
+      opts.fragmentSize ??
+      (total >= 50 * 1024 * 1024 ? 8 * 1024 * 1024 : 4 * 1024 * 1024);
     const ranges: Array<{ start: number; end: number; index: number }> = [];
     for (let start = 0, index = 0; start < total; start += fragmentSize, index++) {
       const end = Math.min(start + fragmentSize - 1, total - 1);
@@ -263,12 +266,14 @@ export async function downloadToBuffer(
   const headers = buildHeaders(opts);
   const concurrency = Math.max(1, opts.concurrency ?? 4);
   const minSize = opts.minSizeForFragments ?? 2 * 1024 * 1024;
-  const fragmentSize = opts.fragmentSize ?? 4 * 1024 * 1024;
 
   const probe = await probeSize(url, headers, opts.signal);
 
   if (probe.acceptRanges && probe.length && probe.length >= minSize && concurrency > 1) {
     const total = probe.length;
+    const fragmentSize =
+      opts.fragmentSize ??
+      (total >= 50 * 1024 * 1024 ? 8 * 1024 * 1024 : 4 * 1024 * 1024);
     const buffer = Buffer.allocUnsafe(total);
     const ranges: Array<{ start: number; end: number }> = [];
     for (let start = 0; start < total; start += fragmentSize) {
