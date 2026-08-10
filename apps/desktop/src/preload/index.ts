@@ -422,8 +422,7 @@ const api = {
     youtube?: Partial<YoutubeDownloadOptions>;
     pinterest?: Partial<PinterestOptions>;
   }): Promise<ProcessResponse> => ipcRenderer.invoke("media:process", payload),
-  cancelMedia: (): Promise<{ ok: boolean; message: string }> =>
-    ipcRenderer.invoke("media:cancel"),
+  cancelMedia: (): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke("media:cancel"),
   processPin: (url: string, preset: PresetName, outDir: string): Promise<ProcessResponse> =>
     ipcRenderer.invoke("pin:process", { url, preset, outDir }),
   detectProvider: (url: string): Promise<DetectedProvider | null> =>
@@ -441,16 +440,13 @@ const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke("pin:pickFolder"),
   pickFolderPath: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke("dialog:pickFolder", defaultPath),
-  pickProviderSource: (): Promise<string | null> =>
-    ipcRenderer.invoke("dialog:pickProviderSource"),
-  pickFormatPlugin: (): Promise<string | null> =>
-    ipcRenderer.invoke("dialog:pickFormatPlugin"),
+  pickProviderSource: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickProviderSource"),
+  pickFormatPlugin: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickFormatPlugin"),
   listCustomProviders: (): Promise<CustomProviderConfig[]> =>
     ipcRenderer.invoke("providers:listCustom"),
   listInstalledProviders: (): Promise<InstalledProviderView[]> =>
     ipcRenderer.invoke("providers:listInstalled"),
-  registryList: (): Promise<RegistryListItem[]> =>
-    ipcRenderer.invoke("providers:registryList"),
+  registryList: (): Promise<RegistryListItem[]> => ipcRenderer.invoke("providers:registryList"),
   setProviderEnabled: (
     id: string,
     enabled: boolean
@@ -514,29 +510,26 @@ const api = {
     channels?: RemoteChannelConfig[];
     tunnel?: Partial<CloudflareTunnelConfig>;
   }): Promise<RemoteConfig> => ipcRenderer.invoke("remote:set", partial),
-  upsertRemoteChannel: (channel: Partial<RemoteChannelConfig> & { id: string }): Promise<RemoteConfig> =>
-    ipcRenderer.invoke("remote:upsertChannel", channel),
+  upsertRemoteChannel: (
+    channel: Partial<RemoteChannelConfig> & { id: string }
+  ): Promise<RemoteConfig> => ipcRenderer.invoke("remote:upsertChannel", channel),
   testRemoteChannel: (payload: {
     id: string;
     botToken?: string;
     webhookUrl?: string;
-  }): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke("remote:testChannel", payload),
+  }): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke("remote:testChannel", payload),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),
-  openPath: (filePath: string): Promise<string> =>
-    ipcRenderer.invoke("shell:openPath", filePath),
-  openExternal: (url: string): Promise<boolean> =>
-    ipcRenderer.invoke("shell:openExternal", url),
+  openPath: (filePath: string): Promise<string> => ipcRenderer.invoke("shell:openPath", filePath),
+  openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke("shell:openExternal", url),
   diskSpace: (dirPath?: string): Promise<DiskSpaceInfo | null> =>
     ipcRenderer.invoke("fs:diskSpace", dirPath),
-  systemResources: (): Promise<SystemResourcesInfo> =>
-    ipcRenderer.invoke("system:resources"),
+  systemResources: (): Promise<SystemResourcesInfo> => ipcRenderer.invoke("system:resources"),
   fileSizes: (paths: string[]): Promise<Record<string, number>> =>
     ipcRenderer.invoke("fs:fileSizes", paths),
-  zipFolder: (
-    folderPath: string,
-    outZipPath?: string
-  ): Promise<{ zipPath: string }> => ipcRenderer.invoke("fs:zipFolder", folderPath, outZipPath),
+  zipFolder: (folderPath: string, outZipPath?: string): Promise<{ zipPath: string }> =>
+    ipcRenderer.invoke("fs:zipFolder", folderPath, outZipPath),
 
   onMediaProgress: (cb: (event: MediaProgressEvent) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, payload: MediaProgressEvent) => cb(payload);
@@ -694,34 +687,24 @@ const api = {
     return () => ipcRenderer.removeListener("tools:environmentSetupProgress", listener);
   },
 
-  getUpdateStatus: (): Promise<AutoUpdateStatus> =>
-    ipcRenderer.invoke("update:getStatus"),
+  getUpdateStatus: (): Promise<AutoUpdateStatus> => ipcRenderer.invoke("update:getStatus"),
   checkForUpdates: (req?: UpdateCheckRequest): Promise<AutoUpdateStatus> =>
     ipcRenderer.invoke("update:check", req),
-  downloadUpdate: (): Promise<AutoUpdateStatus> =>
-    ipcRenderer.invoke("update:download"),
+  downloadUpdate: (): Promise<AutoUpdateStatus> => ipcRenderer.invoke("update:download"),
   quitAndInstallUpdate: (): Promise<{ ok: boolean; message?: string }> =>
     ipcRenderer.invoke("update:quitAndInstall"),
   onUpdateStatus: (cb: (status: AutoUpdateStatus) => void): (() => void) => {
-    const listener = (_e: Electron.IpcRendererEvent, status: AutoUpdateStatus) =>
-      cb(status);
+    const listener = (_e: Electron.IpcRendererEvent, status: AutoUpdateStatus) => cb(status);
     ipcRenderer.on("update:status", listener);
     return () => ipcRenderer.removeListener("update:status", listener);
   },
 
-  listJobs: (filter?: {
-    status?: JobStatus[];
-    limit?: number;
-  }): Promise<DownloadJob[]> => ipcRenderer.invoke("jobs:list", filter),
-  getJob: (id: string): Promise<DownloadJob | null> =>
-    ipcRenderer.invoke("jobs:get", id),
-  pauseJob: (
-    id?: string
-  ): Promise<{ ok: boolean; message?: string; job: DownloadJob | null }> =>
+  listJobs: (filter?: { status?: JobStatus[]; limit?: number }): Promise<DownloadJob[]> =>
+    ipcRenderer.invoke("jobs:list", filter),
+  getJob: (id: string): Promise<DownloadJob | null> => ipcRenderer.invoke("jobs:get", id),
+  pauseJob: (id?: string): Promise<{ ok: boolean; message?: string; job: DownloadJob | null }> =>
     ipcRenderer.invoke("jobs:pause", id),
-  resumeJob: (
-    id: string
-  ): Promise<{ ok: boolean; job: DownloadJob }> =>
+  resumeJob: (id: string): Promise<{ ok: boolean; job: DownloadJob }> =>
     ipcRenderer.invoke("jobs:resume", id),
   cancelJob: (payload?: {
     id?: string;
@@ -729,8 +712,7 @@ const api = {
   }): Promise<{ ok: boolean; message?: string; job: DownloadJob | null }> =>
     ipcRenderer.invoke("jobs:cancel", payload ?? {}),
   recoverJobs: (): Promise<DownloadJob[]> => ipcRenderer.invoke("jobs:recover"),
-  listUnfinishedJobs: (): Promise<DownloadJob[]> =>
-    ipcRenderer.invoke("jobs:listUnfinished"),
+  listUnfinishedJobs: (): Promise<DownloadJob[]> => ipcRenderer.invoke("jobs:listUnfinished"),
 
   windowMinimize: (): Promise<void> => ipcRenderer.invoke("window:minimize"),
   windowToggleMaximize: (): Promise<void> => ipcRenderer.invoke("window:toggleMaximize"),

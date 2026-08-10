@@ -24,10 +24,8 @@ export function heightFromLabel(label?: string, height?: number): number {
 export function normalizeStreamFlags(f: YtStreamFormat): YtStreamFormat {
   const mime = f.mime_type ?? "";
   const hasVideo =
-    f.has_video ??
-    (/^video\//i.test(mime) || Boolean(f.height) || Boolean(f.quality_label));
-  const hasAudio =
-    f.has_audio ?? (/^audio\//i.test(mime) || (/audio/i.test(mime) && !hasVideo));
+    f.has_video ?? (/^video\//i.test(mime) || Boolean(f.height) || Boolean(f.quality_label));
+  const hasAudio = f.has_audio ?? (/^audio\//i.test(mime) || (/audio/i.test(mime) && !hasVideo));
   return { ...f, has_video: Boolean(hasVideo), has_audio: Boolean(hasAudio) };
 }
 
@@ -78,14 +76,13 @@ export function youtubeQualityChoices(availableHeights?: number[]): YoutubeQuali
     const q = key as YoutubeQuality;
     if (!fromPreview.includes(q)) fromPreview.push(q);
   }
-  return fromPreview.length ? (["best", ...fromPreview] as YoutubeQuality[]) : [...DEFAULT_QUALITY_CHOICES];
+  return fromPreview.length
+    ? (["best", ...fromPreview] as YoutubeQuality[])
+    : [...DEFAULT_QUALITY_CHOICES];
 }
 
 /** Default fragment concurrency for a quality target (higher for 1080p+ / best). */
-export function fragmentConcurrencyForQuality(
-  quality: YoutubeQuality,
-  override?: number
-): number {
+export function fragmentConcurrencyForQuality(quality: YoutubeQuality, override?: number): number {
   if (typeof override === "number" && override > 0) return override;
   if (quality === "best") return 6;
   const cap = qualityCap(quality);
@@ -108,9 +105,7 @@ export function pickAudioOnly(
       return bitrateOf(b) - bitrateOf(a);
     });
   if (audio[0]) return audio[0];
-  return formats
-    .filter((f) => f.url && f.has_audio)
-    .sort((a, b) => bitrateOf(b) - bitrateOf(a))[0];
+  return formats.filter((f) => f.url && f.has_audio).sort((a, b) => bitrateOf(b) - bitrateOf(a))[0];
 }
 
 export function pickProgressive(
@@ -128,18 +123,12 @@ export function pickProgressive(
     .filter((f) => f.url && f.has_video && f.has_audio)
     .map(rank)
     .filter((x) => (cap == null ? true : x.h <= cap || x.h === 0))
-    .sort(
-      (a, b) =>
-        b.mp4Boost - a.mp4Boost || b.h - a.h || bitrateOf(b.f) - bitrateOf(a.f)
-    );
+    .sort((a, b) => b.mp4Boost - a.mp4Boost || b.h - a.h || bitrateOf(b.f) - bitrateOf(a.f));
   if (muxed[0]) return muxed[0].f;
   return formats
     .filter((f) => f.url && f.has_video && f.has_audio)
     .map(rank)
-    .sort(
-      (a, b) =>
-        b.mp4Boost - a.mp4Boost || b.h - a.h || bitrateOf(b.f) - bitrateOf(a.f)
-    )[0]?.f;
+    .sort((a, b) => b.mp4Boost - a.mp4Boost || b.h - a.h || bitrateOf(b.f) - bitrateOf(a.f))[0]?.f;
 }
 
 export function pickDashPair(

@@ -42,18 +42,8 @@ export async function mediaInfoToResolved(
       concurrency: ctx?.fragmentConcurrency,
       signal: ctx?.signal,
     });
-    const title =
-      urls.length > 1
-        ? `${info.title ?? provider} (${i + 1})`
-        : info.title;
-    const resolved = toResolved(
-      provider,
-      sourceUrl,
-      buffer,
-      info.ext || ext,
-      title,
-      format
-    );
+    const title = urls.length > 1 ? `${info.title ?? provider} (${i + 1})` : info.title;
+    const resolved = toResolved(provider, sourceUrl, buffer, info.ext || ext, title, format);
     resolved.id = info.id ? (urls.length > 1 ? `${info.id}_${i}` : info.id) : undefined;
     resolved.channel = info.channel;
     resolved.kind = info.kind;

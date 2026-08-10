@@ -14,10 +14,7 @@ import {
   Tag,
   Tooltip,
 } from "@arco-design/web-react";
-import type {
-  ColumnProps,
-  SorterInfo,
-} from "@arco-design/web-react/es/Table/interface";
+import type { ColumnProps, SorterInfo } from "@arco-design/web-react/es/Table/interface";
 import {
   Clear,
   Close,
@@ -60,7 +57,7 @@ const TASKS_TABLE_MIN_X =
   80 + // Preset
   100 + // Updated
   88; // Actions
-  // = 1156
+// = 1156
 
 const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
 
@@ -198,11 +195,7 @@ function formatDateTime(ts: number): {
   });
   const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const now = new Date();
-  const startToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).getTime();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startYesterday = startToday - 86_400_000;
   let secondary: string;
   if (ts >= startToday) secondary = "Today";
@@ -230,11 +223,7 @@ function fileNameFromPath(p: string): string {
 }
 
 /** Detect collection-style downloads (board / playlist / profile). */
-function classifyCollection(
-  url: string,
-  provider?: string,
-  itemCount = 0,
-): CollectionKind | null {
+function classifyCollection(url: string, provider?: string, itemCount = 0): CollectionKind | null {
   try {
     const u = new URL(url.trim());
     const host = u.hostname.replace(/^www\./, "");
@@ -249,14 +238,10 @@ function classifyCollection(
     }
 
     if (/youtube\.com$|youtu\.be$/i.test(host)) {
-      if (
-        /\/playlist/i.test(path) ||
-        (!u.searchParams.has("v") && u.searchParams.has("list"))
-      ) {
+      if (/\/playlist/i.test(path) || (!u.searchParams.has("v") && u.searchParams.has("list"))) {
         return "playlist";
       }
-      if (/^\/(channel|c|user)\//i.test(path) || /^\/@/.test(path))
-        return "profile";
+      if (/^\/(channel|c|user)\//i.test(path) || /^\/@/.test(path)) return "profile";
     }
 
     if (/instagram\.com$/i.test(host)) {
@@ -315,10 +300,7 @@ function formatBytes(n: number | null | undefined): string {
 }
 
 function rowPercent(
-  row: Pick<
-    TaskRow,
-    "current" | "total" | "status" | "downloadedBytes" | "estimateBytes"
-  >,
+  row: Pick<TaskRow, "current" | "total" | "status" | "downloadedBytes" | "estimateBytes">
 ): number {
   if (row.status === "queued") return 0;
   if (
@@ -327,15 +309,9 @@ function rowPercent(
     typeof row.downloadedBytes === "number" &&
     row.downloadedBytes >= 0
   ) {
-    return Math.min(
-      100,
-      Math.round((row.downloadedBytes / row.estimateBytes) * 100),
-    );
+    return Math.min(100, Math.round((row.downloadedBytes / row.estimateBytes) * 100));
   }
-  if (
-    row.total > 0 &&
-    (row.current > 0 || row.status === "done" || row.status === "partial")
-  ) {
+  if (row.total > 0 && (row.current > 0 || row.status === "done" || row.status === "partial")) {
     return Math.min(100, Math.round((row.current / row.total) * 100));
   }
   return row.status === "running"
@@ -391,12 +367,8 @@ const TasksPage: React.FC = () => {
     memory: { used: number; free: number; total: number };
   } | null>(null);
   const [visibleCount, setVisibleCount] = useState(40);
-  const [packFileBytes, setPackFileBytes] = useState<Record<string, number>>(
-    {},
-  );
-  const [fileBytesByPath, setFileBytesByPath] = useState<
-    Record<string, number>
-  >({});
+  const [packFileBytes, setPackFileBytes] = useState<Record<string, number>>({});
+  const [fileBytesByPath, setFileBytesByPath] = useState<Record<string, number>>({});
   const [queue, setQueue] = useState<QueuedJob[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -418,8 +390,7 @@ const TasksPage: React.FC = () => {
   const PAGE_SIZE = 40;
 
   const detectedUrls = useMemo(() => extractUrls(addText), [addText]);
-  const isProcessing =
-    busy || batchRunning || tasks.some((t) => t.status === "running");
+  const isProcessing = busy || batchRunning || tasks.some((t) => t.status === "running");
   const pushNotify = settings?.system?.notifyOnDownloadComplete !== false;
 
   useEffect(() => {
@@ -427,10 +398,7 @@ const TasksPage: React.FC = () => {
     void api.listUnfinishedJobs().then((jobs) => {
       if (cancelled || !jobs.length) return;
       const paused = jobs.filter(
-        (j) =>
-          j.status === "paused" ||
-          j.status === "queued" ||
-          j.status === "downloading",
+        (j) => j.status === "paused" || j.status === "queued" || j.status === "downloading"
       );
       if (!paused.length) return;
       setResumeJobs(
@@ -440,7 +408,7 @@ const TasksPage: React.FC = () => {
           title: j.title,
           percent: j.progress?.percent,
           checked: true,
-        })),
+        }))
       );
       setResumeOpen(true);
     });
@@ -600,9 +568,7 @@ const TasksPage: React.FC = () => {
         etaSec: t.etaSec,
       };
       next.percent =
-        typeof t.percent === "number" && t.status === "running"
-          ? t.percent
-          : rowPercent(next);
+        typeof t.percent === "number" && t.status === "running" ? t.percent : rowPercent(next);
       byId.set(t.packId, next);
     }
 
@@ -623,12 +589,7 @@ const TasksPage: React.FC = () => {
     }
 
     for (const q of queue) {
-      if (
-        [...byId.values()].some(
-          (r) => r.url === q.url && r.status === "running",
-        )
-      )
-        continue;
+      if ([...byId.values()].some((r) => r.url === q.url && r.status === "running")) continue;
       const collection = classifyCollection(q.url, undefined, 0);
       byId.set(q.id, {
         id: q.id,
@@ -654,19 +615,11 @@ const TasksPage: React.FC = () => {
     for (const row of byId.values()) {
       if (row.queued || row.id === "pending" || row.isChild) continue;
       const items = history.filter((h) => h.packId === row.id);
-      const itemCount = Math.max(
-        items.length,
-        row.files,
-        row.total > 1 ? row.total : 0,
-      );
-      const collection =
-        row.collection ?? classifyCollection(row.url, row.provider, itemCount);
+      const itemCount = Math.max(items.length, row.files, row.total > 1 ? row.total : 0);
+      const collection = row.collection ?? classifyCollection(row.url, row.provider, itemCount);
       row.collection = collection;
 
-      if (
-        items.length > 1 ||
-        (collection && items.length >= 1 && itemCount > 1)
-      ) {
+      if (items.length > 1 || (collection && items.length >= 1 && itemCount > 1)) {
         row.children = items.map((h) => {
           const size = fileBytesByPath[h.outPath];
           const child: TaskRow = {
@@ -750,10 +703,7 @@ const TasksPage: React.FC = () => {
 
   rowsRef.current = rows;
 
-  const visibleRows = useMemo(
-    () => rows.slice(0, visibleCount),
-    [rows, visibleCount],
-  );
+  const visibleRows = useMemo(() => rows.slice(0, visibleCount), [rows, visibleCount]);
   const hasMoreRows = visibleCount < rows.length;
 
   useEffect(() => {
@@ -775,8 +725,7 @@ const TasksPage: React.FC = () => {
     const onScroll = () => {
       if (!body) return;
       body.classList.add("is-scrolling");
-      if (tableScrollHideRef.current)
-        window.clearTimeout(tableScrollHideRef.current);
+      if (tableScrollHideRef.current) window.clearTimeout(tableScrollHideRef.current);
       tableScrollHideRef.current = window.setTimeout(() => {
         body?.classList.remove("is-scrolling");
       }, 800);
@@ -804,8 +753,7 @@ const TasksPage: React.FC = () => {
     return () => {
       mo.disconnect();
       body?.removeEventListener("scroll", onScroll);
-      if (tableScrollHideRef.current)
-        window.clearTimeout(tableScrollHideRef.current);
+      if (tableScrollHideRef.current) window.clearTimeout(tableScrollHideRef.current);
     };
   }, []);
 
@@ -855,9 +803,7 @@ const TasksPage: React.FC = () => {
   };
 
   const resolveTaskFolder = (row: TaskRow): string | null => {
-    const items = row.isChild
-      ? history.filter((h) => h.id === row.id)
-      : itemsForPack(row.id);
+    const items = row.isChild ? history.filter((h) => h.id === row.id) : itemsForPack(row.id);
     const first = items.find((h) => h.outPath)?.outPath;
     if (!first) return null;
     const folder = first.replace(/[\\/][^\\/]+$/, "");
@@ -865,11 +811,8 @@ const TasksPage: React.FC = () => {
   };
 
   const selectedRows = useMemo(
-    () =>
-      flattenTaskRows(rows).filter(
-        (r) => selectedKeys.includes(r.id) && r.id !== "pending",
-      ),
-    [rows, selectedKeys],
+    () => flattenTaskRows(rows).filter((r) => selectedKeys.includes(r.id) && r.id !== "pending"),
+    [rows, selectedKeys]
   );
 
   /** ZIP is batch-only (toolbar when rows are selected). */
@@ -893,9 +836,7 @@ const TasksPage: React.FC = () => {
       }
       hide();
       Message.success(
-        folders.size === 1
-          ? `ZIP saved: ${lastZip}`
-          : `Created ${folders.size} ZIP files`,
+        folders.size === 1 ? `ZIP saved: ${lastZip}` : `Created ${folders.size} ZIP files`
       );
       if (lastZip) void api.showItemInFolder(lastZip);
     } catch (err) {
@@ -930,11 +871,7 @@ const TasksPage: React.FC = () => {
 
   const batchRetry = async () => {
     const list = selectedRows.filter(
-      (r) =>
-        !r.isChild &&
-        canRetryStatus(r.status) &&
-        r.url &&
-        r.url !== "…",
+      (r) => !r.isChild && canRetryStatus(r.status) && r.url && r.url !== "…"
     );
     if (list.length === 0) {
       Message.info("Select queued, failed, or partial tasks to retry.");
@@ -967,8 +904,7 @@ const TasksPage: React.FC = () => {
       targets.some(
         (r) =>
           r.status === "running" ||
-          (r.parentId &&
-            rows.find((p) => p.id === r.parentId)?.status === "running"),
+          (r.parentId && rows.find((p) => p.id === r.parentId)?.status === "running")
       )
     ) {
       Message.warning("Stop or wait for running jobs before removing them.");
@@ -988,13 +924,9 @@ const TasksPage: React.FC = () => {
         const child = flattenTaskRows(rows).find((r) => r.id === key);
         if (child?.parentId && removed.has(child.parentId)) return false;
         return true;
-      }),
+      })
     );
-    Message.success(
-      removed.size === 1
-        ? "Removed from list"
-        : `Removed ${removed.size} from list`,
-    );
+    Message.success(removed.size === 1 ? "Removed from list" : `Removed ${removed.size} from list`);
   };
   const unfinishedRows = useMemo(
     () =>
@@ -1004,17 +936,13 @@ const TasksPage: React.FC = () => {
           r.id !== "pending" &&
           r.url &&
           r.url !== "…" &&
-          (r.status === "queued" ||
-            r.status === "failed" ||
-            r.status === "partial"),
+          (r.status === "queued" || r.status === "failed" || r.status === "partial")
       ),
-    [rows],
+    [rows]
   );
 
   const startLabel =
-    unfinishedRows.some(
-      (r) => r.status === "failed" || r.status === "partial",
-    ) ||
+    unfinishedRows.some((r) => r.status === "failed" || r.status === "partial") ||
     (unfinishedRows.length > 0 && rows.some((r) => r.status === "done"))
       ? "Continue"
       : "Start";
@@ -1054,14 +982,9 @@ const TasksPage: React.FC = () => {
         }
         if (job.status === "queued" || job.queued) {
           const queued = queue.find((q) => q.id === job.id);
-          setQueue((prev) =>
-            prev.filter((q) => q.id !== job.id && q.url !== job.url),
-          );
+          setQueue((prev) => prev.filter((q) => q.id !== job.id && q.url !== job.url));
           const res = await processUrl(job.url, queued?.opts);
-          if (
-            stopBatchRef.current ||
-            res?.errors.some((e) => /stopped/i.test(e.error))
-          ) {
+          if (stopBatchRef.current || res?.errors.some((e) => /stopped/i.test(e.error))) {
             stopped = true;
             // Re-queue remaining if stopped mid-item
             if (stopBatchRef.current && job.url) {
@@ -1080,8 +1003,7 @@ const TasksPage: React.FC = () => {
                       outDir: settings?.outDir ?? "",
                       youtube: {
                         quality: settings?.youtube?.quality ?? "best",
-                        audioContainer:
-                          settings?.youtube?.audioContainer ?? "m4a",
+                        audioContainer: settings?.youtube?.audioContainer ?? "m4a",
                         subtitles: settings?.youtube?.subtitles ?? "separate",
                       },
                     },
@@ -1094,10 +1016,7 @@ const TasksPage: React.FC = () => {
           doneCount += 1;
         } else {
           const res = await processUrl(job.url);
-          if (
-            stopBatchRef.current ||
-            res?.errors.some((e) => /stopped/i.test(e.error))
-          ) {
+          if (stopBatchRef.current || res?.errors.some((e) => /stopped/i.test(e.error))) {
             stopped = true;
             break;
           }
@@ -1105,10 +1024,7 @@ const TasksPage: React.FC = () => {
         }
       }
       if (stopped) Message.info("Stopped — press Continue to resume");
-      else
-        Message.success(
-          doneCount ? "Downloads finished" : "Nothing to download",
-        );
+      else Message.success(doneCount ? "Downloads finished" : "Nothing to download");
     } finally {
       setBatchRunning(false);
       stopBatchRef.current = false;
@@ -1160,10 +1076,7 @@ const TasksPage: React.FC = () => {
         subtitles: addSubs,
       },
     };
-    const existing = new Set([
-      ...queue.map((q) => q.url),
-      ...packs.map((p) => p.url),
-    ]);
+    const existing = new Set([...queue.map((q) => q.url), ...packs.map((p) => p.url)]);
     const nextJobs: QueuedJob[] = [];
     for (const url of urls) {
       if (existing.has(url)) continue;
@@ -1184,7 +1097,7 @@ const TasksPage: React.FC = () => {
     Message.success(
       nextJobs.length === 1
         ? "Added to queue — press Start to download"
-        : `Queued ${nextJobs.length} links — press Start to download`,
+        : `Queued ${nextJobs.length} links — press Start to download`
     );
   };
 
@@ -1199,19 +1112,15 @@ const TasksPage: React.FC = () => {
 
   const selectableParentIds = useMemo(
     () => rows.filter((r) => r.id !== "pending").map((r) => r.id),
-    [rows],
+    [rows]
   );
   const allParentsSelected =
-    selectableParentIds.length > 0 &&
-    selectableParentIds.every((id) => selectedKeys.includes(id));
+    selectableParentIds.length > 0 && selectableParentIds.every((id) => selectedKeys.includes(id));
   const someParentsSelected =
-    !allParentsSelected &&
-    selectableParentIds.some((id) => selectedKeys.includes(id));
+    !allParentsSelected && selectableParentIds.some((id) => selectedKeys.includes(id));
 
   const toggleExpand = (id: string) => {
-    setExpandedKeys((prev) =>
-      prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id],
-    );
+    setExpandedKeys((prev) => (prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]));
   };
 
   const toggleRowSelected = (id: string, checked: boolean) => {
@@ -1232,18 +1141,10 @@ const TasksPage: React.FC = () => {
       bodyCellStyle: { padding: "10px 6px" },
       render: (_col, row) => {
         if (row.isChild) {
-          return (
-            <span className="tasks-table__index tasks-table__index--child">
-              ·
-            </span>
-          );
+          return <span className="tasks-table__index tasks-table__index--child">·</span>;
         }
         const n = rows.findIndex((r) => r.id === row.id) + 1;
-        return (
-          <span className="tasks-table__index tabular-nums">
-            {n > 0 ? n : "—"}
-          </span>
-        );
+        return <span className="tasks-table__index tabular-nums">{n > 0 ? n : "—"}</span>;
       },
     },
     {
@@ -1289,10 +1190,7 @@ const TasksPage: React.FC = () => {
         return (
           <div className={`tasks-table__task${row.isChild ? " is-child" : ""}`}>
             <div className="tasks-table__task-main">
-              <span
-                className="tasks-table__icon-slot"
-                aria-hidden={!showFolder}
-              >
+              <span className="tasks-table__icon-slot" aria-hidden={!showFolder}>
                 {hasTree ? (
                   <button
                     type="button"
@@ -1470,11 +1368,7 @@ const TasksPage: React.FC = () => {
           <div className="text-12px tabular-nums leading-tight">
             <div className="text-t-primary font-500">{row.files}</div>
             <div className="text-11px text-t-tertiary">
-              {row.errors > 0 ? (
-                <span className="text-danger">{row.errors} err</span>
-              ) : (
-                "saved"
-              )}
+              {row.errors > 0 ? <span className="text-danger">{row.errors} err</span> : "saved"}
             </div>
           </div>
         ),
@@ -1504,9 +1398,7 @@ const TasksPage: React.FC = () => {
         return (
           <Tooltip content={dt.full}>
             <div className="tasks-table__time leading-tight">
-              <div className="text-12px text-t-primary tabular-nums">
-                {dt.primary}
-              </div>
+              <div className="text-12px text-t-primary tabular-nums">{dt.primary}</div>
               <div className="text-11px text-t-tertiary">{dt.secondary}</div>
             </div>
           </Tooltip>
@@ -1521,12 +1413,9 @@ const TasksPage: React.FC = () => {
       className: "tasks-table__col-actions",
       render: (_col, row) => {
         if (row.id === "pending") return null;
-        const canOpen =
-          (row.files > 0 || row.isChild) && row.status !== "running";
+        const canOpen = (row.files > 0 || row.isChild) && row.status !== "running";
         const canRetry =
-          !row.isChild &&
-          canRetryStatus(row.status) &&
-          Boolean(row.url && row.url !== "…");
+          !row.isChild && canRetryStatus(row.status) && Boolean(row.url && row.url !== "…");
         return (
           <div className="tasks-table__actions flex items-center justify-end gap-2px">
             {canOpen && (
@@ -1585,12 +1474,7 @@ const TasksPage: React.FC = () => {
     onMouseDown: (e: React.MouseEvent) => {
       if (e.button !== 0 || record.id === "pending" || record.isChild) return;
       const target = e.target as HTMLElement;
-      if (
-        target.closest(
-          "button, a, input, .arco-checkbox, .arco-table-expand-icon",
-        )
-      )
-        return;
+      if (target.closest("button, a, input, .arco-checkbox, .arco-table-expand-icon")) return;
       const index = rowsRef.current.findIndex((r) => r.id === record.id);
       if (index < 0) return;
       dragSelectRef.current = {
@@ -1617,10 +1501,7 @@ const TasksPage: React.FC = () => {
           <div className="flex items-center gap-12px min-w-0">
             <div className="text-22px font-600 text-t-primary">Tasks</div>
           </div>
-          <Space
-            size={8}
-            className="tasks-header-actions shrink-0 flex-wrap justify-end"
-          >
+          <Space size={8} className="tasks-header-actions shrink-0 flex-wrap justify-end">
             {selectedKeys.length > 0 ? (
               <>
                 <div className="text-13px text-t-secondary tabular-nums">
@@ -1656,10 +1537,7 @@ const TasksPage: React.FC = () => {
                     icon={<FileZip theme="outline" size="14" />}
                     disabled={
                       busy ||
-                      selectedRows.every(
-                        (r) =>
-                          r.status === "running" || !resolveTaskFolder(r),
-                      )
+                      selectedRows.every((r) => r.status === "running" || !resolveTaskFolder(r))
                     }
                     onClick={() => void batchZip()}
                     aria-label="ZIP selected"
@@ -1674,10 +1552,7 @@ const TasksPage: React.FC = () => {
                     type="outline"
                     icon={<Redo theme="outline" size="14" />}
                     disabled={
-                      busy ||
-                      selectedRows.every(
-                        (r) => r.isChild || !canRetryStatus(r.status),
-                      )
+                      busy || selectedRows.every((r) => r.isChild || !canRetryStatus(r.status))
                     }
                     onClick={() => void batchRetry()}
                     aria-label="Retry selected"
@@ -1692,9 +1567,7 @@ const TasksPage: React.FC = () => {
                     type="outline"
                     status="danger"
                     icon={<Delete theme="outline" size="14" />}
-                    disabled={
-                      busy || selectedRows.some((r) => r.status === "running")
-                    }
+                    disabled={busy || selectedRows.some((r) => r.status === "running")}
                     onClick={() => void removeFromList(selectedRows)}
                     aria-label="Remove selected"
                   >
@@ -1736,14 +1609,9 @@ const TasksPage: React.FC = () => {
                         <PlayOne theme="outline" size="14" />
                       )
                     }
-                    disabled={
-                      !(isProcessing || batchRunning) &&
-                      unfinishedRows.length === 0
-                    }
+                    disabled={!(isProcessing || batchRunning) && unfinishedRows.length === 0}
                     onClick={toggleStartStop}
-                    aria-label={
-                      isProcessing || batchRunning ? "Pause" : startLabel
-                    }
+                    aria-label={isProcessing || batchRunning ? "Pause" : startLabel}
                   >
                     <span className="tasks-header-btn__label">
                       {isProcessing || batchRunning ? "Pause" : startLabel}
@@ -1765,9 +1633,7 @@ const TasksPage: React.FC = () => {
                     </Button>
                   </Tooltip>
                 ) : null}
-                <Tooltip
-                  content={pushNotify ? "Push notify: on" : "Push notify: off"}
-                >
+                <Tooltip content={pushNotify ? "Push notify: on" : "Push notify: off"}>
                   <Button
                     className="tasks-header-btn"
                     size="small"
@@ -1852,9 +1718,7 @@ const TasksPage: React.FC = () => {
               direction: next.direction,
             });
           }}
-          noDataElement={
-            <Empty description="No tasks yet. Use + to add links." />
-          }
+          noDataElement={<Empty description="No tasks yet. Use + to add links." />}
         />
       </div>
       <div className="tasks-hw-bar" aria-label="System resources">
@@ -1863,13 +1727,8 @@ const TasksPage: React.FC = () => {
           <span className="tasks-hw-bar__value tabular-nums">
             {disk ? (
               <>
-                <span className="tasks-hw-bar__em">
-                  {formatBytes(disk.free)}
-                </span>
-                <span className="tasks-hw-bar__muted">
-                  {" "}
-                  free / {formatBytes(disk.total)}
-                </span>
+                <span className="tasks-hw-bar__em">{formatBytes(disk.free)}</span>
+                <span className="tasks-hw-bar__muted"> free / {formatBytes(disk.total)}</span>
               </>
             ) : (
               <span className="tasks-hw-bar__muted">—</span>
@@ -1881,13 +1740,8 @@ const TasksPage: React.FC = () => {
           <span className="tasks-hw-bar__value tabular-nums">
             {resources ? (
               <>
-                <span className="tasks-hw-bar__em">
-                  {resources.cpuPercent}%
-                </span>
-                <span className="tasks-hw-bar__muted">
-                  {" "}
-                  · {resources.cpuCount} cores
-                </span>
+                <span className="tasks-hw-bar__em">{resources.cpuPercent}%</span>
+                <span className="tasks-hw-bar__muted"> · {resources.cpuCount} cores</span>
               </>
             ) : (
               <span className="tasks-hw-bar__muted">—</span>
@@ -1899,9 +1753,7 @@ const TasksPage: React.FC = () => {
           <span className="tasks-hw-bar__value tabular-nums">
             {resources ? (
               <>
-                <span className="tasks-hw-bar__em">
-                  {formatBytes(resources.memory.used)}
-                </span>
+                <span className="tasks-hw-bar__em">{formatBytes(resources.memory.used)}</span>
                 <span className="tasks-hw-bar__muted">
                   {" "}
                   / {formatBytes(resources.memory.total)}
@@ -1933,7 +1785,11 @@ const TasksPage: React.FC = () => {
         unmountOnExit
         footer={
           <div className="flex justify-end gap-10px">
-            <Button onClick={closeAddModal} className="px-20px min-w-80px" style={{ borderRadius: 8 }}>
+            <Button
+              onClick={closeAddModal}
+              className="px-20px min-w-80px"
+              style={{ borderRadius: 8 }}
+            >
               Cancel
             </Button>
             <Button
@@ -1944,9 +1800,7 @@ const TasksPage: React.FC = () => {
               className="px-20px min-w-80px"
               style={{ borderRadius: 8 }}
             >
-              {detectedUrls.length > 1
-                ? `Add to queue (${detectedUrls.length})`
-                : "Add to queue"}
+              {detectedUrls.length > 1 ? `Add to queue (${detectedUrls.length})` : "Add to queue"}
             </Button>
           </div>
         }
@@ -1993,10 +1847,7 @@ const TasksPage: React.FC = () => {
             </div>
             {disk && (
               <div className="tasks-add-modal__hint tabular-nums">
-                Free space{" "}
-                <span className="text-t-secondary">
-                  {formatBytes(disk.free)}
-                </span>
+                Free space <span className="text-t-secondary">{formatBytes(disk.free)}</span>
                 {" / "}
                 {formatBytes(disk.total)} total
               </div>
@@ -2021,12 +1872,10 @@ const TasksPage: React.FC = () => {
                 onChange={(v) => setAddPreset(v as PresetName)}
                 options={
                   settings
-                    ? (Object.keys(settings.presets) as PresetName[]).map(
-                        (key) => ({
-                          value: key,
-                          label: settings.presets[key].label,
-                        }),
-                      )
+                    ? (Object.keys(settings.presets) as PresetName[]).map((key) => ({
+                        value: key,
+                        label: settings.presets[key].label,
+                      }))
                     : []
                 }
               />
@@ -2077,11 +1926,7 @@ const TasksPage: React.FC = () => {
             <div className="tasks-add-modal__field tasks-add-modal__field--switch">
               <div className="tasks-add-modal__label">Enhance stills</div>
               <div className="tasks-add-modal__switch-row">
-                <Switch
-                  checked={addEnhance}
-                  disabled={busy}
-                  onChange={setAddEnhance}
-                />
+                <Switch checked={addEnhance} disabled={busy} onChange={setAddEnhance} />
                 <span className="tasks-add-modal__switch-hint">
                   {addEnhance ? "On — apply preset to stills" : "Off"}
                 </span>
@@ -2119,17 +1964,13 @@ const TasksPage: React.FC = () => {
                   checked={j.checked}
                   onChange={(checked) =>
                     setResumeJobs((prev) =>
-                      prev.map((x) =>
-                        x.id === j.id ? { ...x, checked: Boolean(checked) } : x,
-                      ),
+                      prev.map((x) => (x.id === j.id ? { ...x, checked: Boolean(checked) } : x))
                     )
                   }
                 />
                 <span className="flex-1 truncate">
                   {j.title || j.url}
-                  {typeof j.percent === "number"
-                    ? ` — ${Math.round(j.percent)}%`
-                    : ""}
+                  {typeof j.percent === "number" ? ` — ${Math.round(j.percent)}%` : ""}
                 </span>
               </label>
             ))}

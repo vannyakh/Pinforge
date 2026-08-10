@@ -115,9 +115,11 @@ export const api = {
   setProviderEnabled: (id: string, enabled: boolean) => window.api.setProviderEnabled(id, enabled),
   installFromRegistry: (id: string) => window.api.installFromRegistry(id),
   uninstallProvider: (id: string) => window.api.uninstallProvider(id),
-  upsertCustomProvider: (provider: CustomProviderConfig) => window.api.upsertCustomProvider(provider),
+  upsertCustomProvider: (provider: CustomProviderConfig) =>
+    window.api.upsertCustomProvider(provider),
   removeCustomProvider: (id: string) => window.api.removeCustomProvider(id),
-  installProviderFromSource: (sourcePath: string) => window.api.installProviderFromSource(sourcePath),
+  installProviderFromSource: (sourcePath: string) =>
+    window.api.installProviderFromSource(sourcePath),
   readProviderManifest: (pathOrDir: string) => window.api.readProviderManifest(pathOrDir),
   uploadFormatPlugin: (sourcePath: string) => window.api.uploadFormatPlugin(sourcePath),
   getSettings: () => window.api.getSettings(),
@@ -146,15 +148,13 @@ export const api = {
   ffmpegStatus: () => window.api.ffmpegStatus(),
   ffmpegInstall: () => window.api.ffmpegInstall(),
   ffmpegPick: () => window.api.ffmpegPick(),
-  onFfmpegProgress: (
-    cb: (event: { phase: string; percent: number; message: string }) => void
-  ) => window.api.onFfmpegProgress(cb),
+  onFfmpegProgress: (cb: (event: { phase: string; percent: number; message: string }) => void) =>
+    window.api.onFfmpegProgress(cb),
   ytdlpStatus: () => window.api.ytdlpStatus(),
   ytdlpInstall: () => window.api.ytdlpInstall(),
   ytdlpPick: () => window.api.ytdlpPick(),
-  onYtdlpProgress: (
-    cb: (event: { phase: string; percent: number; message: string }) => void
-  ) => window.api.onYtdlpProgress(cb),
+  onYtdlpProgress: (cb: (event: { phase: string; percent: number; message: string }) => void) =>
+    window.api.onYtdlpProgress(cb),
   playwrightStatus: () => window.api.playwrightStatus(),
   playwrightInstall: () => window.api.playwrightInstall(),
   onPlaywrightProgress: (
@@ -179,15 +179,12 @@ export const api = {
   checkForUpdates: (req?: UpdateCheckRequest) => window.api.checkForUpdates(req),
   downloadUpdate: () => window.api.downloadUpdate(),
   quitAndInstallUpdate: () => window.api.quitAndInstallUpdate(),
-  onUpdateStatus: (cb: (status: AutoUpdateStatus) => void) =>
-    window.api.onUpdateStatus(cb),
-  listJobs: (filter?: { status?: JobStatus[]; limit?: number }) =>
-    window.api.listJobs(filter),
+  onUpdateStatus: (cb: (status: AutoUpdateStatus) => void) => window.api.onUpdateStatus(cb),
+  listJobs: (filter?: { status?: JobStatus[]; limit?: number }) => window.api.listJobs(filter),
   getJob: (id: string) => window.api.getJob(id),
   pauseJob: (id?: string) => window.api.pauseJob(id),
   resumeJob: (id: string) => window.api.resumeJob(id),
-  cancelJob: (payload?: { id?: string; deleteFiles?: boolean }) =>
-    window.api.cancelJob(payload),
+  cancelJob: (payload?: { id?: string; deleteFiles?: boolean }) => window.api.cancelJob(payload),
   recoverJobs: () => window.api.recoverJobs(),
   listUnfinishedJobs: () => window.api.listUnfinishedJobs(),
 };

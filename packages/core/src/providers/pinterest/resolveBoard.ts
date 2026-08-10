@@ -39,9 +39,7 @@ function coverFromPinimg(raw: string): string | undefined {
     .trim();
   if (u.startsWith("//")) u = `https:${u}`;
   // Strip trailing CSS / JSON junk pasted onto the URL
-  const clipped = u.match(
-    /^(https?:\/\/(?:i\.)?pinimg\.com\/[^\s"'<>)\\{}]+)/i
-  );
+  const clipped = u.match(/^(https?:\/\/(?:i\.)?pinimg\.com\/[^\s"'<>)\\{}]+)/i);
   if (!clipped?.[1]) return undefined;
   u = clipped[1].replace(/[,;]+$/, "");
   // UI previews: mid-size grid URLs load more reliably than /originals/ (hotlink blocks)
@@ -80,14 +78,7 @@ function firstPinimgIn(value: unknown, depth = 0): string | undefined {
   if (typeof value !== "object") return undefined;
   const obj = value as Record<string, unknown>;
   // Prefer known thumbnail keys first
-  for (const key of [
-    "url",
-    "thumbnail",
-    "thumbnail_url",
-    "image_url",
-    "src",
-    "cover_image_url",
-  ]) {
+  for (const key of ["url", "thumbnail", "thumbnail_url", "image_url", "src", "cover_image_url"]) {
     const v = obj[key];
     if (typeof v === "string" && /pinimg\.com/i.test(v)) {
       const cover = coverFromPinimg(v);
@@ -106,24 +97,11 @@ function coverFromPinObject(obj: Record<string, unknown>): string | undefined {
   if (images && typeof images === "object") {
     const imgMap = images as Record<string, { url?: string } | string>;
     // Prefer mid-size for chat/grid previews (originals often fail in <img>)
-    const order = [
-      "474x",
-      "736x",
-      "564x",
-      "236x",
-      "orig",
-      "originals",
-      "170x",
-      "150x150",
-    ];
+    const order = ["474x", "736x", "564x", "236x", "orig", "originals", "170x", "150x150"];
     for (const key of order) {
       const slot = imgMap[key];
       const u =
-        typeof slot === "string"
-          ? slot
-          : slot && typeof slot === "object"
-            ? slot.url
-            : undefined;
+        typeof slot === "string" ? slot : slot && typeof slot === "object" ? slot.url : undefined;
       if (typeof u === "string") {
         const cover = coverFromPinimg(u);
         if (cover) return cover;
@@ -185,8 +163,7 @@ function walkPins(node: unknown, map: Map<string, PinListItem>, depth = 0) {
   const obj = node as Record<string, unknown>;
 
   const rawId = obj.id ?? obj.pin_id ?? obj.pinId;
-  const id =
-    typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : "";
+  const id = typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : "";
   const type = typeof obj.type === "string" ? obj.type.toLowerCase() : "";
   // BoardFeed JSON also embeds board/user nodes with numeric ids — skip those.
   const nonPinType =
@@ -197,10 +174,8 @@ function walkPins(node: unknown, map: Map<string, PinListItem>, depth = 0) {
     );
 
   if (/^\d{6,}$/.test(id) && !nonPinType) {
-    const titleRaw =
-      obj.grid_title ?? obj.title ?? obj.description ?? obj.closeup_description;
-    const title =
-      typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim() : undefined;
+    const titleRaw = obj.grid_title ?? obj.title ?? obj.description ?? obj.closeup_description;
+    const title = typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim() : undefined;
 
     const coverUrl = coverFromPinObject(obj);
 
@@ -222,7 +197,7 @@ function collectFeedPins(data: unknown, map: Map<string, PinListItem>) {
   const items: unknown[] = Array.isArray(data)
     ? data
     : data && typeof data === "object" && Array.isArray((data as { data?: unknown }).data)
-      ? ((data as { data: unknown[] }).data)
+      ? (data as { data: unknown[] }).data
       : data && typeof data === "object"
         ? [data]
         : [];
@@ -239,16 +214,12 @@ function collectFeedPins(data: unknown, map: Map<string, PinListItem>) {
       continue;
     }
     const rawId = obj.id ?? obj.pin_id ?? obj.pinId;
-    const id =
-      typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : "";
+    const id = typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : "";
     if (!/^\d{6,}$/.test(id)) continue;
 
-    const titleRaw =
-      obj.grid_title ?? obj.title ?? obj.description ?? obj.closeup_description;
+    const titleRaw = obj.grid_title ?? obj.title ?? obj.description ?? obj.closeup_description;
     const title =
-      typeof titleRaw === "string" && titleRaw.trim()
-        ? titleRaw.trim().slice(0, 200)
-        : undefined;
+      typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim().slice(0, 200) : undefined;
     const coverUrl = coverFromPinObject(obj);
     upsertPin(map, id, { title, coverUrl });
   }
@@ -363,9 +334,7 @@ function enrichMissingMetaFromHtml(html: string, map: Map<string, PinListItem>) 
 
   const jsonBlobs = [
     ...html.matchAll(/<script[^>]*id=["']__PWS_DATA__["'][^>]*>([\s\S]*?)<\/script>/gi),
-    ...html.matchAll(
-      /<script[^>]*id=["']__PWS_INITIAL_PROPS__["'][^>]*>([\s\S]*?)<\/script>/gi
-    ),
+    ...html.matchAll(/<script[^>]*id=["']__PWS_INITIAL_PROPS__["'][^>]*>([\s\S]*?)<\/script>/gi),
     ...html.matchAll(
       /<script[^>]*data-relay-response=["']true["'][^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi
     ),
@@ -449,12 +418,9 @@ async function fetchPinMeta(
   if (!pin || typeof pin !== "object") return null;
   if (pin.id != null && String(pin.id) !== pinId) return null;
 
-  const titleRaw =
-    pin.grid_title ?? pin.title ?? pin.description ?? pin.closeup_description;
+  const titleRaw = pin.grid_title ?? pin.title ?? pin.description ?? pin.closeup_description;
   const title =
-    typeof titleRaw === "string" && titleRaw.trim()
-      ? titleRaw.trim().slice(0, 200)
-      : undefined;
+    typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim().slice(0, 200) : undefined;
   const coverUrl = coverFromPinObject(pin);
   if (!title && !coverUrl) return null;
   return { title, coverUrl };
@@ -673,9 +639,7 @@ async function paginatePins(opts: {
   appVersion?: string;
   signal?: AbortSignal;
 }): Promise<boolean> {
-  let bookmarks: string[] | null = opts.initialBookmark
-    ? [opts.initialBookmark]
-    : null;
+  let bookmarks: string[] | null = opts.initialBookmark ? [opts.initialBookmark] : null;
   let truncated = false;
   let pages = 0;
 
@@ -717,9 +681,7 @@ async function paginatePins(opts: {
       truncated = false;
       break;
     }
-    bookmarks = Array.isArray(nextBookmarks)
-      ? (nextBookmarks as string[])
-      : null;
+    bookmarks = Array.isArray(nextBookmarks) ? (nextBookmarks as string[]) : null;
     if (!bookmarks) break;
     truncated = true;
   }
@@ -727,9 +689,7 @@ async function paginatePins(opts: {
   return truncated && opts.map.size >= opts.maxPins;
 }
 
-export function classifyPinterestCollection(
-  url: string
-): BoardResolveResult["kind"] | null {
+export function classifyPinterestCollection(url: string): BoardResolveResult["kind"] | null {
   try {
     const u = new URL(url.trim());
     if (!isPinterestHost(u.hostname)) return null;

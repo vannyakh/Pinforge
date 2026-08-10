@@ -35,11 +35,7 @@ const FEATURES: FeatureSlide[] = [
 
 const SLIDE_COUNT = FEATURES.length;
 /** Clones at both ends for seamless loop: [last, ...items, first] */
-const LOOP_SLIDES: FeatureSlide[] = [
-  FEATURES[SLIDE_COUNT - 1]!,
-  ...FEATURES,
-  FEATURES[0]!,
-];
+const LOOP_SLIDES: FeatureSlide[] = [FEATURES[SLIDE_COUNT - 1]!, ...FEATURES, FEATURES[0]!];
 const AUTO_MS = 4500;
 const SWIPE_PX = 56;
 
@@ -67,7 +63,10 @@ function overallPercent(steps: StepRow[], currentPercent: number): number {
   if (doneCount >= n) return 100;
   const base = (doneCount / n) * 100;
   const slice = 100 / n;
-  return Math.min(99, Math.round(base + (slice * Math.max(0, Math.min(100, currentPercent))) / 100));
+  return Math.min(
+    99,
+    Math.round(base + (slice * Math.max(0, Math.min(100, currentPercent))) / 100)
+  );
 }
 
 function isPreviewSession(): boolean {

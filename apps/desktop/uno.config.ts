@@ -86,7 +86,8 @@ export default defineConfig({
     [
       /^(bg|text|border)-(primary|success|warning|danger)-([1-9])$/,
       ([, prefix, color, d]) => {
-        const prop = prefix === "bg" ? "background-color" : prefix === "text" ? "color" : "border-color";
+        const prop =
+          prefix === "bg" ? "background-color" : prefix === "text" ? "color" : "border-color";
         return { [prop]: `rgb(var(--${color}-${d}))` };
       },
     ],

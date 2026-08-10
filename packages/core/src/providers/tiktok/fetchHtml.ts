@@ -54,12 +54,7 @@ export async function fetchTikTokProfileViaBrowser(
     for (const item of list) {
       if (!item || typeof item !== "object") continue;
       const rec = item as Record<string, unknown>;
-      const id =
-        rec.id != null
-          ? String(rec.id)
-          : rec.aweme_id != null
-            ? String(rec.aweme_id)
-            : "";
+      const id = rec.id != null ? String(rec.id) : rec.aweme_id != null ? String(rec.aweme_id) : "";
       if (!id || seenIds.has(id)) continue;
       seenIds.add(id);
       apiItems.push(rec);

@@ -1,13 +1,7 @@
 /** Shared auto-update types (main ↔ preload ↔ renderer). */
 
 export type AutoUpdateStatusType =
-  | "idle"
-  | "checking"
-  | "available"
-  | "not-available"
-  | "downloading"
-  | "downloaded"
-  | "error";
+  "idle" | "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
 
 export interface AutoUpdateProgress {
   bytesPerSecond: number;

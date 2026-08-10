@@ -41,9 +41,7 @@ const LAST_PATH_KEY = "pinforge:last-non-settings-path";
 
 function chatHasActiveProcess(chat: ChatSession): boolean {
   return chat.messages.some(
-    (m) =>
-      m.role === "assistant" &&
-      (m.status === "started" || m.status === "detecting")
+    (m) => m.role === "assistant" && (m.status === "started" || m.status === "detecting")
   );
 }
 
@@ -69,9 +67,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const activeLiveBusy = useMemo(
     () =>
       liveMessages.some(
-        (m) =>
-          m.role === "assistant" &&
-          (m.status === "started" || m.status === "detecting")
+        (m) => m.role === "assistant" && (m.status === "started" || m.status === "detecting")
       ),
     [liveMessages]
   );
@@ -209,83 +205,81 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                 </Tooltip>
               </div>
 
-              {recent.length === 0 ? (
-                !collapsed && (
-                  <div className="chat-history__placeholder px-12px py-8px text-12px text-t-tertiary">
-                    Chats you start on Home show up here.
-                  </div>
-                )
-              ) : (
-                recent.map((chat) => {
-                  const active = pathname === "/" && activeId === chat.id;
-                  const processing =
-                    (activeId === chat.id && activeLiveBusy) || chatHasActiveProcess(chat);
-                  return (
-                    <div
-                      key={chat.id}
-                      className={classNames(
-                        "chat-history__item group w-full flex items-center gap-8px rd-8px px-10px py-8px cursor-pointer",
-                        active
-                          ? "chat-history__item--active bg-primary-light-1 text-t-primary"
-                          : "text-t-secondary hover:bg-hover"
-                      )}
-                    >
-                      <button
-                        type="button"
-                        className="flex-1 min-w-0 flex items-center gap-8px border-none bg-transparent cursor-pointer text-left font-inherit text-inherit p-0"
-                        onClick={() => openRecent(chat.id)}
-                        title={collapsed ? chat.title : undefined}
+              {recent.length === 0
+                ? !collapsed && (
+                    <div className="chat-history__placeholder px-12px py-8px text-12px text-t-tertiary">
+                      Chats you start on Home show up here.
+                    </div>
+                  )
+                : recent.map((chat) => {
+                    const active = pathname === "/" && activeId === chat.id;
+                    const processing =
+                      (activeId === chat.id && activeLiveBusy) || chatHasActiveProcess(chat);
+                    return (
+                      <div
+                        key={chat.id}
+                        className={classNames(
+                          "chat-history__item group w-full flex items-center gap-8px rd-8px px-10px py-8px cursor-pointer",
+                          active
+                            ? "chat-history__item--active bg-primary-light-1 text-t-primary"
+                            : "text-t-secondary hover:bg-hover"
+                        )}
                       >
-                        {processing ? (
-                          <LoadingFour
-                            theme="outline"
-                            size="16"
-                            fill="currentColor"
-                            strokeWidth={3}
-                            className="sider-nav-spin shrink-0"
-                          />
-                        ) : (
-                          <MessageIcon
-                            theme="outline"
-                            size="16"
-                            fill="currentColor"
-                            strokeWidth={3}
-                            className="shrink-0"
-                          />
-                        )}
-                        {!collapsed && (
-                          <span className="chat-history__item-name text-13px">{chat.title}</span>
-                        )}
-                      </button>
-                      {!collapsed && (
                         <button
                           type="button"
-                          className="chat-history__item-delete opacity-0 group-hover:opacity-100 shrink-0 flex items-center justify-center w-22px h-22px rd-4px border-none cursor-pointer bg-transparent text-t-tertiary hover:text-danger"
-                          aria-label="Remove chat"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            Modal.confirm({
-                              title: "Delete chat?",
-                              content: `Are you sure you want to delete “${chat.title}”? This can’t be undone.`,
-                              okText: "Delete",
-                              okButtonProps: { status: "danger" },
-                              onOk: () => {
-                                removeChat(chat.id);
-                                Notification.success({
-                                  title: "Deleted",
-                                  content: "Chat removed from Recent.",
-                                });
-                              },
-                            });
-                          }}
+                          className="flex-1 min-w-0 flex items-center gap-8px border-none bg-transparent cursor-pointer text-left font-inherit text-inherit p-0"
+                          onClick={() => openRecent(chat.id)}
+                          title={collapsed ? chat.title : undefined}
                         >
-                          <Delete theme="outline" size="12" fill="currentColor" strokeWidth={3} />
+                          {processing ? (
+                            <LoadingFour
+                              theme="outline"
+                              size="16"
+                              fill="currentColor"
+                              strokeWidth={3}
+                              className="sider-nav-spin shrink-0"
+                            />
+                          ) : (
+                            <MessageIcon
+                              theme="outline"
+                              size="16"
+                              fill="currentColor"
+                              strokeWidth={3}
+                              className="shrink-0"
+                            />
+                          )}
+                          {!collapsed && (
+                            <span className="chat-history__item-name text-13px">{chat.title}</span>
+                          )}
                         </button>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+                        {!collapsed && (
+                          <button
+                            type="button"
+                            className="chat-history__item-delete opacity-0 group-hover:opacity-100 shrink-0 flex items-center justify-center w-22px h-22px rd-4px border-none cursor-pointer bg-transparent text-t-tertiary hover:text-danger"
+                            aria-label="Remove chat"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              Modal.confirm({
+                                title: "Delete chat?",
+                                content: `Are you sure you want to delete “${chat.title}”? This can’t be undone.`,
+                                okText: "Delete",
+                                okButtonProps: { status: "danger" },
+                                onOk: () => {
+                                  removeChat(chat.id);
+                                  Notification.success({
+                                    title: "Deleted",
+                                    content: "Chat removed from Recent.",
+                                  });
+                                },
+                              });
+                            }}
+                          >
+                            <Delete theme="outline" size="12" fill="currentColor" strokeWidth={3} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
             </div>
           </div>
         )}

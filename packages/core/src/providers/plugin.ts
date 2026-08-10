@@ -2,13 +2,7 @@
  * Provider plugin contract — third-party extractors inherit MediaCore queue/resume/FFmpeg.
  */
 
-import type {
-  DownloadMode,
-  FormatPreset,
-  MediaKind,
-  ProviderId,
-  ResolvedMedia,
-} from "../types";
+import type { DownloadMode, FormatPreset, MediaKind, ProviderId, ResolvedMedia } from "../types";
 import type { MediaProvider, ResolveContext } from "./types";
 import { registerProvider } from "./registry";
 import type { ProviderFeatureMatrix } from "./capabilities";
@@ -46,10 +40,7 @@ export interface ProviderPlugin {
    * Optional: download binaries yourself. Default uses MediaCore HTTP download
    * via the built-in adapter (fetchBinary through resolve).
    */
-  download?: (
-    info: MediaInfo,
-    ctx?: ResolveContext
-  ) => Promise<ResolvedMedia | ResolvedMedia[]>;
+  download?: (info: MediaInfo, ctx?: ResolveContext) => Promise<ResolvedMedia | ResolvedMedia[]>;
 }
 
 export interface RegisteredPluginInfo {

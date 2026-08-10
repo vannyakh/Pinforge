@@ -6,15 +6,15 @@ Pinforge uses GitHub Actions for PR checks, optional GPT review, manual builds, 
 
 ## Workflows
 
-| Workflow | Trigger | Purpose |
-| --- | --- | --- |
-| `pr-checks.yml` | PR / push to main, master, dev | `pnpm format:check` + `pnpm typecheck`; optional GPT jobs |
-| `build-manual.yml` | workflow_dispatch | Build installers for selected platforms |
-| `release.yml` | Tag `v*` | Build + upload assets to GitHub Release |
-| `gpt-review.yml` | Called from PR checks or manual | Code review (requires `OPENAI_API_KEY`) |
-| `gpt-pr-assessment.yml` | External contributor PRs or manual | Merge-priority assessment |
-| `issue-triage.yml` | New issues | Label + assign from Module dropdown |
-| `discussion-triage.yml` | New discussions | Welcome comment |
+| Workflow                | Trigger                            | Purpose                                                   |
+| ----------------------- | ---------------------------------- | --------------------------------------------------------- |
+| `pr-checks.yml`         | PR / push to main, master, dev     | `pnpm format:check` + `pnpm typecheck`; optional GPT jobs |
+| `build-manual.yml`      | workflow_dispatch                  | Build installers for selected platforms                   |
+| `release.yml`           | Tag `v*`                           | Build + upload assets to GitHub Release                   |
+| `gpt-review.yml`        | Called from PR checks or manual    | Code review (requires `OPENAI_API_KEY`)                   |
+| `gpt-pr-assessment.yml` | External contributor PRs or manual | Merge-priority assessment                                 |
+| `issue-triage.yml`      | New issues                         | Label + assign from Module dropdown                       |
+| `discussion-triage.yml` | New discussions                    | Welcome comment                                           |
 
 ## Secrets and variables
 
@@ -22,16 +22,16 @@ Configure under **Settings → Secrets and variables → Actions**.
 
 ### Secrets
 
-| Secret | Required | Purpose |
-| --- | --- | --- |
-| `GITHUB_TOKEN` | Built-in | Releases and PR comments |
-| `OPENAI_API_KEY` | Optional | GPT review / assessment |
+| Secret                                   | Required         | Purpose                                 |
+| ---------------------------------------- | ---------------- | --------------------------------------- |
+| `GITHUB_TOKEN`                           | Built-in         | Releases and PR comments                |
+| `OPENAI_API_KEY`                         | Optional         | GPT review / assessment                 |
 | `appleId` / `appleIdPassword` / `teamId` | Optional (macOS) | Notarization via `scripts/afterSign.js` |
 
 ### Variables
 
-| Variable | Purpose |
-| --- | --- |
+| Variable            | Purpose                                            |
+| ------------------- | -------------------------------------------------- |
 | `ENABLE_GPT_REVIEW` | Set to `true` to run GPT jobs from `pr-checks.yml` |
 
 ## Local packaging
@@ -55,11 +55,11 @@ See [scripts/README.md](../scripts/README.md).
 
 ## Artifacts
 
-| Platform | Typical files |
-| --- | --- |
-| Windows | `Pinforge-*-Setup.exe` |
-| macOS | `.dmg`, `.zip` (zip required for electron-updater) |
-| Linux | `.AppImage` |
+| Platform | Typical files                                      |
+| -------- | -------------------------------------------------- |
+| Windows  | `Pinforge-*-Setup.exe`                             |
+| macOS    | `.dmg`, `.zip` (zip required for electron-updater) |
+| Linux    | `.AppImage`                                        |
 
 ## Troubleshooting
 

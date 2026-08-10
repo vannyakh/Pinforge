@@ -4,7 +4,11 @@ import { fetchHtmlOrPlaywrightMeta } from "./playwrightMeta";
 import type { MediaInfo } from "../plugin";
 
 function cleanUrl(raw: string): string {
-  return raw.replace(/\\u002F/g, "/").replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
+  return raw
+    .replace(/\\u002F/g, "/")
+    .replace(/\\\//g, "/")
+    .replace(/&amp;/g, "&")
+    .trim();
 }
 
 function uniq(urls: string[]): string[] {
@@ -71,17 +75,14 @@ export async function extractInstagramInfo(url: string): Promise<MediaInfo> {
   const images = [...fromHtml.images];
 
   const ogVideo =
-    meta?.ogVideo ||
-    metaContent(html, "og:video") ||
-    metaContent(html, "og:video:secure_url");
+    meta?.ogVideo || metaContent(html, "og:video") || metaContent(html, "og:video:secure_url");
   if (ogVideo) videos.unshift(cleanUrl(ogVideo));
   for (const v of meta?.videos ?? []) videos.push(cleanUrl(v));
 
   const ogImage = meta?.ogImage || meta?.images[0] || metaContent(html, "og:image");
   if (ogImage) images.unshift(cleanUrl(ogImage));
 
-  const title =
-    meta?.ogTitle || meta?.title || metaContent(html, "og:title") || "instagram";
+  const title = meta?.ogTitle || meta?.title || metaContent(html, "og:title") || "instagram";
   const channel =
     html.match(/"username"\s*:\s*"([^"]+)"/)?.[1] ||
     title.replace(/\s*[•·|].*$/, "").trim() ||
@@ -149,15 +150,21 @@ export async function extractInstagram(
     const mediaUrl = info.urls[i]!;
     const isImage = /\.(jpe?g|png|webp)(\?|$)/i.test(mediaUrl) || info.kind === "image";
     // Mixed carousel: detect per URL
-    const kind = isImage && !/\.mp4/i.test(mediaUrl) ? "image" : info.kind === "video" && /\.mp4/i.test(mediaUrl) ? "video" : isImage ? "image" : "video";
+    const kind =
+      isImage && !/\.mp4/i.test(mediaUrl)
+        ? "image"
+        : info.kind === "video" && /\.mp4/i.test(mediaUrl)
+          ? "video"
+          : isImage
+            ? "image"
+            : "video";
     const { buffer, ext } = await fetchBinary(mediaUrl, {
       referer: "https://www.instagram.com/",
       accept: kind === "image" ? "image/*,*/*;q=0.8" : "video/mp4,video/*,*/*;q=0.8",
       concurrency: opts?.fragmentConcurrency,
       signal: opts?.signal,
     });
-    const title =
-      info.urls.length > 1 ? `${info.title ?? "instagram"} (${i + 1})` : info.title;
+    const title = info.urls.length > 1 ? `${info.title ?? "instagram"} (${i + 1})` : info.title;
     const resolved = toResolved(
       "instagram",
       url,

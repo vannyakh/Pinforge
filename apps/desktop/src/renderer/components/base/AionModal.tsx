@@ -113,7 +113,14 @@ const STD_BODY_PADDING_CLASS = "px-24px py-20px";
 const STD_CLOSE_BTN_CLASS =
   "shrink-0 w-32px h-32px flex items-center justify-center rd-8px transition-colors duration-200 cursor-pointer border-0 bg-transparent p-0 text-t-secondary hover:bg-fill-2 focus:outline-none";
 
-const dimensionKeys = ["width", "minWidth", "maxWidth", "height", "minHeight", "maxHeight"] as const;
+const dimensionKeys = [
+  "width",
+  "minWidth",
+  "maxWidth",
+  "height",
+  "minHeight",
+  "maxHeight",
+] as const;
 type DimensionKey = (typeof dimensionKeys)[number];
 
 const formatDimensionValue = (value?: string | number) => {
@@ -145,8 +152,7 @@ const AionModal: React.FC<AionModalProps> = ({
 
   const borderRadiusVal =
     typeof contentBorderRadius === "number" ? `${contentBorderRadius}px` : contentBorderRadius;
-  const paddingVal =
-    typeof contentPadding === "number" ? `${contentPadding}px` : contentPadding;
+  const paddingVal = typeof contentPadding === "number" ? `${contentPadding}px` : contentPadding;
 
   const safeScale = fontScale > 0 ? fontScale : 1;
 
@@ -173,7 +179,9 @@ const AionModal: React.FC<AionModalProps> = ({
   dimensionKeys.forEach((key) => {
     const raw = baseStyle[key];
     if (raw !== undefined) {
-      scaledStyle[key] = scaleDimension(raw as CSSProperties["width"]) as CSSProperties[DimensionKey];
+      scaledStyle[key] = scaleDimension(
+        raw as CSSProperties["width"]
+      ) as CSSProperties[DimensionKey];
     }
   });
 
@@ -288,13 +296,23 @@ const AionModal: React.FC<AionModalProps> = ({
 
     if (isStandard) {
       return (
-        <div className={classNames(STD_HEADER_CLASS, headerConfig.className)} style={headerConfig.style}>
+        <div
+          className={classNames(STD_HEADER_CLASS, headerConfig.className)}
+          style={headerConfig.style}
+        >
           <div className="min-w-0 flex-1">
             {headerConfig.title && <h3 className={STD_TITLE_CLASS}>{headerConfig.title}</h3>}
-            {headerConfig.subtitle ? <p className={STD_SUBTITLE_CLASS}>{headerConfig.subtitle}</p> : null}
+            {headerConfig.subtitle ? (
+              <p className={STD_SUBTITLE_CLASS}>{headerConfig.subtitle}</p>
+            ) : null}
           </div>
           {headerConfig.showClose && (
-            <button type="button" onClick={onCancel} className={STD_CLOSE_BTN_CLASS} aria-label="Close">
+            <button
+              type="button"
+              onClick={onCancel}
+              className={STD_CLOSE_BTN_CLASS}
+              aria-label="Close"
+            >
               {headerConfig.closeIcon || <Close size={20} fill="currentColor" />}
             </button>
           )}
@@ -312,7 +330,12 @@ const AionModal: React.FC<AionModalProps> = ({
       <div className={headerClassName} style={headerStyle}>
         {headerConfig.title && <h3 className={TITLE_BASE_CLASS}>{headerConfig.title}</h3>}
         {headerConfig.showClose && (
-          <button type="button" onClick={onCancel} className={CLOSE_BUTTON_CLASS} aria-label="Close">
+          <button
+            type="button"
+            onClick={onCancel}
+            className={CLOSE_BUTTON_CLASS}
+            aria-label="Close"
+          >
             {headerConfig.closeIcon || <Close size={20} fill="#86909c" />}
           </button>
         )}
@@ -364,7 +387,9 @@ const AionModal: React.FC<AionModalProps> = ({
             isStandard && STD_BODY_LAYOUT_CLASS,
             isStandard && !stdBodyHasCustomPadding && STD_BODY_PADDING_CLASS
           )}
-          style={stdBodyHasCustomPadding ? { ...bodyInlineStyle, padding: paddingVal } : bodyInlineStyle}
+          style={
+            stdBodyHasCustomPadding ? { ...bodyInlineStyle, padding: paddingVal } : bodyInlineStyle
+          }
         >
           {children}
         </div>

@@ -107,9 +107,7 @@ export async function extractFacebookInfo(
     "facebook";
 
   const description =
-    metaContent(html, "og:description") ||
-    metaContent(html, "description") ||
-    undefined;
+    metaContent(html, "og:description") || metaContent(html, "description") || undefined;
 
   const videoUrls = uniq(videos).filter((u) => /\.mp4|video/i.test(u) || /fbcdn/i.test(u));
   if (videoUrls.length) {
@@ -160,18 +158,14 @@ export async function extractFacebook(
 
   for (let i = 0; i < info.urls.length; i++) {
     const mediaUrl = info.urls[i]!;
-    const accept =
-      info.kind === "image"
-        ? "image/*,*/*;q=0.8"
-        : "video/mp4,video/*,*/*;q=0.8";
+    const accept = info.kind === "image" ? "image/*,*/*;q=0.8" : "video/mp4,video/*,*/*;q=0.8";
     const { buffer, ext } = await fetchBinary(mediaUrl, {
       referer: "https://www.facebook.com/",
       accept,
       concurrency: opts?.fragmentConcurrency,
       signal: opts?.signal,
     });
-    const title =
-      info.urls.length > 1 ? `${info.title ?? "facebook"} (${i + 1})` : info.title;
+    const title = info.urls.length > 1 ? `${info.title ?? "facebook"} (${i + 1})` : info.title;
     const resolved = toResolved(
       "facebook",
       url,

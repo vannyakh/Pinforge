@@ -4,7 +4,11 @@ import { fetchHtmlOrPlaywrightMeta } from "./playwrightMeta";
 import type { MediaInfo } from "../plugin";
 
 function cleanUrl(raw: string): string {
-  return raw.replace(/\\u002F/g, "/").replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
+  return raw
+    .replace(/\\u002F/g, "/")
+    .replace(/\\\//g, "/")
+    .replace(/&amp;/g, "&")
+    .trim();
 }
 
 function uniq(urls: string[]): string[] {
@@ -169,15 +173,11 @@ export async function extractTikTok(
     const mediaUrl = info.urls[i]!;
     const { buffer, ext } = await fetchBinary(mediaUrl, {
       referer: "https://www.tiktok.com/",
-      accept:
-        info.kind === "image"
-          ? "image/*,*/*;q=0.8"
-          : "video/mp4,video/*,*/*;q=0.8",
+      accept: info.kind === "image" ? "image/*,*/*;q=0.8" : "video/mp4,video/*,*/*;q=0.8",
       concurrency: opts?.fragmentConcurrency,
       signal: opts?.signal,
     });
-    const title =
-      info.urls.length > 1 ? `${info.title ?? "tiktok"} (${i + 1})` : info.title;
+    const title = info.urls.length > 1 ? `${info.title ?? "tiktok"} (${i + 1})` : info.title;
     const resolved = toResolved(
       "tiktok",
       url,

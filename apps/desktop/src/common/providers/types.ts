@@ -1,12 +1,7 @@
 /** Provider engines, manifests, and format plugins (extension-style). */
 
 export type ProviderEngineId =
-  | "builtin"
-  | "http-meta"
-  | "piped"
-  | "script"
-  | "playwright"
-  | "ytdlp";
+  "builtin" | "http-meta" | "piped" | "script" | "playwright" | "ytdlp";
 
 export type ProviderCapability =
   | "video.download"
@@ -21,19 +16,9 @@ export type ProviderCapability =
 export type ProviderOrigin = "builtin-override" | "registry" | "local";
 
 export type ProviderLifecycle =
-  | "installed"
-  | "enabled"
-  | "disabled"
-  | "updateAvailable"
-  | "incompatible";
+  "installed" | "enabled" | "disabled" | "updateAvailable" | "incompatible";
 
-export type ProviderCategory =
-  | "video"
-  | "social"
-  | "music"
-  | "images"
-  | "streaming"
-  | "utilities";
+export type ProviderCategory = "video" | "social" | "music" | "images" | "streaming" | "utilities";
 
 export interface ProviderEngineInfo {
   id: ProviderEngineId;
@@ -238,12 +223,7 @@ export const BUILTIN_PROVIDER_META: Record<
     hosts: "instagram.com, instagr.am",
     formats: ["best", "mp4"],
     engine: "http-meta",
-    capabilities: [
-      "video.download",
-      "image.download",
-      "metadata.fetch",
-      "batch.download",
-    ],
+    capabilities: ["video.download", "image.download", "metadata.fetch", "batch.download"],
     category: "social",
     version: "1.0.0",
   },
@@ -283,11 +263,7 @@ export const BUILTIN_PROVIDER_META: Record<
     hosts: "facebook.com, fb.watch, fb.com, m.facebook.com",
     formats: ["best", "mp4"],
     engine: "http-meta",
-    capabilities: [
-      "video.download",
-      "image.download",
-      "metadata.fetch",
-    ],
+    capabilities: ["video.download", "image.download", "metadata.fetch"],
     category: "social",
     version: "1.0.0",
   },
@@ -297,12 +273,7 @@ export const BUILTIN_PROVIDER_META: Record<
     hosts: "*",
     formats: ["best", "mp4", "audio-only"],
     engine: "ytdlp",
-    capabilities: [
-      "video.download",
-      "audio.download",
-      "playlist.download",
-      "metadata.fetch",
-    ],
+    capabilities: ["video.download", "audio.download", "playlist.download", "metadata.fetch"],
     category: "utilities",
     version: "1.0.0",
   },
@@ -333,7 +304,5 @@ export function hostListMatches(hostsCsv: string, url: string): boolean {
     .split(/[,;\s]+/)
     .map((h) => h.trim().toLowerCase())
     .filter(Boolean);
-  return parts.some(
-    (h) => hostname === h || hostname.endsWith(`.${h}`) || hostname.includes(h)
-  );
+  return parts.some((h) => hostname === h || hostname.endsWith(`.${h}`) || hostname.includes(h));
 }

@@ -2,15 +2,7 @@ import type { YoutubeQuality } from "@renderer/api";
 
 const KNOWN = new Set(["4320", "2160", "1440", "1080", "720", "480", "360"]);
 
-const FALLBACK: YoutubeQuality[] = [
-  "best",
-  "2160",
-  "1440",
-  "1080",
-  "720",
-  "480",
-  "360",
-];
+const FALLBACK: YoutubeQuality[] = ["best", "2160", "1440", "1080", "720", "480", "360"];
 
 /** Best + heights from extract preview, or the default ladder (4320 only when available). */
 export function youtubeQualityChoices(availableHeights?: number[]): YoutubeQuality[] {

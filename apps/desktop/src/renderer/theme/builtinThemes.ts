@@ -55,10 +55,22 @@ export const BUILTIN_THEMES: Theme[] = [
     created_at: T0,
     updated_at: T0,
   },
-  decorative("misaka-mikoto-theme", "Misaka Mikoto Theme", "light", misakaMikotoCss, misakaMikotoCover),
+  decorative(
+    "misaka-mikoto-theme",
+    "Misaka Mikoto Theme",
+    "light",
+    misakaMikotoCss,
+    misakaMikotoCover
+  ),
   decorative("hello-kitty", "Hello Kitty", "light", helloKittyCss, helloKittyCover),
   decorative("retro-windows", "Retro Windows", "light", retroWindowsCss, retroWindowsCover),
-  decorative("retroma-y2k-jp-v42-pure", "Y2K电子账本 by 椰树女王", "light", retromaY2kCss, y2kJpCover),
+  decorative(
+    "retroma-y2k-jp-v42-pure",
+    "Y2K电子账本 by 椰树女王",
+    "light",
+    retromaY2kCss,
+    y2kJpCover
+  ),
   decorative(
     "retroma-obsidian-book",
     "Retroma Obsidian Book",

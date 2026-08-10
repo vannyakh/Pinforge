@@ -41,7 +41,10 @@ function resolveUrl(base: string, ref: string): string {
 
 /** Parse HLS master or media playlist; picks highest BANDWIDTH variant from master. */
 export function parseM3u8(text: string, playlistUrl: string): ParsedHlsPlaylist {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   const variants: Array<{ bandwidth: number; uri: string }> = [];
   const segments: string[] = [];
   let isMaster = false;
@@ -187,8 +190,7 @@ export async function downloadHlsResumable(
     resumeManager: opts.resumeManager,
     provider: opts.provider,
     type: "hls",
-    onProgress: (info) =>
-      opts.onProgress?.({ ...info, phase: "download" }),
+    onProgress: (info) => opts.onProgress?.({ ...info, phase: "download" }),
   });
 
   opts.onProgress?.({

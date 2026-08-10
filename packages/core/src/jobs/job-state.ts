@@ -15,11 +15,7 @@ const UNFINISHED: ReadonlySet<JobStatus> = new Set([
   "processing",
 ]);
 
-const TERMINAL: ReadonlySet<JobStatus> = new Set([
-  "completed",
-  "failed",
-  "cancelled",
-]);
+const TERMINAL: ReadonlySet<JobStatus> = new Set(["completed", "failed", "cancelled"]);
 
 export function isActiveStatus(status: JobStatus): boolean {
   return ACTIVE.has(status);

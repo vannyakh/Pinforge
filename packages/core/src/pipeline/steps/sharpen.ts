@@ -3,10 +3,7 @@ import type { EnhanceStepOptions } from "../../types";
 /**
  * Unsharp-mask style sharpen via sharp's sharpen().
  */
-export async function sharpen(
-  input: Buffer,
-  opts: EnhanceStepOptions = {}
-): Promise<Buffer> {
+export async function sharpen(input: Buffer, opts: EnhanceStepOptions = {}): Promise<Buffer> {
   const sharp = (await import("sharp")).default;
   const strength = Math.min(1.5, Math.max(0, opts.strength ?? 0.6));
 

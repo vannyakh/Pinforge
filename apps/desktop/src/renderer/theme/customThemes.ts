@@ -38,10 +38,7 @@ export function loadCustomThemes(): Theme[] {
 }
 
 export function saveCustomThemes(themes: Theme[]): void {
-  localStorage.setItem(
-    CUSTOM_THEMES_STORAGE_KEY,
-    JSON.stringify(themes.filter((t) => !t.builtin))
-  );
+  localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(themes.filter((t) => !t.builtin)));
 }
 
 export function upsertCustomTheme(theme: Theme, existing: Theme[]): Theme[] {

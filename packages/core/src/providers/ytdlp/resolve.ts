@@ -5,11 +5,7 @@ import path from "node:path";
 import type { FormatPreset, ResolvedMedia, YoutubeQuality } from "../../types";
 import { sanitizeFilename } from "../../utils";
 import { resolveFfmpeg } from "../youtube/mux";
-import {
-  buildYtdlpDownloadArgs,
-  buildYtdlpProbeArgs,
-  isHttpUrl,
-} from "./args";
+import { buildYtdlpDownloadArgs, buildYtdlpProbeArgs, isHttpUrl } from "./args";
 import { requireYtdlpMessage, resolveYtdlp } from "./bin";
 
 export type YtdlpResolveOpts = {
@@ -17,11 +13,7 @@ export type YtdlpResolveOpts = {
   quality?: YoutubeQuality;
   outDir?: string;
   signal?: AbortSignal;
-  onByteProgress?: (info: {
-    downloaded: number;
-    total: number | null;
-    phase?: string;
-  }) => void;
+  onByteProgress?: (info: { downloaded: number; total: number | null; phase?: string }) => void;
 };
 
 export type YtdlpPreview = {
@@ -73,15 +65,12 @@ function runYtdlp(
 
 function parseProgressLine(line: string): { downloaded: number; total: number | null } | null {
   // [download]  45.2% of 12.34MiB at ...
-  const m = line.match(
-    /\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+)(KiB|MiB|GiB|B)/i
-  );
+  const m = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+)(KiB|MiB|GiB|B)/i);
   if (!m) return null;
   const pct = Number(m[1]);
   const size = Number(m[2]);
   const unit = m[3].toLowerCase();
-  const mult =
-    unit === "gib" ? 1024 ** 3 : unit === "mib" ? 1024 ** 2 : unit === "kib" ? 1024 : 1;
+  const mult = unit === "gib" ? 1024 ** 3 : unit === "mib" ? 1024 ** 2 : unit === "kib" ? 1024 : 1;
   const total = size * mult;
   if (!Number.isFinite(pct) || !Number.isFinite(total) || total <= 0) return null;
   return { downloaded: Math.round((pct / 100) * total), total: Math.round(total) };
@@ -162,8 +151,7 @@ export async function resolveYtdlpMedia(
 
   const format = opts.format ?? "best";
   const ff = await resolveFfmpeg();
-  const workRoot =
-    opts.outDir ?? path.join(os.tmpdir(), "pinforge-ytdlp", String(Date.now()));
+  const workRoot = opts.outDir ?? path.join(os.tmpdir(), "pinforge-ytdlp", String(Date.now()));
   await fs.mkdir(workRoot, { recursive: true });
 
   const outTemplate = path.join(workRoot, "%(title).180B [%(id)s].%(ext)s");
@@ -194,17 +182,25 @@ export async function resolveYtdlpMedia(
   }
 
   let filePath = pickOutputPath(stdout, workRoot);
-  if (!filePath || !(await fs.stat(filePath).then(() => true).catch(() => false))) {
+  if (
+    !filePath ||
+    !(await fs
+      .stat(filePath)
+      .then(() => true)
+      .catch(() => false))
+  ) {
     filePath = await findNewestMedia(workRoot);
   }
   if (!filePath) {
     throw new Error("yt-dlp finished but no output file was found");
   }
 
-  const ext = path.extname(filePath).replace(/^\./, "") || (format === "audio-only" ? "m4a" : "mp4");
+  const ext =
+    path.extname(filePath).replace(/^\./, "") || (format === "audio-only" ? "m4a" : "mp4");
   const base = path.basename(filePath, path.extname(filePath));
   const title = sanitizeFilename(base) || "download";
-  const kind = format === "audio-only" || /^(m4a|mp3|opus|flac|ogg)$/i.test(ext) ? "audio" : "video";
+  const kind =
+    format === "audio-only" || /^(m4a|mp3|opus|flac|ogg)$/i.test(ext) ? "audio" : "video";
 
   opts.onByteProgress?.({
     downloaded: 1,

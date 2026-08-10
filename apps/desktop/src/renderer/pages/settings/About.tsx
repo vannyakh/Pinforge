@@ -8,9 +8,7 @@ const GITHUB_URL = "https://github.com/vannyakh/Pinforge";
 const RELEASES_URL = `${GITHUB_URL}/releases`;
 const ISSUES_URL = `${GITHUB_URL}/issues`;
 
-type LinkItem =
-  | { title: string; url: string }
-  | { title: string; onClick: () => void };
+type LinkItem = { title: string; url: string } | { title: string; onClick: () => void };
 
 function statusHint(status: AutoUpdateStatus | null): string {
   if (!status) return "";
@@ -18,17 +16,13 @@ function statusHint(status: AutoUpdateStatus | null): string {
     case "checking":
       return "Checking for updates…";
     case "available":
-      return status.version
-        ? `Update available: v${status.version}`
-        : "Update available";
+      return status.version ? `Update available: v${status.version}` : "Update available";
     case "not-available":
       return "You're up to date";
     case "downloading":
       return `Downloading… ${Math.round(status.progress?.percent ?? 0)}%`;
     case "downloaded":
-      return status.version
-        ? `Ready to install v${status.version}`
-        : "Ready to install";
+      return status.version ? `Ready to install v${status.version}` : "Ready to install";
     case "error":
       return status.error || "Update check failed";
     default:
@@ -43,7 +37,10 @@ const AboutSettings: React.FC = () => {
 
   useEffect(() => {
     setIncludePrerelease(localStorage.getItem("update.includePrerelease") === "true");
-    void api.getUpdateStatus().then(setUpdateStatus).catch(() => undefined);
+    void api
+      .getUpdateStatus()
+      .then(setUpdateStatus)
+      .catch(() => undefined);
     return api.onUpdateStatus(setUpdateStatus);
   }, []);
 
@@ -156,8 +153,7 @@ const AboutSettings: React.FC = () => {
   })();
 
   const hint = statusHint(updateStatus);
-  const showProgress =
-    updateStatus?.status === "downloading" && updateStatus.progress != null;
+  const showProgress = updateStatus?.status === "downloading" && updateStatus.progress != null;
 
   const linkItems: LinkItem[] = [
     {
@@ -186,7 +182,10 @@ const AboutSettings: React.FC = () => {
     <div className="about-page flex flex-col w-full">
       <div className="flex flex-col max-w-500px mx-auto w-full">
         <div className="flex flex-col items-center pb-24px">
-          <Typography.Title heading={3} className="!text-24px !font-bold !text-t-primary !mb-8px !mt-0">
+          <Typography.Title
+            heading={3}
+            className="!text-24px !font-bold !text-t-primary !mb-8px !mt-0"
+          >
             Pinforge
           </Typography.Title>
           <Typography.Text className="text-14px text-t-secondary mb-12px text-center">

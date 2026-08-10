@@ -10,8 +10,7 @@ import "@renderer/styles/layout.css";
 
 const DEFAULT_SIDER_WIDTH = 260;
 
-const detectMobile = (): boolean =>
-  typeof window !== "undefined" && window.innerWidth < 768;
+const detectMobile = (): boolean => typeof window !== "undefined" && window.innerWidth < 768;
 
 const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
   const { pathname } = useLocation();
@@ -155,9 +154,7 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
             <div
               className={classNames(
                 "flex-1 min-h-0 flex flex-col",
-                isSettings || isHome
-                  ? "p-0 overflow-hidden"
-                  : "p-24px overflow-auto"
+                isSettings || isHome ? "p-0 overflow-hidden" : "p-24px overflow-auto"
               )}
             >
               <Outlet />

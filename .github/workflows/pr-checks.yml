@@ -10,9 +10,12 @@ concurrency:
   group: pr-checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   quality:
-    name: Format & Typecheck
+    name: Format, Typecheck & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,24 +37,5 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-  gpt-review:
-    name: GPT Review
-    needs: quality
-    if: github.event_name == 'pull_request' && vars.ENABLE_GPT_REVIEW == 'true'
-    uses: ./.github/workflows/gpt-review.yml
-    secrets: inherit
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-
-  gpt-assessment:
-    name: GPT PR Assessment
-    needs: quality
-    if: >
-      github.event_name == 'pull_request' &&
-      vars.ENABLE_GPT_REVIEW == 'true' &&
-      github.event.pull_request.author_association != 'OWNER' &&
-      github.event.pull_request.author_association != 'MEMBER'
-    uses: ./.github/workflows/gpt-pr-assessment.yml
-    secrets: inherit
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
+      - name: Unit tests
+        run: pnpm test

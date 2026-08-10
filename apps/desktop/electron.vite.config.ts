@@ -97,7 +97,14 @@ export default defineConfig({
       },
     },
     optimizeDeps: {
-      include: ["react", "react-dom", "react-router-dom", "@arco-design/web-react", "@icon-park/react", "classnames"],
+      include: [
+        "react",
+        "react-dom",
+        "react-router-dom",
+        "@arco-design/web-react",
+        "@icon-park/react",
+        "classnames",
+      ],
       exclude: ["playwright", "playwright-core", "chromium-bidi"],
     },
   },

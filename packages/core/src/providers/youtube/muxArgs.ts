@@ -1,9 +1,5 @@
 /** Build ffmpeg argv for muxing separate video + audio streams (stream copy). */
-export function muxAvCopyArgs(
-  videoPath: string,
-  audioPath: string,
-  outPath: string
-): string[] {
+export function muxAvCopyArgs(videoPath: string, audioPath: string, outPath: string): string[] {
   return [
     "-y",
     "-i",
@@ -27,11 +23,7 @@ export function muxAvCopyArgs(
  * Retry argv when stream-copy fails (e.g. mismatched containers):
  * keep video copy, re-encode audio to AAC for a playable MP4/WebM.
  */
-export function muxAvRemuxArgs(
-  videoPath: string,
-  audioPath: string,
-  outPath: string
-): string[] {
+export function muxAvRemuxArgs(videoPath: string, audioPath: string, outPath: string): string[] {
   return [
     "-y",
     "-i",

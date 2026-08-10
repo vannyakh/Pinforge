@@ -1,4 +1,10 @@
-import type { DownloadMode, FormatPreset, ProviderId, ResolvedMedia, YoutubeDownloadOptions } from "../types";
+import type {
+  DownloadMode,
+  FormatPreset,
+  ProviderId,
+  ResolvedMedia,
+  YoutubeDownloadOptions,
+} from "../types";
 import type { ProviderFeatureMatrix } from "./capabilities";
 
 export interface ResolveContext {
@@ -10,11 +16,7 @@ export interface ResolveContext {
   signal?: AbortSignal;
   youtube?: YoutubeDownloadOptions;
   /** Byte-level download progress (YouTube / fragment downloads). */
-  onByteProgress?: (info: {
-    downloaded: number;
-    total: number | null;
-    phase?: string;
-  }) => void;
+  onByteProgress?: (info: { downloaded: number; total: number | null; phase?: string }) => void;
 }
 
 export interface MediaProvider {

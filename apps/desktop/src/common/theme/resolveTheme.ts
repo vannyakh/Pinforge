@@ -11,11 +11,7 @@ export function resolveActiveTheme(
   prefersDark?: boolean
 ): Theme {
   const targetId =
-    activeId === SYSTEM_THEME_ID
-      ? prefersDark
-        ? DARK_THEME_ID
-        : LIGHT_THEME_ID
-      : activeId;
+    activeId === SYSTEM_THEME_ID ? (prefersDark ? DARK_THEME_ID : LIGHT_THEME_ID) : activeId;
   return (
     themes.find((t) => t.id === targetId) ??
     themes.find((t) => t.id === LIGHT_THEME_ID) ??

@@ -33,12 +33,7 @@ describe("youtubeQualityChoices", () => {
   });
 
   it("prefers Best plus available preview heights including 4320", () => {
-    assert.deepEqual(youtubeQualityChoices([2160, 1080, 720]), [
-      "best",
-      "2160",
-      "1080",
-      "720",
-    ]);
+    assert.deepEqual(youtubeQualityChoices([2160, 1080, 720]), ["best", "2160", "1080", "720"]);
     assert.deepEqual(youtubeQualityChoices([4320, 1080]), ["best", "4320", "1080"]);
   });
 

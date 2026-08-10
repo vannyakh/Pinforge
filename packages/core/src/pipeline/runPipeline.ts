@@ -26,10 +26,7 @@ function resolveFeatures(
   return { ...base, ...partial };
 }
 
-function featuresMatchPreset(
-  features: EnhanceFeatures,
-  presetName: keyof typeof PRESETS
-): boolean {
+function featuresMatchPreset(features: EnhanceFeatures, presetName: keyof typeof PRESETS): boolean {
   const preset = PRESETS[presetName] ?? PRESETS.auto;
   return (
     features.autoLevels === preset.autoLevels &&
@@ -44,10 +41,7 @@ function featuresMatchPreset(
  * Prefers Pinforge Rust worker when features match the preset;
  * falls back to sharp JS pipeline (honors feature toggles).
  */
-export async function runPipeline(
-  buffer: Buffer,
-  opts: PipelineOptions
-): Promise<EnhancedAsset> {
+export async function runPipeline(buffer: Buffer, opts: PipelineOptions): Promise<EnhancedAsset> {
   const presetName = opts.preset ?? "auto";
   const features = resolveFeatures(presetName, opts.features);
 

@@ -11,7 +11,12 @@ import {
   Typography,
 } from "@arco-design/web-react";
 import { CheckOne, Communication, Plus } from "@icon-park/react";
-import { api, type CloudflareTunnelConfig, type RemoteChannelConfig, type RemoteConfig } from "@renderer/api";
+import {
+  api,
+  type CloudflareTunnelConfig,
+  type RemoteChannelConfig,
+  type RemoteConfig,
+} from "@renderer/api";
 import telegramLogo from "@renderer/assets/channel-logos/telegram.svg";
 import discordLogo from "@renderer/assets/channel-logos/discord.svg";
 import slackLogo from "@renderer/assets/channel-logos/slack.svg";
@@ -70,7 +75,9 @@ const PreferenceRow: React.FC<{
   <div className="remote-pref-row">
     <div className="remote-pref-row__meta">
       <div className="text-14px text-t-primary">{label}</div>
-      {description && <div className="text-12px text-t-tertiary mt-4px leading-relaxed">{description}</div>}
+      {description && (
+        <div className="text-12px text-t-tertiary mt-4px leading-relaxed">{description}</div>
+      )}
     </div>
     <div className="remote-pref-row__control">{children}</div>
   </div>
@@ -155,7 +162,12 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
               onChange={(v) => onLocalChange({ botToken: v })}
               onBlur={() => void onSave(channel)}
             />
-            <Button type="outline" loading={testing} disabled={saving} onClick={() => void handleTest()}>
+            <Button
+              type="outline"
+              loading={testing}
+              disabled={saving}
+              onClick={() => void handleTest()}
+            >
               Test
             </Button>
           </div>
@@ -176,7 +188,12 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
                 onChange={(v) => onLocalChange({ botToken: v })}
                 onBlur={() => void onSave(channel)}
               />
-              <Button type="outline" loading={testing} disabled={saving} onClick={() => void handleTest()}>
+              <Button
+                type="outline"
+                loading={testing}
+                disabled={saving}
+                onClick={() => void handleTest()}
+              >
                 Test
               </Button>
             </div>
@@ -223,7 +240,12 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
                 onBlur={() => void onSave(channel)}
               />
               {canTest && (
-                <Button type="outline" loading={testing} disabled={saving} onClick={() => void handleTest()}>
+                <Button
+                  type="outline"
+                  loading={testing}
+                  disabled={saving}
+                  onClick={() => void handleTest()}
+                >
                   Test
                 </Button>
               )}
@@ -379,12 +401,7 @@ const RemoteSettings: React.FC = () => {
         receive downloaded files.
       </div>
 
-      <Tabs
-        activeTab={tab}
-        onChange={setTab}
-        type="line"
-        className="mb-12px settings-remote-tabs"
-      >
+      <Tabs activeTab={tab} onChange={setTab} type="line" className="mb-12px settings-remote-tabs">
         <Tabs.TabPane
           key="tunnel"
           title={
@@ -405,8 +422,8 @@ const RemoteSettings: React.FC = () => {
             <div>
               <div className="text-16px font-600 text-t-primary mb-4px">Cloudflare Tunnel</div>
               <div className="text-13px text-t-secondary leading-relaxed">
-                Expose a local Pinforge API over HTTPS so online chatbot agents can request downloads
-                and receive files. Requires{" "}
+                Expose a local Pinforge API over HTTPS so online chatbot agents can request
+                downloads and receive files. Requires{" "}
                 <a
                   href="https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/"
                   target="_blank"
@@ -461,7 +478,10 @@ const RemoteSettings: React.FC = () => {
               />
             </PreferenceRow>
 
-            <PreferenceRow label="Tunnel token" description="From the Cloudflare Zero Trust dashboard.">
+            <PreferenceRow
+              label="Tunnel token"
+              description="From the Cloudflare Zero Trust dashboard."
+            >
               <Input.Password
                 style={{ width: 320 }}
                 placeholder="Cloudflare tunnel token"
@@ -495,7 +515,10 @@ const RemoteSettings: React.FC = () => {
               />
             </PreferenceRow>
 
-            <PreferenceRow label="cloudflared path" description="Optional. Leave empty to use PATH.">
+            <PreferenceRow
+              label="cloudflared path"
+              description="Optional. Leave empty to use PATH."
+            >
               <Input
                 style={{ width: 320 }}
                 placeholder="Leave empty to use PATH"

@@ -54,7 +54,10 @@ export function extFromUrlOrType(url: string, contentType: string | null): strin
   if (contentType?.includes("webp")) return "webp";
   if (contentType?.includes("jpeg") || contentType?.includes("jpg")) return "jpg";
   const fromUrl = url.split("?")[0]?.split(".").pop()?.toLowerCase();
-  if (fromUrl && ["mp4", "webm", "mp3", "m4a", "jpg", "jpeg", "png", "webp", "gif"].includes(fromUrl)) {
+  if (
+    fromUrl &&
+    ["mp4", "webm", "mp3", "m4a", "jpg", "jpeg", "png", "webp", "gif"].includes(fromUrl)
+  ) {
     return fromUrl === "jpeg" ? "jpg" : fromUrl;
   }
   return "mp4";

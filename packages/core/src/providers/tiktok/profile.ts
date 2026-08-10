@@ -109,19 +109,13 @@ function coverFromItem(item: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-function videoFromItem(
-  item: Record<string, unknown>,
-  username: string
-): TikTokProfileVideo | null {
+function videoFromItem(item: Record<string, unknown>, username: string): TikTokProfileVideo | null {
   const idRaw = item.id ?? item.aweme_id ?? item.video_id;
-  const id =
-    typeof idRaw === "string" || typeof idRaw === "number" ? String(idRaw) : "";
+  const id = typeof idRaw === "string" || typeof idRaw === "number" ? String(idRaw) : "";
   if (!/^\d{5,}$/.test(id)) return null;
   const titleRaw = item.desc ?? item.title ?? item.contentDesc;
   const title =
-    typeof titleRaw === "string" && titleRaw.trim()
-      ? titleRaw.trim().slice(0, 200)
-      : undefined;
+    typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim().slice(0, 200) : undefined;
   const dur = durationFromItem(item);
   return {
     id,
@@ -133,10 +127,7 @@ function videoFromItem(
 }
 
 function parseJsonScript(html: string, id: string): unknown | null {
-  const re = new RegExp(
-    `<script[^>]+id=["']${id}["'][^>]*>([\\s\\S]*?)<\\/script>`,
-    "i"
-  );
+  const re = new RegExp(`<script[^>]+id=["']${id}["'][^>]*>([\\s\\S]*?)<\\/script>`, "i");
   const m = html.match(re);
   if (!m?.[1]?.trim()) return null;
   try {
@@ -175,24 +166,16 @@ function extractUserMeta(data: unknown): {
 } {
   const scope =
     data && typeof data === "object"
-      ? ((data as Record<string, unknown>).__DEFAULT_SCOPE__ as
-          | Record<string, unknown>
-          | undefined)
+      ? ((data as Record<string, unknown>).__DEFAULT_SCOPE__ as Record<string, unknown> | undefined)
       : undefined;
   const detail = scope?.["webapp.user-detail"] as Record<string, unknown> | undefined;
   const userInfo = detail?.userInfo as Record<string, unknown> | undefined;
   const user = userInfo?.user as Record<string, unknown> | undefined;
   const secUid = typeof user?.secUid === "string" ? user.secUid : undefined;
   const displayName =
-    typeof user?.nickname === "string" && user.nickname.trim()
-      ? user.nickname.trim()
-      : undefined;
+    typeof user?.nickname === "string" && user.nickname.trim() ? user.nickname.trim() : undefined;
   const userId =
-    user?.id != null
-      ? String(user.id)
-      : user?.uid != null
-        ? String(user.uid)
-        : undefined;
+    user?.id != null ? String(user.id) : user?.uid != null ? String(user.uid) : undefined;
   if (!secUid) {
     const blob = JSON.stringify(data ?? {});
     const m = blob.match(/"secUid"\s*:\s*"([^"]+)"/);
@@ -201,10 +184,7 @@ function extractUserMeta(data: unknown): {
   return { secUid, displayName, userId };
 }
 
-function upsertVideo(
-  map: Map<string, TikTokProfileVideo>,
-  video: TikTokProfileVideo
-) {
+function upsertVideo(map: Map<string, TikTokProfileVideo>, video: TikTokProfileVideo) {
   const prev = map.get(video.id);
   if (!prev) {
     map.set(video.id, video);
@@ -320,8 +300,7 @@ export async function resolveTikTokProfile(
 
   if (rehydration && typeof rehydration === "object") {
     const scope = (rehydration as Record<string, unknown>).__DEFAULT_SCOPE__ as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     const detail = scope?.["webapp.user-detail"] as Record<string, unknown> | undefined;
     const itemList = detail?.itemList;
     if (Array.isArray(itemList)) {

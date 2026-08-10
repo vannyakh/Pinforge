@@ -215,7 +215,8 @@ export function buildInstalledViews(
       lifecycle,
       enabled: cfg.enabled,
       version,
-      capabilities: cfg.capabilities || cfg.manifest?.capabilities || catalogItem?.capabilities || [],
+      capabilities:
+        cfg.capabilities || cfg.manifest?.capabilities || catalogItem?.capabilities || [],
       checksum: cfg.checksum || cfg.manifest?.checksum,
       builtin: false,
       live: false,

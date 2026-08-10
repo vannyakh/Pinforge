@@ -42,8 +42,14 @@ const DownloadSettings: React.FC = () => {
         Enhance
       </div>
       <div className="bg-2 rd-12px border border-b-base px-18px mb-28px">
-        <Row title="Enhance images" description="Apply image enhancement to Pinterest stills by default.">
-          <Switch checked={settings.enhance} onChange={(v) => void updateSettings({ enhance: v })} />
+        <Row
+          title="Enhance images"
+          description="Apply image enhancement to Pinterest stills by default."
+        >
+          <Switch
+            checked={settings.enhance}
+            onChange={(v) => void updateSettings({ enhance: v })}
+          />
         </Row>
         {settings.enhance && (
           <div className="py-14px border-b border-b-base">
@@ -70,7 +76,9 @@ const DownloadSettings: React.FC = () => {
         )}
         <div className="py-14px">
           <div className="text-14px text-t-primary mb-4px">Enhance preset</div>
-          <div className="text-12px text-t-tertiary mb-8px">Default quality pipeline for stills.</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            Default quality pipeline for stills.
+          </div>
           <Select
             className="w-full"
             value={settings.preset}
@@ -121,17 +129,15 @@ const DownloadSettings: React.FC = () => {
           <Select
             className="w-full"
             value={settings.youtube?.quality ?? "best"}
-            onChange={(v) =>
-              void updateSettings({ youtube: { quality: v as YoutubeQuality } })
-            }
+            onChange={(v) => void updateSettings({ youtube: { quality: v as YoutubeQuality } })}
           >
-            {(
-              ["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]
-            ).map((q) => (
-              <Select.Option key={q} value={q}>
-                {q === "best" ? "Best" : `${q}p`}
-              </Select.Option>
-            ))}
+            {(["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]).map(
+              (q) => (
+                <Select.Option key={q} value={q}>
+                  {q === "best" ? "Best" : `${q}p`}
+                </Select.Option>
+              )
+            )}
           </Select>
         </div>
         <div className="py-14px border-b border-b-base">

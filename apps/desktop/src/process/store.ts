@@ -1,8 +1,20 @@
 import Store from "electron-store";
 import { app } from "electron";
 import { join } from "node:path";
-import type { FormatPreset, PresetName, ProviderId, MediaKind, EnhanceFeatures, YoutubeDownloadOptions, PinterestOptions } from "@pinterest-desktop/core";
-import { DEFAULT_ENHANCE_FEATURES, DEFAULT_YOUTUBE_OPTIONS, DEFAULT_PINTEREST_OPTIONS } from "@pinterest-desktop/core";
+import type {
+  FormatPreset,
+  PresetName,
+  ProviderId,
+  MediaKind,
+  EnhanceFeatures,
+  YoutubeDownloadOptions,
+  PinterestOptions,
+} from "@pinterest-desktop/core";
+import {
+  DEFAULT_ENHANCE_FEATURES,
+  DEFAULT_YOUTUBE_OPTIONS,
+  DEFAULT_PINTEREST_OPTIONS,
+} from "@pinterest-desktop/core";
 import {
   DEFAULT_REMOTE,
   DEFAULT_TUNNEL,
@@ -236,9 +248,6 @@ function migrateFlatHistoryToPacks(s: Store<AppStoreSchema>): void {
     }
   }
 
-  s.set(
-    "packs",
-    nextPacks.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 50)
-  );
+  s.set("packs", nextPacks.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 50));
   s.set("history", nextHistory.slice(0, 200));
 }

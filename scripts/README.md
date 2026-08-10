@@ -59,10 +59,10 @@ pnpm --filter @pinterest-desktop/core exec playwright install chromium
 
 ## Artifacts
 
-| Path                         | Contents                |
-| ---------------------------- | ----------------------- |
-| `apps/desktop/out/`          | Vite main/preload/UI    |
-| `apps/desktop/release/`      | Installers / unpacked   |
+| Path                    | Contents              |
+| ----------------------- | --------------------- |
+| `apps/desktop/out/`     | Vite main/preload/UI  |
+| `apps/desktop/release/` | Installers / unpacked |
 
 ## Icons
 
@@ -70,17 +70,18 @@ Add `apps/desktop/resources/icon.png` (and `.ico` / `.icns` if desired) before s
 
 ## CI / Release
 
-| Workflow | Trigger | What it does |
-| -------- | ------- | ------------ |
-| `.github/workflows/release.yml` | Push tag `v*` (or manual dispatch) | Cross-platform build (Windows x64, macOS arm64/x64, Linux x64) → draft Release → upload assets + `SHA256SUMS.txt` → publish |
-| `.github/workflows/build-manual.yml` | `workflow_dispatch` | Same platform matrix; uploads Actions artifacts only (no GitHub Release) |
+| Workflow                             | Trigger                            | What it does                                                                                                                |
+| ------------------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/release.yml`      | Push tag `v*` (or manual dispatch) | Cross-platform build (Windows x64, macOS arm64/x64, Linux x64) → draft Release → upload assets + `SHA256SUMS.txt` → publish |
+| `.github/workflows/build-manual.yml` | `workflow_dispatch`                | Same platform matrix; uploads Actions artifacts only (no GitHub Release)                                                    |
 
 Release checklist:
 
-1. Set `apps/desktop/package.json` `"version"` to the release version (e.g. `0.1.0`).
-2. Commit and push to the default branch.
-3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`
-4. Watch **Release** workflow; GitHub Release is published when all platform jobs finish.
+1. Set package versions (`apps/desktop`, `apps/cli`, `packages/core`) to the release version (e.g. `0.1.1`).
+2. Ensure **PR Checks** is green (`pnpm format:check`, `pnpm typecheck`, `pnpm test`).
+3. Commit and push to the default branch.
+4. Tag and push: `git tag v0.1.1 && git push origin v0.1.1`
+5. Watch **Release** workflow; GitHub Release is published when all platform jobs finish.
 
 Optional signing / notarization secrets (macOS): `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (and code-sign certs if configured). Unsigned CI builds set `CSC_IDENTITY_AUTO_DISCOVERY=false`.
 

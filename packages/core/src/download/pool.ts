@@ -38,9 +38,6 @@ export async function mapPool<T, R>(
   return results;
 }
 
-export async function runPool<T>(
-  tasks: PoolTask<T>[],
-  concurrency: number
-): Promise<T[]> {
+export async function runPool<T>(tasks: PoolTask<T>[], concurrency: number): Promise<T[]> {
   return mapPool(tasks, concurrency, (task) => task());
 }

@@ -24,13 +24,7 @@ import {
   qualityCap,
   type YtStreamFormat,
 } from "./formats";
-import {
-  convertAudio,
-  embedMetadata,
-  muxAv,
-  requireFfmpegMessage,
-  resolveFfmpeg,
-} from "./mux";
+import { convertAudio, embedMetadata, muxAv, requireFfmpegMessage, resolveFfmpeg } from "./mux";
 import { clearResumeState } from "./resume";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,11 +45,7 @@ export type YoutubeResolveOpts = {
   signal?: AbortSignal;
   /** Legacy Piped/Invidious fallback base. */
   extractorUrl?: string;
-  onByteProgress?: (info: {
-    downloaded: number;
-    total: number | null;
-    phase?: string;
-  }) => void;
+  onByteProgress?: (info: { downloaded: number; total: number | null; phase?: string }) => void;
 };
 
 type CaptionTrack = {
@@ -188,10 +178,9 @@ async function resolveInnertubeMeta(id: string): Promise<VideoMeta> {
         id,
         title: basic.title ?? id,
         channel: basic.author ?? basic.channel?.name ?? basic.author_name,
-        description: typeof basic.short_description === "string" ? basic.short_description : undefined,
-        uploadDate: basic.start_timestamp
-          ? String(basic.start_timestamp).slice(0, 10)
-          : undefined,
+        description:
+          typeof basic.short_description === "string" ? basic.short_description : undefined,
+        uploadDate: basic.start_timestamp ? String(basic.start_timestamp).slice(0, 10) : undefined,
         durationSec:
           typeof basic.duration === "number"
             ? basic.duration
@@ -215,11 +204,7 @@ export async function previewYouTubeVideo(url: string): Promise<YoutubeVideoPrev
   if (!id) throw new Error("Could not parse YouTube video id from URL");
   const meta = await resolveInnertubeMeta(id);
   const captionLangs = [
-    ...new Set(
-      meta.captions
-        .map((t) => (t.language_code || "").trim())
-        .filter(Boolean)
-    ),
+    ...new Set(meta.captions.map((t) => (t.language_code || "").trim()).filter(Boolean)),
   ];
   return {
     id: meta.id,
@@ -321,15 +306,13 @@ export async function resolveYouTubeVideo(
     });
   }
 
-  const workRoot =
-    opts.outDir ??
-    path.join(os.tmpdir(), "pinforge-yt", id);
+  const workRoot = opts.outDir ?? path.join(os.tmpdir(), "pinforge-yt", id);
   await fs.mkdir(workRoot, { recursive: true });
 
   const channelDir =
     ytOpts.organizeByChannel && meta.channel && opts.outDir
       ? path.join(opts.outDir, sanitizeFilename(meta.channel))
-      : opts.outDir ?? workRoot;
+      : (opts.outDir ?? workRoot);
   if (opts.outDir) await fs.mkdir(channelDir, { recursive: true });
 
   // Stable names so Stop → Continue can resume the same .part paths
@@ -411,7 +394,11 @@ export async function resolveYouTubeVideo(
         let aDone = 0;
         const emitDash = () => {
           const total =
-            vTotal != null && aTotal != null ? vTotal + aTotal : vTotal != null ? vTotal * 1.25 : null;
+            vTotal != null && aTotal != null
+              ? vTotal + aTotal
+              : vTotal != null
+                ? vTotal * 1.25
+                : null;
           const downloaded = vDone + aDone;
           onProg?.({ downloaded, total, phase: "download" });
         };
@@ -518,9 +505,7 @@ export async function resolveYouTubeVideo(
     await fs.mkdir(finalDir, { recursive: true });
     let finalPath = path.join(finalDir, `${baseName}.${outExt}`);
 
-    const needsTag =
-      ytOpts.tagMetadata ||
-      (ytOpts.subtitles === "embed" && Boolean(embedSub));
+    const needsTag = ytOpts.tagMetadata || (ytOpts.subtitles === "embed" && Boolean(embedSub));
     const ffTag = await resolveFfmpeg();
 
     if (needsTag && ffTag && wantsVideo && !audioOnly) {

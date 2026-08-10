@@ -35,7 +35,10 @@ async function probeBinary(bin: string): Promise<{ ok: boolean; version?: string
     if (path.isAbsolute(bin)) return { ok: false };
   }
   return await new Promise((resolve) => {
-    const child = spawn(bin, ["-version"], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(bin, ["-version"], {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let out = "";
     child.stdout?.on("data", (d: Buffer) => {
       out += d.toString();
@@ -193,7 +196,9 @@ function downloadUrlForPlatform(): string {
     return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz";
   }
   // macOS: recommend brew; no automatic large download for now
-  throw new Error("Automatic ffmpeg install is supported on Windows. On macOS use: brew install ffmpeg");
+  throw new Error(
+    "Automatic ffmpeg install is supported on Windows. On macOS use: brew install ffmpeg"
+  );
 }
 
 export type FfmpegInstallProgress = {

@@ -202,9 +202,7 @@ export function initAutoUpdater(): void {
   }, 4_000);
 }
 
-export async function checkForUpdates(
-  req: UpdateCheckRequest = {}
-): Promise<AutoUpdateStatus> {
+export async function checkForUpdates(req: UpdateCheckRequest = {}): Promise<AutoUpdateStatus> {
   const includePrerelease = Boolean(req.includePrerelease);
   wireEvents();
 

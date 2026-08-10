@@ -37,7 +37,7 @@
   box-sizing: border-box;
 }
 
-:global([data-theme='dark']) .guidInputInner {
+:global([data-theme="dark"]) .guidInputInner {
   background: #262626;
   border-color: #3a3a3a;
 }
@@ -348,14 +348,24 @@
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--color-fill-2) 25%, var(--color-fill-3) 50%, var(--color-fill-2) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--color-fill-2) 25%,
+    var(--color-fill-3) 50%,
+    var(--color-fill-2) 75%
+  );
   background-size: 200% 100%;
   animation: guid-shimmer 1.5s ease-in-out infinite;
   border-radius: 50%;
 }
 
 .skeletonPill {
-  background: linear-gradient(90deg, var(--color-fill-2) 25%, var(--color-fill-3) 50%, var(--color-fill-2) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--color-fill-2) 25%,
+    var(--color-fill-3) 50%,
+    var(--color-fill-2) 75%
+  );
   background-size: 200% 100%;
   animation: guid-shimmer 1.5s ease-in-out infinite;
   border-radius: 100px;
@@ -483,7 +493,7 @@
   animation: assistantOverflowPanelIn 0.16s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
-:global([data-theme='dark']) .assistantSelectorInactive {
+:global([data-theme="dark"]) .assistantSelectorInactive {
   opacity: 1;
   color: var(--aou-9) !important;
 }
@@ -523,7 +533,12 @@
 }
 
 .assistantCardScrollWrapScrollable {
-  -webkit-mask-image: linear-gradient(to bottom, black 0, black calc(100% - 56px), transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0,
+    black calc(100% - 56px),
+    transparent 100%
+  );
   mask-image: linear-gradient(to bottom, black 0, black calc(100% - 56px), transparent 100%);
 }
 
@@ -566,11 +581,11 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
-:global([data-theme='dark']) .assistantCard {
+:global([data-theme="dark"]) .assistantCard {
   background: #262626;
 }
 
-:global([data-theme='dark']) .assistantCard:hover {
+:global([data-theme="dark"]) .assistantCard:hover {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 

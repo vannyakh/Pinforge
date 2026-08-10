@@ -108,9 +108,7 @@ function pickVideoId(node: AnyYt): string | null {
     node.on_tap_endpoint?.payload?.videoId ||
     node.endpoint?.payload?.videoId ||
     node.navigation_endpoint?.payload?.videoId ||
-    (typeof node.entity_id === "string"
-      ? node.entity_id.replace(/^shorts-shelf-item-/, "")
-      : null);
+    (typeof node.entity_id === "string" ? node.entity_id.replace(/^shorts-shelf-item-/, "") : null);
   if (typeof id === "string" && /^[\w-]{6,}$/.test(id)) return id;
   return null;
 }
@@ -175,12 +173,7 @@ function pickDuration(node: AnyYt): { text?: string; sec?: number } {
     node?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text,
   ];
   for (const c of candidates) {
-    const raw =
-      typeof c === "string"
-        ? c
-        : c && typeof c.toString === "function"
-          ? String(c)
-          : "";
+    const raw = typeof c === "string" ? c : c && typeof c.toString === "function" ? String(c) : "";
     if (!raw || raw === "[object Object]") continue;
     if (!/\d/.test(raw) || !/[:\d]/.test(raw)) continue;
     if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw.trim()) && !/^\d+\s*(s|sec|min)/i.test(raw)) {
@@ -233,9 +226,7 @@ async function resolveChannelId(url: string, yt: AnyYt, signal?: AbortSignal): P
   try {
     const endpoint = await yt.resolveURL(root);
     const browseId =
-      endpoint?.payload?.browseId ??
-      endpoint?.metadata?.browseId ??
-      endpoint?.browseId;
+      endpoint?.payload?.browseId ?? endpoint?.metadata?.browseId ?? endpoint?.browseId;
     if (typeof browseId === "string" && /^UC[\w-]+$/.test(browseId)) {
       return browseId;
     }
@@ -269,10 +260,7 @@ async function resolveChannelId(url: string, yt: AnyYt, signal?: AbortSignal): P
   );
 }
 
-async function loadChannelTabPage(
-  channel: AnyYt,
-  tab: YoutubeChannelTab
-): Promise<AnyYt | null> {
+async function loadChannelTabPage(channel: AnyYt, tab: YoutubeChannelTab): Promise<AnyYt | null> {
   if (tab === "shorts") {
     if (!channel.has_shorts) return null;
     return channel.getShorts();

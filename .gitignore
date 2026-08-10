@@ -57,3 +57,7 @@ test-results/
 # Reference checkout (do not ship in the public repo)
 .tmp-aionui/
 .tmp-*/
+
+# Accidental youtubei / player dump scripts
+*-player-script.js
+apps/desktop/src/renderer/out-test-yt/

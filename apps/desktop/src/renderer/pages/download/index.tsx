@@ -88,7 +88,9 @@ function describeExtract(extract: ExtractPreview): string {
     return extract.message ?? `${extract.provider.label} ${extract.mode} is not supported yet.`;
   }
   if (extract.itemCount > 1) {
-    return extract.message ?? `Extracted ${extract.itemCount} items from ${extract.provider.label}.`;
+    return (
+      extract.message ?? `Extracted ${extract.itemCount} items from ${extract.provider.label}.`
+    );
   }
   return extract.message ?? `Detected ${extract.provider.label}. Ready to download.`;
 }
@@ -137,9 +139,7 @@ const DownloadPage: React.FC = () => {
   const stickToBottomRef = useRef(true);
   const scrollHideTimerRef = useRef<number | null>(null);
   const [chatFade, setChatFade] = useState({ top: false, bottom: false });
-  const progressTargetRef = useRef<{ assistantId: string; activeUrl: string } | null>(
-    null
-  );
+  const progressTargetRef = useRef<{ assistantId: string; activeUrl: string } | null>(null);
   const downloadQueueRef = useRef<Array<() => Promise<void>>>([]);
   const drainingQueueRef = useRef(false);
 
@@ -255,9 +255,7 @@ const DownloadPage: React.FC = () => {
             ? Math.round((ev.current / ev.total) * 100)
             : undefined;
       const coverUrl =
-        coverUrlFromMediaUrl(ev.url || "") ||
-        coverUrlFromMediaUrl(matchUrl) ||
-        undefined;
+        coverUrlFromMediaUrl(ev.url || "") || coverUrlFromMediaUrl(matchUrl) || undefined;
       const patch = {
         status: "downloading" as const,
         ...(ev.title ? { title: ev.title } : {}),
@@ -288,10 +286,7 @@ const DownloadPage: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [showProcessing]);
 
-  const pendingConfirmMsg = useMemo(
-    () => selectPendingConfirm(messages),
-    [messages]
-  );
+  const pendingConfirmMsg = useMemo(() => selectPendingConfirm(messages), [messages]);
 
   if (!settings) {
     return <div className="text-t-secondary p-24px">Loading…</div>;
@@ -347,9 +342,7 @@ const DownloadPage: React.FC = () => {
           };
         }
         const base =
-          m.results && m.results.length > 0
-            ? m.results
-            : makeDownloadCards(urls, "queued");
+          m.results && m.results.length > 0 ? m.results : makeDownloadCards(urls, "queued");
         return {
           ...m,
           text: `${(m.text || "").split("\n")[0]}\nStarting download…`,
@@ -425,8 +418,7 @@ const DownloadPage: React.FC = () => {
           provider: primary.provider ?? res.provider,
           kind: primary.kind,
           packId: res.packId,
-          message:
-            res.results.length > 1 ? `${res.results.length} files saved` : "Saved",
+          message: res.results.length > 1 ? `${res.results.length} files saved` : "Saved",
         });
       }
     }
@@ -507,10 +499,7 @@ const DownloadPage: React.FC = () => {
     const detectingMsg: ChatMessage = {
       id: assistantId,
       role: "assistant",
-      text:
-        urls.length > 1
-          ? `Found ${urls.length} links. Extracting…`
-          : "Extracting source…",
+      text: urls.length > 1 ? `Found ${urls.length} links. Extracting…` : "Extracting source…",
       url: urls[0],
       status: "detecting",
       results: seedCards,
@@ -603,17 +592,14 @@ const DownloadPage: React.FC = () => {
             url: e.sourceUrl,
             title: e.title ?? e.items[0]?.title,
             coverUrl:
-              e.items.find((it) => it.coverUrl)?.coverUrl ||
-              coverUrlFromMediaUrl(e.sourceUrl),
+              e.items.find((it) => it.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl),
           })),
           message: replyText,
         }
       : primary;
 
     const selectable = isSelectableExtract(extractForMsg);
-    const selectedItemUrls = selectable
-      ? extractForMsg.items.map((i) => i.url)
-      : undefined;
+    const selectedItemUrls = selectable ? extractForMsg.items.map((i) => i.url) : undefined;
     // Profile / bulk: always pick from the list (skip auto-start of whole channel).
     // Single YouTube: always confirm so the user can pick height quality.
     const shouldAuto =
@@ -632,8 +618,7 @@ const DownloadPage: React.FC = () => {
           "ready",
           downloadable.map((e) => e.title ?? e.items[0]?.title),
           downloadable.map(
-            (e) =>
-              e.items.find((i) => i.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl)
+            (e) => e.items.find((i) => i.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl)
           )
         );
 
@@ -661,9 +646,7 @@ const DownloadPage: React.FC = () => {
           enhance: settings.enhance,
           assistantId,
           asBatch: downloadUrls.length > 1 || selectable,
-          batchLabel: selectable
-            ? `${detected.label} · ${extractForMsg.mode}`
-            : detected.label,
+          batchLabel: selectable ? `${detected.label} · ${extractForMsg.mode}` : detected.label,
           youtube:
             detected.id === "youtube"
               ? {
@@ -707,10 +690,7 @@ const DownloadPage: React.FC = () => {
     void beginSelectedDownload(msg);
   };
 
-  const beginSelectedDownload = (
-    msg: ChatMessage,
-    onlyUrls?: string[]
-  ) => {
+  const beginSelectedDownload = (msg: ChatMessage, onlyUrls?: string[]) => {
     if (!msg.detected?.live || !msg.extract) return;
 
     const extract = msg.extract;
@@ -755,9 +735,10 @@ const DownloadPage: React.FC = () => {
         m.id === msg.id
           ? {
               ...m,
-              text: asBatch && initialJob
-                ? formatBatchMessage({ ...m, status: "started" }, initialJob)
-                : `${describeExtract(m.extract!)}\nDownload started.`,
+              text:
+                asBatch && initialJob
+                  ? formatBatchMessage({ ...m, status: "started" }, initialJob)
+                  : `${describeExtract(m.extract!)}\nDownload started.`,
               pendingConfirm: false,
               status: "started",
               results: asBatch
@@ -881,9 +862,7 @@ const DownloadPage: React.FC = () => {
       if (msg.detected?.id === "youtube") {
         void updateSettings({
           youtube:
-            mode === "playlist"
-              ? { playlistMaxVideos: capped }
-              : { channelMaxVideos: capped },
+            mode === "playlist" ? { playlistMaxVideos: capped } : { channelMaxVideos: capped },
         });
       } else if (isPin) {
         void updateSettings({ pinterest: { boardMaxPins: capped } });
@@ -1004,13 +983,7 @@ const DownloadPage: React.FC = () => {
   );
 
   return (
-    <div
-      className={
-        hasChat
-          ? "home-hero flex flex-col h-full min-h-0"
-          : styles.guidContainer
-      }
-    >
+    <div className={hasChat ? "home-hero flex flex-col h-full min-h-0" : styles.guidContainer}>
       {hasChat ? (
         <div className="home-hero__stage home-hero__stage--chat flex-1 min-h-0 flex flex-col">
           <div className="home-guid-layout home-guid-layout--chat w-full flex flex-col flex-1 min-h-0">
@@ -1020,315 +993,312 @@ const DownloadPage: React.FC = () => {
                   className={`home-chat__fade home-chat__fade--top${chatFade.top ? " is-visible" : ""}`}
                   aria-hidden
                 />
-                <div
-                  ref={chatScrollRef}
-                  className="home-chat"
-                  onScroll={onChatScroll}
-                >
+                <div ref={chatScrollRef} className="home-chat" onScroll={onChatScroll}>
                   <div className="home-chat__thread home-chat__content min-w-0">
-                  <div className="h-10px" />
-                  {messages.map((msg) => {
-                    const meta = msg.detected ? platformMetaFor(msg.detected.id) : null;
-                    const extract = msg.extract;
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`home-chat__row message-item home-chat__row--${msg.role}`}
-                      >
-                        <div className={`home-chat__bubble home-chat__bubble--${msg.role}`}>
-                          {msg.role === "assistant" && msg.detected && (
-                            <div className="home-chat__meta">
-                              <span
-                                className="home-composer-card__platform-chip"
-                                style={
-                                  meta
-                                    ? { background: meta.tint, color: meta.accent }
-                                    : undefined
-                                }
-                              >
-                                {msg.detected.id !== "auto" && msg.detected.id !== "unknown" && (
-                                  <PlatformIcon id={msg.detected.id as PlatformId} size={14} />
-                                )}
-                                {msg.detected.label}
-                              </span>
-                              {extract && (
-                                <span className="home-chat__mode-chip">
-                                  {extract.itemCount > 1 && extract.mode === "single"
-                                    ? `batch · ${extract.itemCount}`
-                                    : extract.mode}
+                    <div className="h-10px" />
+                    {messages.map((msg) => {
+                      const meta = msg.detected ? platformMetaFor(msg.detected.id) : null;
+                      const extract = msg.extract;
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`home-chat__row message-item home-chat__row--${msg.role}`}
+                        >
+                          <div className={`home-chat__bubble home-chat__bubble--${msg.role}`}>
+                            {msg.role === "assistant" && msg.detected && (
+                              <div className="home-chat__meta">
+                                <span
+                                  className="home-composer-card__platform-chip"
+                                  style={
+                                    meta ? { background: meta.tint, color: meta.accent } : undefined
+                                  }
+                                >
+                                  {msg.detected.id !== "auto" && msg.detected.id !== "unknown" && (
+                                    <PlatformIcon id={msg.detected.id as PlatformId} size={14} />
+                                  )}
+                                  {msg.detected.label}
                                 </span>
-                              )}
-                              <span className="home-chat__status">
-                                {msg.status === "detecting" ? (
-                                  <ShimmerText>Extracting</ShimmerText>
-                                ) : msg.status === "started" ? (
-                                  <ShimmerText>Downloading</ShimmerText>
-                                ) : msg.status === "done" ? (
-                                  "Done"
-                                ) : msg.status === "failed" ? (
-                                  "Failed"
-                                ) : extract?.modeSupported ? (
-                                  "Ready"
-                                ) : (
-                                  "Unsupported"
+                                {extract && (
+                                  <span className="home-chat__mode-chip">
+                                    {extract.itemCount > 1 && extract.mode === "single"
+                                      ? `batch · ${extract.itemCount}`
+                                      : extract.mode}
+                                  </span>
                                 )}
-                              </span>
-                            </div>
-                          )}
-                          {(() => {
-                            const cards: ChatDownloadCard[] =
-                              msg.batchJob
+                                <span className="home-chat__status">
+                                  {msg.status === "detecting" ? (
+                                    <ShimmerText>Extracting</ShimmerText>
+                                  ) : msg.status === "started" ? (
+                                    <ShimmerText>Downloading</ShimmerText>
+                                  ) : msg.status === "done" ? (
+                                    "Done"
+                                  ) : msg.status === "failed" ? (
+                                    "Failed"
+                                  ) : extract?.modeSupported ? (
+                                    "Ready"
+                                  ) : (
+                                    "Unsupported"
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                            {(() => {
+                              const cards: ChatDownloadCard[] = msg.batchJob
                                 ? []
                                 : msg.results && msg.results.length > 0
                                   ? msg.results
                                   : msg.result
                                     ? [msg.result]
                                     : [];
-                            const showCards =
-                              msg.role === "assistant" && cards.length > 0 && !msg.batchJob;
-                            const showBatch = Boolean(
-                              msg.role === "assistant" && msg.batchJob
-                            );
-                            // Batch: title + collapsible pipeline (no progress card).
-                            const showText =
-                              Boolean(msg.text) &&
-                              !showBatch &&
-                              (msg.role === "user" ||
-                                msg.status === "ready" ||
-                                msg.status === "error" ||
-                                msg.status === "failed" ||
-                                msg.status === "detecting" ||
-                                msg.status === "started" ||
-                                msg.status === "done" ||
-                                (msg.status === "started" && cards.every((c) => !c.percent)));
-                            return (
-                              <>
-                                {showText && (
-                                  <div className="home-chat__text whitespace-pre-wrap">
-                                    {msg.text}
-                                  </div>
-                                )}
-                                {showBatch && msg.batchJob && (
-                                  <BatchPipeline
-                                    job={msg.batchJob}
-                                    status={msg.status}
-                                    title={msg.text}
-                                    onOpenTasks={() => navigate("/tasks")}
-                                  />
-                                )}
-                                {showCards && (
-                                  <div className="home-result-list">
-                                    {cards.map((card) => (
-                                      <DownloadPipeline
-                                        key={card.id || `${card.sourceUrl}-${card.status}`}
-                                        card={card}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
+                              const showCards =
+                                msg.role === "assistant" && cards.length > 0 && !msg.batchJob;
+                              const showBatch = Boolean(msg.role === "assistant" && msg.batchJob);
+                              // Batch: title + collapsible pipeline (no progress card).
+                              const showText =
+                                Boolean(msg.text) &&
+                                !showBatch &&
+                                (msg.role === "user" ||
+                                  msg.status === "ready" ||
+                                  msg.status === "error" ||
+                                  msg.status === "failed" ||
+                                  msg.status === "detecting" ||
+                                  msg.status === "started" ||
+                                  msg.status === "done" ||
+                                  (msg.status === "started" && cards.every((c) => !c.percent)));
+                              return (
+                                <>
+                                  {showText && (
+                                    <div className="home-chat__text whitespace-pre-wrap">
+                                      {msg.text}
+                                    </div>
+                                  )}
+                                  {showBatch && msg.batchJob && (
+                                    <BatchPipeline
+                                      job={msg.batchJob}
+                                      status={msg.status}
+                                      title={msg.text}
+                                      onOpenTasks={() => navigate("/tasks")}
+                                    />
+                                  )}
+                                  {showCards && (
+                                    <div className="home-result-list">
+                                      {cards.map((card) => (
+                                        <DownloadPipeline
+                                          key={card.id || `${card.sourceUrl}-${card.status}`}
+                                          card={card}
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
 
-                          {msg.role === "assistant" &&
-                            extract &&
-                            isSelectableExtract(extract) &&
-                            msg.status !== "detecting" &&
-                            msg.status !== "started" &&
-                            msg.status !== "done" &&
-                            msg.status !== "failed" &&
-                            !msg.batchJob && (
-                            <ExtractPickTable
-                              messageId={msg.id}
-                              extract={extract}
-                              selectedUrls={msg.selectedItemUrls ?? []}
-                              onSelectionChange={(urls) => setMessageSelection(msg.id, urls)}
-                              onToggleUrl={(u) => toggleMessageItem(msg.id, u)}
-                              format={confirmFormat}
-                              formats={extract.formats?.length ? extract.formats : ["best", "mp4", "audio-only"]}
-                              onFormatChange={setConfirmFormat}
-                              showYoutube={msg.detected?.id === "youtube"}
-                              ytQuality={confirmYtQuality}
-                              onYtQualityChange={setConfirmYtQuality}
-                              audio={confirmAudio}
-                              onAudioChange={setConfirmAudio}
-                              subs={confirmSubs}
-                              onSubsChange={setConfirmSubs}
-                              listMax={
-                                extract.mode === "playlist"
-                                  ? settings.youtube?.playlistMaxVideos ?? listMax
-                                  : extract.provider.id === "pinterest"
-                                    ? settings.pinterest?.boardMaxPins ?? listMax
-                                    : extract.mode === "profile"
-                                      ? settings.youtube?.channelMaxVideos ?? listMax
-                                      : listMax
-                              }
-                              onListMaxChange={setListMax}
-                              onReloadList={(max) => reloadExtractList(msg, max)}
-                              listLoading={listReloadingId === msg.id}
-                              busy={false}
-                              onDownloadSelected={() => beginSelectedDownload(msg)}
-                              onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}
-                            />
-                          )}
+                            {msg.role === "assistant" &&
+                              extract &&
+                              isSelectableExtract(extract) &&
+                              msg.status !== "detecting" &&
+                              msg.status !== "started" &&
+                              msg.status !== "done" &&
+                              msg.status !== "failed" &&
+                              !msg.batchJob && (
+                                <ExtractPickTable
+                                  messageId={msg.id}
+                                  extract={extract}
+                                  selectedUrls={msg.selectedItemUrls ?? []}
+                                  onSelectionChange={(urls) => setMessageSelection(msg.id, urls)}
+                                  onToggleUrl={(u) => toggleMessageItem(msg.id, u)}
+                                  format={confirmFormat}
+                                  formats={
+                                    extract.formats?.length
+                                      ? extract.formats
+                                      : ["best", "mp4", "audio-only"]
+                                  }
+                                  onFormatChange={setConfirmFormat}
+                                  showYoutube={msg.detected?.id === "youtube"}
+                                  ytQuality={confirmYtQuality}
+                                  onYtQualityChange={setConfirmYtQuality}
+                                  audio={confirmAudio}
+                                  onAudioChange={setConfirmAudio}
+                                  subs={confirmSubs}
+                                  onSubsChange={setConfirmSubs}
+                                  listMax={
+                                    extract.mode === "playlist"
+                                      ? (settings.youtube?.playlistMaxVideos ?? listMax)
+                                      : extract.provider.id === "pinterest"
+                                        ? (settings.pinterest?.boardMaxPins ?? listMax)
+                                        : extract.mode === "profile"
+                                          ? (settings.youtube?.channelMaxVideos ?? listMax)
+                                          : listMax
+                                  }
+                                  onListMaxChange={setListMax}
+                                  onReloadList={(max) => reloadExtractList(msg, max)}
+                                  listLoading={listReloadingId === msg.id}
+                                  busy={false}
+                                  onDownloadSelected={() => beginSelectedDownload(msg)}
+                                  onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}
+                                />
+                              )}
 
-                          {msg.pendingConfirm &&
-                            msg.detected?.live &&
-                            extract?.modeSupported &&
-                            !isSelectableExtract(extract) && (
-                            <div className="home-chat-confirm">
-                              <div className="home-chat-confirm__title">Download options</div>
-                              <div className="home-chat-confirm__row">
-                                <span className="home-chat-confirm__label">Format</span>
-                                <Select
-                                  size="small"
-                                  style={{ width: 140 }}
-                                  value={confirmFormat}
-                                  onChange={(v) => setConfirmFormat(v as FormatPreset)}
-                                >
-                                  {(extract.formats?.length
-                                    ? extract.formats
-                                    : ["best", "mp4", "audio-only"]
-                                  ).map((f) => (
-                                    <Select.Option key={f} value={f}>
-                                      {f}
-                                    </Select.Option>
-                                  ))}
-                                </Select>
-                              </div>
-                              {showYoutubeConfirm && confirmFormat !== "audio-only" && (
-                                <div className="home-chat-confirm__row">
-                                  <span className="home-chat-confirm__label">Quality</span>
-                                  <Select
-                                    size="small"
-                                    style={{ width: 140 }}
-                                    value={
-                                      youtubeQualityChoices(extract.qualities).includes(
-                                        confirmYtQuality
-                                      )
-                                        ? confirmYtQuality
-                                        : "best"
-                                    }
-                                    onChange={(v) => setConfirmYtQuality(v as YoutubeQuality)}
-                                  >
-                                    {youtubeQualityChoices(extract.qualities).map((q) => (
-                                      <Select.Option key={q} value={q}>
-                                        {q === "best"
-                                          ? extract.qualities?.[0]
-                                            ? `Best (up to ${extract.qualities[0]}p)`
-                                            : "Best (DASH streams)"
-                                          : `${q}p`}
-                                      </Select.Option>
-                                    ))}
-                                  </Select>
-                                </div>
-                              )}
-                              {showYoutubeConfirm && extract.qualities && extract.qualities.length > 0 && (
-                                <div className="home-chat-confirm__hint">
-                                  Adaptive streams: {extract.qualities.slice(0, 6).map((h) => `${h}p`).join(" · ")}
-                                  {extract.qualities.length > 6 ? " · …" : ""}
-                                  {" · ffmpeg merges video + audio"}
-                                </div>
-                              )}
-                              {showYoutubeConfirm && (
-                                <div className="home-chat-confirm__row home-chat-confirm__row--assets">
-                                  <span className="home-chat-confirm__label">Save</span>
-                                  <div className="home-chat-confirm__checks">
-                                    {confirmFormat !== "audio-only" && (
-                                      <Checkbox
-                                        checked={confirmSaveVideo}
-                                        onChange={setConfirmSaveVideo}
+                            {msg.pendingConfirm &&
+                              msg.detected?.live &&
+                              extract?.modeSupported &&
+                              !isSelectableExtract(extract) && (
+                                <div className="home-chat-confirm">
+                                  <div className="home-chat-confirm__title">Download options</div>
+                                  <div className="home-chat-confirm__row">
+                                    <span className="home-chat-confirm__label">Format</span>
+                                    <Select
+                                      size="small"
+                                      style={{ width: 140 }}
+                                      value={confirmFormat}
+                                      onChange={(v) => setConfirmFormat(v as FormatPreset)}
+                                    >
+                                      {(extract.formats?.length
+                                        ? extract.formats
+                                        : ["best", "mp4", "audio-only"]
+                                      ).map((f) => (
+                                        <Select.Option key={f} value={f}>
+                                          {f}
+                                        </Select.Option>
+                                      ))}
+                                    </Select>
+                                  </div>
+                                  {showYoutubeConfirm && confirmFormat !== "audio-only" && (
+                                    <div className="home-chat-confirm__row">
+                                      <span className="home-chat-confirm__label">Quality</span>
+                                      <Select
+                                        size="small"
+                                        style={{ width: 140 }}
+                                        value={
+                                          youtubeQualityChoices(extract.qualities).includes(
+                                            confirmYtQuality
+                                          )
+                                            ? confirmYtQuality
+                                            : "best"
+                                        }
+                                        onChange={(v) => setConfirmYtQuality(v as YoutubeQuality)}
                                       >
-                                        Video
-                                      </Checkbox>
+                                        {youtubeQualityChoices(extract.qualities).map((q) => (
+                                          <Select.Option key={q} value={q}>
+                                            {q === "best"
+                                              ? extract.qualities?.[0]
+                                                ? `Best (up to ${extract.qualities[0]}p)`
+                                                : "Best (DASH streams)"
+                                              : `${q}p`}
+                                          </Select.Option>
+                                        ))}
+                                      </Select>
+                                    </div>
+                                  )}
+                                  {showYoutubeConfirm &&
+                                    extract.qualities &&
+                                    extract.qualities.length > 0 && (
+                                      <div className="home-chat-confirm__hint">
+                                        Adaptive streams:{" "}
+                                        {extract.qualities
+                                          .slice(0, 6)
+                                          .map((h) => `${h}p`)
+                                          .join(" · ")}
+                                        {extract.qualities.length > 6 ? " · …" : ""}
+                                        {" · ffmpeg merges video + audio"}
+                                      </div>
                                     )}
-                                    <Checkbox
-                                      checked={
-                                        confirmFormat === "audio-only" ? true : confirmSaveAudio
-                                      }
-                                      disabled={confirmFormat === "audio-only"}
-                                      onChange={setConfirmSaveAudio}
-                                    >
-                                      Audio
-                                    </Checkbox>
-                                    <Checkbox
-                                      checked={confirmSaveThumbnail}
-                                      onChange={setConfirmSaveThumbnail}
-                                    >
-                                      Thumbnail
-                                    </Checkbox>
-                                    <Checkbox
-                                      checked={confirmSubs !== "none"}
-                                      onChange={(v) =>
-                                        setConfirmSubs(v ? "separate" : "none")
-                                      }
-                                    >
-                                      Subtitles
-                                    </Checkbox>
+                                  {showYoutubeConfirm && (
+                                    <div className="home-chat-confirm__row home-chat-confirm__row--assets">
+                                      <span className="home-chat-confirm__label">Save</span>
+                                      <div className="home-chat-confirm__checks">
+                                        {confirmFormat !== "audio-only" && (
+                                          <Checkbox
+                                            checked={confirmSaveVideo}
+                                            onChange={setConfirmSaveVideo}
+                                          >
+                                            Video
+                                          </Checkbox>
+                                        )}
+                                        <Checkbox
+                                          checked={
+                                            confirmFormat === "audio-only" ? true : confirmSaveAudio
+                                          }
+                                          disabled={confirmFormat === "audio-only"}
+                                          onChange={setConfirmSaveAudio}
+                                        >
+                                          Audio
+                                        </Checkbox>
+                                        <Checkbox
+                                          checked={confirmSaveThumbnail}
+                                          onChange={setConfirmSaveThumbnail}
+                                        >
+                                          Thumbnail
+                                        </Checkbox>
+                                        <Checkbox
+                                          checked={confirmSubs !== "none"}
+                                          onChange={(v) => setConfirmSubs(v ? "separate" : "none")}
+                                        >
+                                          Subtitles
+                                        </Checkbox>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {showYoutubeConfirm && confirmFormat === "audio-only" && (
+                                    <div className="home-chat-confirm__row">
+                                      <span className="home-chat-confirm__label">Audio</span>
+                                      <Select
+                                        size="small"
+                                        style={{ width: 140 }}
+                                        value={confirmAudio}
+                                        onChange={(v) => setConfirmAudio(v as AudioContainer)}
+                                      >
+                                        {(["m4a", "mp3", "flac"] as AudioContainer[]).map((a) => (
+                                          <Select.Option key={a} value={a}>
+                                            {a.toUpperCase()}
+                                          </Select.Option>
+                                        ))}
+                                      </Select>
+                                    </div>
+                                  )}
+                                  {showYoutubeConfirm && confirmSubs !== "none" && (
+                                    <div className="home-chat-confirm__row">
+                                      <span className="home-chat-confirm__label">Subtitles</span>
+                                      <Select
+                                        size="small"
+                                        style={{ width: 140 }}
+                                        value={confirmSubs}
+                                        onChange={(v) => setConfirmSubs(v as SubtitleMode)}
+                                      >
+                                        <Select.Option value="separate">
+                                          Separate file
+                                        </Select.Option>
+                                        <Select.Option value="embed">Embed</Select.Option>
+                                      </Select>
+                                    </div>
+                                  )}
+                                  {showEnhanceConfirm && (
+                                    <div className="home-chat-confirm__row">
+                                      <span className="home-chat-confirm__label">Enhance</span>
+                                      <Switch
+                                        size="small"
+                                        checked={confirmEnhance}
+                                        onChange={setConfirmEnhance}
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="home-chat-confirm__actions">
+                                    <Button size="small" onClick={cancelConfirm}>
+                                      Cancel
+                                    </Button>
+                                    <Button type="primary" size="small" onClick={confirmDownload}>
+                                      Download
+                                    </Button>
                                   </div>
                                 </div>
                               )}
-                              {showYoutubeConfirm && confirmFormat === "audio-only" && (
-                                <div className="home-chat-confirm__row">
-                                  <span className="home-chat-confirm__label">Audio</span>
-                                  <Select
-                                    size="small"
-                                    style={{ width: 140 }}
-                                    value={confirmAudio}
-                                    onChange={(v) => setConfirmAudio(v as AudioContainer)}
-                                  >
-                                    {(["m4a", "mp3", "flac"] as AudioContainer[]).map((a) => (
-                                      <Select.Option key={a} value={a}>
-                                        {a.toUpperCase()}
-                                      </Select.Option>
-                                    ))}
-                                  </Select>
-                                </div>
-                              )}
-                              {showYoutubeConfirm && confirmSubs !== "none" && (
-                                <div className="home-chat-confirm__row">
-                                  <span className="home-chat-confirm__label">Subtitles</span>
-                                  <Select
-                                    size="small"
-                                    style={{ width: 140 }}
-                                    value={confirmSubs}
-                                    onChange={(v) => setConfirmSubs(v as SubtitleMode)}
-                                  >
-                                    <Select.Option value="separate">Separate file</Select.Option>
-                                    <Select.Option value="embed">Embed</Select.Option>
-                                  </Select>
-                                </div>
-                              )}
-                              {showEnhanceConfirm && (
-                                <div className="home-chat-confirm__row">
-                                  <span className="home-chat-confirm__label">Enhance</span>
-                                  <Switch
-                                    size="small"
-                                    checked={confirmEnhance}
-                                    onChange={setConfirmEnhance}
-                                  />
-                                </div>
-                              )}
-                              <div className="home-chat-confirm__actions">
-                                <Button size="small" onClick={cancelConfirm}>
-                                  Cancel
-                                </Button>
-                                <Button
-                                  type="primary"
-                                  size="small"
-                                  onClick={confirmDownload}
-                                >
-                                  Download
-                                </Button>
-                              </div>
-                            </div>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                  <div className="h-20px" />
-                  <div ref={chatEndRef} />
+                      );
+                    })}
+                    <div className="h-20px" />
+                    <div ref={chatEndRef} />
                   </div>
                 </div>
                 <div
@@ -1433,7 +1403,9 @@ function BatchPipeline({
         <div className="home-pipeline__body">
           {job.label ? <div className="home-pipeline__line">{job.label}</div> : null}
           {running ? (
-            <div className="home-pipeline__line">Progress is on Tasks — paste more links anytime</div>
+            <div className="home-pipeline__line">
+              Progress is on Tasks — paste more links anytime
+            </div>
           ) : (
             <div className="home-pipeline__line">Files are listed on Tasks</div>
           )}
@@ -1502,8 +1474,7 @@ function cardStatusLabel(card: ChatDownloadCard): string {
 }
 
 function downloadPipelineSummary(card: ChatDownloadCard, title: string): string {
-  const short =
-    title.length > 42 ? `${title.slice(0, 40)}…` : title;
+  const short = title.length > 42 ? `${title.slice(0, 40)}…` : title;
   switch (card.status) {
     case "extracting":
       return `Extracting · ${short}`;
@@ -1528,8 +1499,7 @@ function downloadPipelineSummary(card: ChatDownloadCard, title: string): string 
 
 const DownloadPipeline: React.FC<{ card: ChatDownloadCard }> = ({ card }) => {
   const title =
-    card.title ||
-    (card.outPath ? fileNameFromPath(card.outPath) : shortHostPath(card.sourceUrl));
+    card.title || (card.outPath ? fileNameFromPath(card.outPath) : shortHostPath(card.sourceUrl));
   const active =
     card.status === "downloading" ||
     card.status === "extracting" ||

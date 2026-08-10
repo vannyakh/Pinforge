@@ -18,8 +18,7 @@ import {
 import { buildNewJob, type JobStore } from "./job-store";
 
 export type JobEvent =
-  | { type: "updated"; job: DownloadJob }
-  | { type: "recovered"; jobs: DownloadJob[] };
+  { type: "updated"; job: DownloadJob } | { type: "recovered"; jobs: DownloadJob[] };
 
 export type JobEventListener = (event: JobEvent) => void;
 
@@ -107,15 +106,15 @@ export class JobManager {
       ...job.progress,
       ...progress,
     };
-    if (
-      nextProgress.totalBytes &&
-      nextProgress.totalBytes > 0 &&
-      progress.percent === undefined
-    ) {
+    if (nextProgress.totalBytes && nextProgress.totalBytes > 0 && progress.percent === undefined) {
       nextProgress.percent =
         Math.round((nextProgress.downloadedBytes / nextProgress.totalBytes) * 10000) / 100;
     }
-    return this.persist({ ...job, progress: nextProgress, status: job.status === "queued" ? "downloading" : job.status });
+    return this.persist({
+      ...job,
+      progress: nextProgress,
+      status: job.status === "queued" ? "downloading" : job.status,
+    });
   }
 
   /** Register an AbortController for cooperative pause/cancel. */
@@ -188,9 +187,7 @@ export class JobManager {
   }
 
   private async deleteJobFiles(job: DownloadJob): Promise<void> {
-    const paths = [job.files.temp, job.files.final, job.files.jobDir].filter(
-      Boolean
-    ) as string[];
+    const paths = [job.files.temp, job.files.final, job.files.jobDir].filter(Boolean) as string[];
     for (const p of paths) {
       await fs.rm(p, { recursive: true, force: true }).catch(() => undefined);
     }

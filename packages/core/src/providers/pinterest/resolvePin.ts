@@ -61,7 +61,11 @@ function extFromContentType(ct: string | null, url: string): string {
 
 /** Trim junk pasted after a pinimg URL (CSS, JSON delimiters, etc.). */
 function sanitizeMediaUrl(raw: string): string {
-  let u = raw.replace(/\\\//g, "/").replace(/\\u002F/g, "/").replace(/\\u0026/g, "&").trim();
+  let u = raw
+    .replace(/\\\//g, "/")
+    .replace(/\\u002F/g, "/")
+    .replace(/\\u0026/g, "&")
+    .trim();
   const cut = u.search(/["'\s<>)}\\]|,(?=["'])/);
   if (cut > 0) u = u.slice(0, cut);
   const extMatch = u.match(
@@ -83,8 +87,7 @@ function extractVideoList(videos: unknown, allowHls: boolean): VideoCandidate[] 
   if (!videos || typeof videos !== "object") return [];
   const root = videos as Record<string, unknown>;
   const list =
-    (root.video_list as Record<string, unknown> | undefined) ??
-    (root as Record<string, unknown>);
+    (root.video_list as Record<string, unknown> | undefined) ?? (root as Record<string, unknown>);
   if (!list || typeof list !== "object") return [];
 
   const out: VideoCandidate[] = [];
@@ -95,9 +98,12 @@ function extractVideoList(videos: unknown, allowHls: boolean): VideoCandidate[] 
     if (!/^https?:\/\//i.test(url)) continue;
     const hls = /\.m3u8(\?|$)/i.test(url) || /HLS/i.test(key);
     if (hls && !allowHls) continue;
-    const width = typeof item.width === "number" ? item.width : /1080|720|480|360/.test(key)
-      ? Number(key.match(/(1080|720|480|360)/)?.[1] ?? 0)
-      : 0;
+    const width =
+      typeof item.width === "number"
+        ? item.width
+        : /1080|720|480|360/.test(key)
+          ? Number(key.match(/(1080|720|480|360)/)?.[1] ?? 0)
+          : 0;
     const height = typeof item.height === "number" ? item.height : 0;
     out.push({ url, width, height, hls });
   }
@@ -125,11 +131,7 @@ function imageUrlFromImagesMap(images: unknown): string | null {
   for (const key of order) {
     const slot = map[key];
     const u =
-      typeof slot === "string"
-        ? slot
-        : slot && typeof slot === "object"
-          ? slot.url
-          : undefined;
+      typeof slot === "string" ? slot : slot && typeof slot === "object" ? slot.url : undefined;
     if (typeof u === "string" && /pinimg\.com/i.test(u)) {
       return key === "orig" || key === "originals" ? sanitizeMediaUrl(u) : toOriginalsUrl(u);
     }
@@ -137,11 +139,7 @@ function imageUrlFromImagesMap(images: unknown): string | null {
   // Any remaining size → upgrade to originals
   for (const slot of Object.values(map)) {
     const u =
-      typeof slot === "string"
-        ? slot
-        : slot && typeof slot === "object"
-          ? slot.url
-          : undefined;
+      typeof slot === "string" ? slot : slot && typeof slot === "object" ? slot.url : undefined;
     if (typeof u === "string" && /pinimg\.com/i.test(u)) return toOriginalsUrl(u);
   }
   return null;
@@ -164,7 +162,13 @@ function titleFromPin(pin: Record<string, unknown>): string | undefined {
 function extractFromPinObject(
   pin: Record<string, unknown>,
   allowHls: boolean
-): { imageUrl: string | null; videoUrl: string | null; title?: string; fallbacks: string[]; carouselImages?: string[] } {
+): {
+  imageUrl: string | null;
+  videoUrl: string | null;
+  title?: string;
+  fallbacks: string[];
+  carouselImages?: string[];
+} {
   const title = titleFromPin(pin);
   const fallbacks: string[] = [];
 
@@ -334,11 +338,7 @@ function findPinInHtml(html: string, pinId: string): Record<string, unknown> | n
   return null;
 }
 
-function findPinNode(
-  node: unknown,
-  pinId: string,
-  depth: number
-): Record<string, unknown> | null {
+function findPinNode(node: unknown, pinId: string, depth: number): Record<string, unknown> | null {
   if (depth > 16 || node == null) return null;
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -350,7 +350,10 @@ function findPinNode(
   if (typeof node !== "object") return null;
   const obj = node as Record<string, unknown>;
   const id = obj.id ?? obj.pin_id ?? obj.pinId;
-  if (String(id) === pinId && (obj.images || obj.videos || obj.story_pin_data || obj.carousel_data)) {
+  if (
+    String(id) === pinId &&
+    (obj.images || obj.videos || obj.story_pin_data || obj.carousel_data)
+  ) {
     return obj;
   }
   for (const v of Object.values(obj)) {
@@ -549,7 +552,10 @@ export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
       const pin = await fetchPinResource(pinId, { appVersion });
       if (pin) {
         const extracted = extractFromPinObject(pin, allowHls);
-        if (extracted.videoUrl || (extracted.imageUrl && /\/originals\//i.test(extracted.imageUrl))) {
+        if (
+          extracted.videoUrl ||
+          (extracted.imageUrl && /\/originals\//i.test(extracted.imageUrl))
+        ) {
           imageUrl = extracted.imageUrl;
           videoUrl = extracted.videoUrl;
           title = title || extracted.title;
@@ -631,8 +637,7 @@ export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
     );
   }
 
-  const slots =
-    carouselImages.length > 1 ? carouselImages : [imageUrl];
+  const slots = carouselImages.length > 1 ? carouselImages : [imageUrl];
   const assets: PinAsset[] = [];
   for (let i = 0; i < slots.length; i++) {
     const slotUrl = slots[i]!;

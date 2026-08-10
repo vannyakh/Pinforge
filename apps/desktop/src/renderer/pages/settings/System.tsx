@@ -99,9 +99,12 @@ const SystemSettings: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    void api.getAppInfo().then((info) => setShowDevDetails(!info.isPackaged)).catch(() => {
-      setShowDevDetails(false);
-    });
+    void api
+      .getAppInfo()
+      .then((info) => setShowDevDetails(!info.isPackaged))
+      .catch(() => {
+        setShowDevDetails(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -184,13 +187,19 @@ const SystemSettings: React.FC = () => {
           title="Start on Boot"
           description="Launch Pinforge automatically when you sign in to Windows or macOS."
         >
-          <Switch checked={system.startOnBoot} onChange={(v) => void patchSystem({ startOnBoot: v })} />
+          <Switch
+            checked={system.startOnBoot}
+            onChange={(v) => void patchSystem({ startOnBoot: v })}
+          />
         </Row>
         <Row
           title="Close to Tray"
           description="Hide to the system tray instead of quitting when you close the window."
         >
-          <Switch checked={system.closeToTray} onChange={(v) => void patchSystem({ closeToTray: v })} />
+          <Switch
+            checked={system.closeToTray}
+            onChange={(v) => void patchSystem({ closeToTray: v })}
+          />
         </Row>
         <Row
           title="Hardware Acceleration"
@@ -208,7 +217,10 @@ const SystemSettings: React.FC = () => {
           />
         </Row>
         {system.notifications && (
-          <Row title="Download complete" description="Notify when a download or board job finishes.">
+          <Row
+            title="Download complete"
+            description="Notify when a download or board job finishes."
+          >
             <Switch
               checked={system.notifyOnDownloadComplete}
               onChange={(v) => void patchSystem({ notifyOnDownloadComplete: v })}
@@ -217,9 +229,7 @@ const SystemSettings: React.FC = () => {
         )}
       </div>
 
-      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-        Tools
-      </div>
+      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">Tools</div>
       <div className="bg-2 rd-12px border border-b-base px-18px mb-28px">
         <div className="py-14px border-b border-b-base">
           <div className="flex items-start justify-between gap-16px mb-10px">
@@ -390,8 +400,8 @@ const SystemSettings: React.FC = () => {
         <div className="py-14px border-b border-b-base">
           <div className="text-14px text-t-primary mb-4px">First-launch setup</div>
           <div className="text-12px text-t-tertiary leading-relaxed mb-12px">
-            On first launch, Pinforge automatically downloads ffmpeg, yt-dlp, and Playwright Chromium.
-            Use the controls below (and Tools above) to repair or reinstall later.
+            On first launch, Pinforge automatically downloads ffmpeg, yt-dlp, and Playwright
+            Chromium. Use the controls below (and Tools above) to repair or reinstall later.
           </div>
           {showDevDetails && (
             <Button

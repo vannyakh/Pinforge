@@ -99,7 +99,9 @@ export async function scrapePageMeta(
     });
 
     if (opts.waitForSelector) {
-      await page.waitForSelector(opts.waitForSelector, { timeout: opts.timeoutMs ?? 45_000 }).catch(() => undefined);
+      await page
+        .waitForSelector(opts.waitForSelector, { timeout: opts.timeoutMs ?? 45_000 })
+        .catch(() => undefined);
     }
 
     if (opts.settleMs) {
@@ -112,8 +114,9 @@ export async function scrapePageMeta(
     await page
       .waitForFunction(
         () => {
-          const doc = (globalThis as unknown as { document: { querySelector: (s: string) => unknown } })
-            .document;
+          const doc = (
+            globalThis as unknown as { document: { querySelector: (s: string) => unknown } }
+          ).document;
           return Boolean(
             doc.querySelector(
               'meta[property="og:image"], meta[property="og:video"], meta[name="twitter:image"]'
@@ -125,18 +128,20 @@ export async function scrapePageMeta(
       .catch(() => undefined);
 
     const extracted = await page.evaluate(() => {
-      const doc = (globalThis as unknown as {
-        document: {
-          title: string;
-          documentElement: { outerHTML: string };
-          querySelector: (s: string) => { getAttribute: (n: string) => string | null } | null;
-          querySelectorAll: (s: string) => ArrayLike<{
-            src?: string;
-            textContent?: string | null;
-            getAttribute: (n: string) => string | null;
-          }>;
-        };
-      }).document;
+      const doc = (
+        globalThis as unknown as {
+          document: {
+            title: string;
+            documentElement: { outerHTML: string };
+            querySelector: (s: string) => { getAttribute: (n: string) => string | null } | null;
+            querySelectorAll: (s: string) => ArrayLike<{
+              src?: string;
+              textContent?: string | null;
+              getAttribute: (n: string) => string | null;
+            }>;
+          };
+        }
+      ).document;
 
       const meta = (prop: string): string | null => {
         const el =

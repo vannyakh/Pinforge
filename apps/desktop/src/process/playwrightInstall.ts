@@ -113,8 +113,7 @@ export async function installPlaywrightChromium(
         else {
           reject(
             new Error(
-              err.trim().split(/\r?\n/).slice(-4).join(" ") ||
-                `playwright install exited ${code}`
+              err.trim().split(/\r?\n/).slice(-4).join(" ") || `playwright install exited ${code}`
             )
           );
         }

@@ -35,10 +35,7 @@ export interface MediaCoreJobHandle {
   wait(): Promise<DownloadJob>;
 }
 
-function combineSignals(
-  primary: AbortSignal,
-  secondary?: AbortSignal
-): AbortSignal {
+function combineSignals(primary: AbortSignal, secondary?: AbortSignal): AbortSignal {
   if (!secondary) return primary;
   if (typeof AbortSignal.any === "function") {
     return AbortSignal.any([primary, secondary]);
@@ -209,7 +206,8 @@ export class MediaCore {
       const aborted =
         reason === "pause" ||
         reason === "cancel" ||
-        (err instanceof Error && (err.name === "AbortError" || /aborted|stopped/i.test(err.message)));
+        (err instanceof Error &&
+          (err.name === "AbortError" || /aborted|stopped/i.test(err.message)));
       if (aborted) {
         if (reason === "pause") {
           const paused = await this.jobs.updateStatus(jobId, "paused");

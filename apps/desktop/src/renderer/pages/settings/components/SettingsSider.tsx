@@ -56,12 +56,10 @@ function readCollapsedGroups(): Record<string, boolean> {
   }
 }
 
-const SettingsSider: React.FC<SettingsSiderProps> = ({
-  collapsed = false,
-  onItemClick,
-}) => {
+const SettingsSider: React.FC<SettingsSiderProps> = ({ collapsed = false, onItemClick }) => {
   const { pathname } = useLocation();
-  const [groupCollapsed, setGroupCollapsed] = useState<Record<string, boolean>>(readCollapsedGroups);
+  const [groupCollapsed, setGroupCollapsed] =
+    useState<Record<string, boolean>>(readCollapsedGroups);
 
   useEffect(() => {
     try {
@@ -94,8 +92,8 @@ const SettingsSider: React.FC<SettingsSiderProps> = ({
 
         return (
           <div key={section.group} className="flex flex-col gap-2px">
-            {!collapsed && (
-              section.collapsible ? (
+            {!collapsed &&
+              (section.collapsible ? (
                 <button
                   type="button"
                   className="settings-sider__group-header settings-sider__group-header--toggle w-full flex items-center justify-between gap-8px px-12px mt-8px mb-2px h-28px border-none bg-transparent cursor-pointer text-left"
@@ -106,17 +104,28 @@ const SettingsSider: React.FC<SettingsSiderProps> = ({
                     {section.group}
                   </span>
                   {isGroupCollapsed ? (
-                    <Right theme="outline" size="12" fill="currentColor" strokeWidth={3} className="text-t-tertiary" />
+                    <Right
+                      theme="outline"
+                      size="12"
+                      fill="currentColor"
+                      strokeWidth={3}
+                      className="text-t-tertiary"
+                    />
                   ) : (
-                    <Down theme="outline" size="12" fill="currentColor" strokeWidth={3} className="text-t-tertiary" />
+                    <Down
+                      theme="outline"
+                      size="12"
+                      fill="currentColor"
+                      strokeWidth={3}
+                      className="text-t-tertiary"
+                    />
                   )}
                 </button>
               ) : (
                 <div className="settings-sider__group-header px-12px mt-8px mb-2px h-28px flex items-center text-12px font-500 text-t-tertiary tracking-wide uppercase select-none">
                   {section.group}
                 </div>
-              )
-            )}
+              ))}
 
             {showItems &&
               section.items.map(({ path, label, Icon }) => {
@@ -134,9 +143,7 @@ const SettingsSider: React.FC<SettingsSiderProps> = ({
                     className={classNames(
                       "settings-sider__item flex items-center gap-10px rd-8px no-underline text-13px h-34px shrink-0",
                       collapsed ? "w-full justify-center px-0" : "justify-start px-12px",
-                      active
-                        ? "bg-3 text-t-primary font-600"
-                        : "text-t-secondary hover:bg-hover"
+                      active ? "bg-3 text-t-primary font-600" : "text-t-secondary hover:bg-hover"
                     )}
                   >
                     <Icon theme="outline" size="16" fill="currentColor" strokeWidth={3} />

@@ -157,8 +157,7 @@ export async function runEnvironmentSetup(
     }
 
     const tools = await toolSnapshots();
-    const allOk =
-      tools.ffmpeg.available && tools.ytdlp.available && tools.playwright.available;
+    const allOk = tools.ffmpeg.available && tools.ytdlp.available && tools.playwright.available;
 
     if (allOk && !failed) {
       await completeEnvironmentSetup();
@@ -195,11 +194,7 @@ async function isAvailable(step: EnvironmentSetupStep): Promise<boolean> {
 
 async function installStep(
   step: EnvironmentSetupStep,
-  onProgress: (
-    phase: EnvironmentSetupProgress["phase"],
-    percent: number,
-    message: string
-  ) => void
+  onProgress: (phase: EnvironmentSetupProgress["phase"], percent: number, message: string) => void
 ): Promise<void> {
   if (step === "ffmpeg") {
     await installFfmpeg((ev) => onProgress(ev.phase, ev.percent, ev.message));

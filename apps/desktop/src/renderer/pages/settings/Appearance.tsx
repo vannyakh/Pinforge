@@ -73,19 +73,31 @@ const ThemeLayoutPreview: React.FC<{ palette: ThemePreviewPalette }> = ({ palett
         style={{ borderColor: palette.border, background: palette.headerBg }}
       >
         <span className="block w-5px h-5px rd-full" style={{ background: palette.accent }} />
-        <span className="block w-18px h-4px rd-full" style={{ background: palette.border, opacity: 0.45 }} />
+        <span
+          className="block w-18px h-4px rd-full"
+          style={{ background: palette.border, opacity: 0.45 }}
+        />
       </div>
       <div className="flex" style={{ height: "calc(100% - 14px)" }}>
         <div
           className="border-r border-solid px-3px py-3px flex flex-col gap-3px"
           style={{ width: "23%", borderColor: palette.border, background: palette.sideBg }}
         >
-          <span className="block h-3px rd-full" style={{ background: palette.textMuted, opacity: 0.4 }} />
-          <span className="block h-3px rd-full w-4/5" style={{ background: palette.textMuted, opacity: 0.33 }} />
+          <span
+            className="block h-3px rd-full"
+            style={{ background: palette.textMuted, opacity: 0.4 }}
+          />
+          <span
+            className="block h-3px rd-full w-4/5"
+            style={{ background: palette.textMuted, opacity: 0.33 }}
+          />
         </div>
         <div className="px-4px py-4px flex flex-col gap-4px flex-1">
           <span className="block h-6px rd-6px w-4/5" style={{ background: palette.aiBubble }} />
-          <span className="block h-6px rd-6px w-3/5 self-end" style={{ background: palette.userBubble }} />
+          <span
+            className="block h-6px rd-6px w-3/5 self-end"
+            style={{ background: palette.userBubble }}
+          />
         </div>
       </div>
     </div>
@@ -121,7 +133,10 @@ const FontSizeStepper: React.FC<{
       >
         -
       </Button>
-      <span className="text-13px text-t-primary text-center min-w-32px" style={{ fontVariantNumeric: "tabular-nums" }}>
+      <span
+        className="text-13px text-t-primary text-center min-w-32px"
+        style={{ fontVariantNumeric: "tabular-nums" }}
+      >
         {value}
       </span>
       <Button
@@ -182,9 +197,16 @@ const AppearanceSettings: React.FC = () => {
         <div className="flex items-start justify-between gap-16px mb-12px">
           <div>
             <div className="text-14px text-t-primary leading-22px mb-4px">Theme</div>
-            <div className="text-14px text-t-secondary leading-22px">Select or customize a theme</div>
+            <div className="text-14px text-t-secondary leading-22px">
+              Select or customize a theme
+            </div>
           </div>
-          <Button type="primary" size="small" icon={<Plus theme="outline" size="14" />} onClick={() => setAddOpen(true)}>
+          <Button
+            type="primary"
+            size="small"
+            icon={<Plus theme="outline" size="14" />}
+            onClick={() => setAddOpen(true)}
+          >
             Add Theme
           </Button>
         </div>
@@ -208,7 +230,9 @@ const AppearanceSettings: React.FC = () => {
                 key={item.id}
                 className={`appearance-card ${active ? "is-active" : ""}`}
                 style={cardStyle}
-                onClick={() => void selectTheme(item.id).then(() => Message.success(`Applied ${item.name}`))}
+                onClick={() =>
+                  void selectTheme(item.id).then(() => Message.success(`Applied ${item.name}`))
+                }
               >
                 {item.id === SYSTEM_THEME_ID ? (
                   <SystemThemePreview />
@@ -222,7 +246,11 @@ const AppearanceSettings: React.FC = () => {
 
                 {active && (
                   <div className="appearance-card__check">
-                    <CheckOne theme="filled" size="20" fill="var(--color-primary, var(--primary))" />
+                    <CheckOne
+                      theme="filled"
+                      size="20"
+                      fill="var(--color-primary, var(--primary))"
+                    />
                   </div>
                 )}
 
@@ -271,7 +299,9 @@ const AppearanceSettings: React.FC = () => {
               type="secondary"
               shape="circle"
               className="w-28px h-28px !min-w-28px flex items-center justify-center p-0"
-              onClick={() => void setFontScale(Math.max(MIN_UI_SCALE, +(fontScale - UI_SCALE_STEP).toFixed(2)))}
+              onClick={() =>
+                void setFontScale(Math.max(MIN_UI_SCALE, +(fontScale - UI_SCALE_STEP).toFixed(2)))
+              }
               disabled={fontScale <= MIN_UI_SCALE}
             >
               -
@@ -289,12 +319,17 @@ const AppearanceSettings: React.FC = () => {
               type="secondary"
               shape="circle"
               className="w-28px h-28px !min-w-28px flex items-center justify-center p-0"
-              onClick={() => void setFontScale(Math.min(MAX_UI_SCALE, +(fontScale + UI_SCALE_STEP).toFixed(2)))}
+              onClick={() =>
+                void setFontScale(Math.min(MAX_UI_SCALE, +(fontScale + UI_SCALE_STEP).toFixed(2)))
+              }
               disabled={fontScale >= MAX_UI_SCALE}
             >
               +
             </Button>
-            <span className="text-13px text-t-primary min-w-48px text-right" style={{ fontVariantNumeric: "tabular-nums" }}>
+            <span
+              className="text-13px text-t-primary min-w-48px text-right"
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
               {Math.round(fontScale * 100)}%
             </span>
             <Button

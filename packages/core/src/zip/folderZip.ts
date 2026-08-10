@@ -11,9 +11,7 @@ export async function zipFolder(folderPath: string, outZipPath?: string): Promis
   const st = await fs.stat(abs);
   if (!st.isDirectory()) throw new Error("ZIP source must be a directory");
 
-  const dest =
-    outZipPath ??
-    path.join(path.dirname(abs), `${path.basename(abs)}.zip`);
+  const dest = outZipPath ?? path.join(path.dirname(abs), `${path.basename(abs)}.zip`);
 
   try {
     await fs.unlink(dest);

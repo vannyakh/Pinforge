@@ -208,12 +208,7 @@ function pickDuration(node: AnyYt): { text?: string; sec?: number } {
     node?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text,
   ];
   for (const c of candidates) {
-    const raw =
-      typeof c === "string"
-        ? c
-        : c && typeof c.toString === "function"
-          ? String(c)
-          : "";
+    const raw = typeof c === "string" ? c : c && typeof c.toString === "function" ? String(c) : "";
     if (!raw || raw === "[object Object]") continue;
     if (!/\d/.test(raw)) continue;
     if (!/^\d{1,2}:\d{2}/.test(raw.trim()) && !/^\d+\s*(s|sec|min)/i.test(raw)) {
@@ -267,9 +262,7 @@ async function resolveYouTubeMixPlaylist(
   playlistId: string,
   opts: { maxVideos: number; seedVideoId?: string | null; signal?: AbortSignal }
 ): Promise<YoutubePlaylistResolveResult> {
-  const seed =
-    opts.seedVideoId ||
-    seedVideoIdFromMixPlaylistId(playlistId);
+  const seed = opts.seedVideoId || seedVideoIdFromMixPlaylistId(playlistId);
   if (!seed) {
     throw new Error(
       "This Mix / radio playlist needs a video id. Open a watch URL with &list=… (not /playlist?list=… alone)."
@@ -320,9 +313,7 @@ async function resolveYouTubeMixPlaylist(
 
     if (!playlistTitle) {
       playlistTitle =
-        typeof panel.title === "string"
-          ? panel.title
-          : playlistTitleOf({ title: panel.title });
+        typeof panel.title === "string" ? panel.title : playlistTitleOf({ title: panel.title });
     }
     isInfinite = Boolean(panel.is_infinite);
 

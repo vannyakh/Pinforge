@@ -1,9 +1,5 @@
 import type { Theme } from "@/common/theme/types";
-import {
-  DEFAULT_UI_SCALE,
-  MAX_UI_SCALE,
-  MIN_UI_SCALE,
-} from "@/common/theme/constants";
+import { DEFAULT_UI_SCALE, MAX_UI_SCALE, MIN_UI_SCALE } from "@/common/theme/constants";
 import { processCustomCss } from "./customCssProcessor";
 
 const TOKENS_STYLE_ID = "theme-tokens";

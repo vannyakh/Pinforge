@@ -46,10 +46,7 @@ const GuidHomeActionRow: React.FC<GuidHomeActionRowProps> = ({
   onSend,
 }) => {
   const formatMenu = (
-    <Menu
-      selectedKeys={[format]}
-      onClickMenuItem={(key) => onFormatChange(key as FormatPreset)}
-    >
+    <Menu selectedKeys={[format]} onClickMenuItem={(key) => onFormatChange(key as FormatPreset)}>
       {formats.map((f) => (
         <Menu.Item key={f}>{FORMAT_LABELS[f] ?? f}</Menu.Item>
       ))}
@@ -117,9 +114,7 @@ const GuidHomeActionRow: React.FC<GuidHomeActionRowProps> = ({
               >
                 <span className="inline-flex items-center gap-4px min-w-0">
                   <Shield theme="outline" size={14} fill="currentColor" />
-                  <span className="guid-model-label">
-                    {enhance ? "Enhance" : "Original"}
-                  </span>
+                  <span className="guid-model-label">{enhance ? "Enhance" : "Original"}</span>
                   <Down theme="outline" size={12} fill="currentColor" />
                 </span>
               </Button>

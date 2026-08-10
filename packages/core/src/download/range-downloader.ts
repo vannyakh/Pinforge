@@ -134,8 +134,7 @@ async function downloadStreamResumable(
   opts: RangeDownloadOptions,
   offset: number
 ): Promise<FragmentDownloadResult> {
-  const rangeHeaders =
-    offset > 0 ? { ...headers, Range: `bytes=${offset}-` } : headers;
+  const rangeHeaders = offset > 0 ? { ...headers, Range: `bytes=${offset}-` } : headers;
   const res = await fetch(url, {
     headers: rangeHeaders,
     redirect: "follow",
@@ -296,13 +295,7 @@ export async function rangeDownloadToFile(
   try {
     if (!probe.acceptRanges || !probe.length || probe.length < minSize || concurrency <= 1) {
       const offset = resume ? resumeOffset : 0;
-      const streamed = await downloadStreamResumable(
-        url,
-        tempPath,
-        headers,
-        opts,
-        offset
-      );
+      const streamed = await downloadStreamResumable(url, tempPath, headers, opts, offset);
       await writeCheckpoint({
         downloadedBytes: streamed.bytes,
         completedRanges: [],
@@ -336,19 +329,23 @@ export async function rangeDownloadToFile(
         (r) => !completed.some((c) => c.start === r.start && c.end === r.end)
       );
 
-      await mapPool(pending, concurrency, async (range: { start: number; end: number; index: number }) => {
-        const buf = await downloadFragment(url, headers, range.start, range.end, opts.signal);
-        await fh.write(buf, 0, buf.length, range.start);
-        downloaded += buf.length;
-        if (resume) {
-          completed.push({ start: range.start, end: range.end });
-          await writeCheckpoint({
-            downloadedBytes: Math.min(downloaded, total),
-            completedRanges: [...completed],
-          });
+      await mapPool(
+        pending,
+        concurrency,
+        async (range: { start: number; end: number; index: number }) => {
+          const buf = await downloadFragment(url, headers, range.start, range.end, opts.signal);
+          await fh.write(buf, 0, buf.length, range.start);
+          downloaded += buf.length;
+          if (resume) {
+            completed.push({ start: range.start, end: range.end });
+            await writeCheckpoint({
+              downloadedBytes: Math.min(downloaded, total),
+              completedRanges: [...completed],
+            });
+          }
+          opts.onProgress?.({ downloaded: Math.min(downloaded, total), total });
         }
-        opts.onProgress?.({ downloaded: Math.min(downloaded, total), total });
-      });
+      );
     } finally {
       await fh.close();
     }

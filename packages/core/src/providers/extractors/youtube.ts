@@ -215,8 +215,7 @@ async function extractViaInnertube(
       if (!buffer.length) throw new Error("Empty download");
 
       const outExt =
-        extFromMime(pick.mime_type) ||
-        (format === "audio-only" ? "m4a" : ext || "mp4");
+        extFromMime(pick.mime_type) || (format === "audio-only" ? "m4a" : ext || "mp4");
       return toResolved("youtube", sourceUrl, buffer, outExt, title, format);
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e));
@@ -243,9 +242,7 @@ function pickInnertubeFormat(
       .sort((a, b) => bitrate(b) - bitrate(a));
     if (audio[0]) return audio[0];
     // Progressive muxed still has audio — usable fallback
-    return formats
-      .filter((f) => f.has_audio)
-      .sort((a, b) => bitrate(b) - bitrate(a))[0];
+    return formats.filter((f) => f.has_audio).sort((a, b) => bitrate(b) - bitrate(a))[0];
   }
 
   const muxed = formats
@@ -260,7 +257,11 @@ function pickInnertubeFormat(
     .filter((f) => f.has_video && f.has_audio)
     .sort((a, b) => bitrate(b) - bitrate(a));
   if (anyMuxed[0]) return anyMuxed[0];
-  return formats.find((f) => f.has_video && heightOk(f)) ?? formats.find((f) => f.has_video) ?? formats[0];
+  return (
+    formats.find((f) => f.has_video && heightOk(f)) ??
+    formats.find((f) => f.has_video) ??
+    formats[0]
+  );
 }
 
 function extFromMime(mime?: string): string | undefined {
@@ -441,19 +442,25 @@ async function pickAndDownload(
 
   if (format === "audio-only") {
     pick = [...adaptive, ...muxed]
-      .filter((s) => s.url && (s.audioOnly || s.audioQuality || /audio\//i.test(s.type ?? s.mimeType ?? "")))
+      .filter(
+        (s) =>
+          s.url && (s.audioOnly || s.audioQuality || /audio\//i.test(s.type ?? s.mimeType ?? ""))
+      )
       .sort((a, b) => Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0))[0];
   } else {
     pick = muxed
       .filter((s) => s.url && !s.videoOnly && withinCap(s))
       .sort(
         (a, b) =>
-          heightFromLabel(b.qualityLabel ?? b.quality) - heightFromLabel(a.qualityLabel ?? a.quality) ||
+          heightFromLabel(b.qualityLabel ?? b.quality) -
+            heightFromLabel(a.qualityLabel ?? a.quality) ||
           Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0)
       )[0];
     if (!pick) {
       pick =
-        muxed.filter((s) => s.url && !s.videoOnly).sort((a, b) => Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0))[0] ??
+        muxed
+          .filter((s) => s.url && !s.videoOnly)
+          .sort((a, b) => Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0))[0] ??
         muxed.find((s) => s.url) ??
         adaptive.find((s) => s.url && !s.audioOnly);
     }

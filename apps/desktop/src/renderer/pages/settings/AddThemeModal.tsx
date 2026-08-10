@@ -212,8 +212,8 @@ const AddThemeModal: React.FC<AddThemeModalProps> = ({ visible, onClose, onSave 
             style={{ minHeight: 200 }}
           />
           <div className="text-12px text-t-tertiary mt-8px leading-relaxed">
-            Use UI tokens like <code>--primary</code>, <code>--bg-1</code>, <code>--text-primary</code>.
-            Cover image is applied as wallpaper when uploaded.
+            Use UI tokens like <code>--primary</code>, <code>--bg-1</code>,{" "}
+            <code>--text-primary</code>. Cover image is applied as wallpaper when uploaded.
           </div>
         </div>
       </div>

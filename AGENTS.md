@@ -4,12 +4,12 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 
 ## Layout
 
-| Path | Role |
-| --- | --- |
-| `apps/desktop/` | Electron app (main / preload / renderer) |
-| `apps/cli/` | CLI |
-| `packages/core/` | Shared providers, download, enhance |
-| `rust/` | Optional native worker |
+| Path             | Role                                     |
+| ---------------- | ---------------------------------------- |
+| `apps/desktop/`  | Electron app (main / preload / renderer) |
+| `apps/cli/`      | CLI                                      |
+| `packages/core/` | Shared providers, download, enhance      |
+| `rust/`          | Optional native worker                   |
 
 ## Process boundaries
 

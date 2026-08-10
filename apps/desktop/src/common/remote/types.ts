@@ -1,13 +1,7 @@
 /** Remote chatbot channels + Cloudflare tunnel (send files back to bots). */
 
 export type RemoteChannelId =
-  | "telegram"
-  | "discord"
-  | "slack"
-  | "lark"
-  | "wechat"
-  | "line"
-  | "webhook";
+  "telegram" | "discord" | "slack" | "lark" | "wechat" | "line" | "webhook";
 
 export interface RemoteChannelConfig {
   id: RemoteChannelId | string;

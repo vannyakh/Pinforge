@@ -6,11 +6,7 @@ import { registerIpc } from "./process/ipc";
 import { getStore } from "./process/store";
 import { initAutoUpdater } from "./process/autoUpdater";
 import { recoverJobsOnStartup } from "./process/mediacore";
-import {
-  applyLoginItem,
-  markAppQuitting,
-  wireCloseToTray,
-} from "./process/systemPrefs";
+import { applyLoginItem, markAppQuitting, wireCloseToTray } from "./process/systemPrefs";
 import {
   INSTALLER_HEIGHT,
   INSTALLER_WIDTH,
@@ -138,7 +134,11 @@ app.whenReady().then(() => {
         /* keep raw */
       }
       const filePath =
-        process.platform === "win32" ? raw.replace(/\//g, "\\") : raw.startsWith("/") ? raw : `/${raw}`;
+        process.platform === "win32"
+          ? raw.replace(/\//g, "\\")
+          : raw.startsWith("/")
+            ? raw
+            : `/${raw}`;
 
       if (!existsSync(filePath)) {
         return new Response("", { status: 404, statusText: "Not Found" });

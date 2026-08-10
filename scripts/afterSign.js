@@ -1,4 +1,4 @@
-const { execSync } = require('child_process');
+const { execSync } = require("child_process");
 
 /**
  * macOS afterSign hook — notarize when Apple credentials are present.
@@ -7,15 +7,15 @@ const { execSync } = require('child_process');
 exports.default = async function afterSign(context) {
   const { electronPlatformName, appOutDir } = context;
 
-  if (electronPlatformName !== 'darwin') {
+  if (electronPlatformName !== "darwin") {
     return;
   }
 
   let notarize;
   try {
-    ({ notarize } = await import('@electron/notarize'));
+    ({ notarize } = await import("@electron/notarize"));
   } catch {
-    console.log('Skipping notarization - @electron/notarize is not installed');
+    console.log("Skipping notarization - @electron/notarize is not installed");
     return;
   }
 
@@ -24,21 +24,21 @@ exports.default = async function afterSign(context) {
   const appPath = `${appOutDir}/${appName}.app`;
 
   try {
-    execSync(`codesign --verify --verbose "${appPath}"`, { stdio: 'pipe' });
+    execSync(`codesign --verify --verbose "${appPath}"`, { stdio: "pipe" });
     console.log(`App ${appName} is properly code signed`);
   } catch {
     console.log(`App ${appName} is not code signed, applying ad-hoc signature...`);
     try {
-      execSync(`codesign --force --deep --sign - "${appPath}"`, { stdio: 'inherit' });
+      execSync(`codesign --force --deep --sign - "${appPath}"`, { stdio: "inherit" });
       console.log(`Ad-hoc signature applied successfully to ${appName}`);
     } catch (adHocError) {
-      console.error('Ad-hoc signing failed:', adHocError.message);
+      console.error("Ad-hoc signing failed:", adHocError.message);
     }
     return;
   }
 
   if (!process.env.appleId || !process.env.appleIdPassword) {
-    console.log('Skipping notarization - missing Apple ID credentials');
+    console.log("Skipping notarization - missing Apple ID credentials");
     return;
   }
 
@@ -46,16 +46,16 @@ exports.default = async function afterSign(context) {
 
   try {
     await notarize({
-      tool: 'notarytool',
+      tool: "notarytool",
       appBundleId,
       appPath,
       appleId: process.env.appleId,
       appleIdPassword: process.env.appleIdPassword,
       teamId: process.env.teamId,
     });
-    console.log('Notarization completed successfully');
+    console.log("Notarization completed successfully");
   } catch (error) {
-    console.error('Notarization failed:', error);
+    console.error("Notarization failed:", error);
     throw error;
   }
 };

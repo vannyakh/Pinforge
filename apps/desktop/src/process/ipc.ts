@@ -56,12 +56,7 @@ import {
   runEnvironmentSetup,
 } from "./environmentSetup";
 import { enterInstallerWindow, exitInstallerWindow } from "./windowInstaller";
-import {
-  checkForUpdates,
-  downloadUpdate,
-  getUpdateStatus,
-  quitAndInstall,
-} from "./autoUpdater";
+import { checkForUpdates, downloadUpdate, getUpdateStatus, quitAndInstall } from "./autoUpdater";
 import { ensureMediaCore } from "./mediacore";
 
 /** Active download abort — Tasks Stop / pause / cancel. */
@@ -170,11 +165,8 @@ async function runProcess(
   }
 
   const format =
-    payload.format ??
-    (providerCfg?.format as FormatPreset | undefined) ??
-    store.get("format");
-  const extractorUrl =
-    providerCfg?.extractorUrl?.trim() || store.get("extractorUrl") || undefined;
+    payload.format ?? (providerCfg?.format as FormatPreset | undefined) ?? store.get("format");
+  const extractorUrl = providerCfg?.extractorUrl?.trim() || store.get("extractorUrl") || undefined;
   const enabledPlugins = (providerCfg?.formatPlugins ?? []).filter((p) => p.enabled);
 
   store.set("preset", preset);
@@ -387,7 +379,7 @@ async function runProcess(
           ? "Done"
           : status === "partial"
             ? `Saved ${res.results.length}, ${res.errors.length} failed`
-            : res.errors[0]?.error ?? "Failed",
+            : (res.errors[0]?.error ?? "Failed"),
     });
 
     return {
@@ -403,12 +395,9 @@ async function runProcess(
   } catch (err) {
     const aborted =
       abort.signal.aborted ||
-      (err instanceof Error && (err.name === "AbortError" || /aborted|stopped|paused|cancelled/i.test(err.message)));
-    const message = aborted
-      ? "Stopped"
-      : err instanceof Error
-        ? err.message
-        : String(err);
+      (err instanceof Error &&
+        (err.name === "AbortError" || /aborted|stopped|paused|cancelled/i.test(err.message)));
+    const message = aborted ? "Stopped" : err instanceof Error ? err.message : String(err);
     const pack: DownloadPack = {
       ...runningPack,
       status: aborted ? "partial" : "failed",
@@ -570,60 +559,61 @@ export function registerIpc(): void {
         preferPlaylist?: boolean;
       }
     ) => {
-    try {
-      const store = getStore();
       try {
-        resolveProviderForUrl(url);
-      } catch (err) {
-        if (err instanceof ProviderDisabledError) {
-          return {
-            sourceUrl: typeof url === "string" ? url : "",
-            provider: { id: err.providerId, label: err.providerLabel, live: false },
-            mode: "single",
-            modeSupported: false,
-            formats: [],
-            supportedModes: [],
-            items: [],
-            itemCount: 0,
-            message: err.message,
-          };
+        const store = getStore();
+        try {
+          resolveProviderForUrl(url);
+        } catch (err) {
+          if (err instanceof ProviderDisabledError) {
+            return {
+              sourceUrl: typeof url === "string" ? url : "",
+              provider: { id: err.providerId, label: err.providerLabel, live: false },
+              mode: "single",
+              modeSupported: false,
+              formats: [],
+              supportedModes: [],
+              items: [],
+              itemCount: 0,
+              message: err.message,
+            };
+          }
         }
+        const youtube = {
+          ...DEFAULT_YOUTUBE_OPTIONS,
+          ...store.get("youtube"),
+        };
+        const pinterest = {
+          ...DEFAULT_PINTEREST_OPTIONS,
+          ...store.get("pinterest"),
+        };
+        configurePinterestCookies(pinterest.cookies);
+        const system = store.get("system");
+        const ytdlpPath = await resolveConfiguredYtdlp();
+        configureYtdlp({
+          path: ytdlpPath ?? system.ytdlpPath ?? undefined,
+          enabled: Boolean(system.ytdlpEnabled) && Boolean(ytdlpPath),
+        });
+        return await extractMediaPreview(url, {
+          channelMaxVideos: opts?.channelMaxVideos ?? youtube.channelMaxVideos,
+          playlistMaxVideos: opts?.playlistMaxVideos ?? youtube.playlistMaxVideos,
+          boardMaxPins: opts?.boardMaxPins ?? pinterest.boardMaxPins,
+          preferPlaylist: opts?.preferPlaylist,
+        });
+      } catch (err) {
+        return {
+          sourceUrl: typeof url === "string" ? url : "",
+          provider: { id: "unknown", label: "Unknown", live: false },
+          mode: "single",
+          modeSupported: false,
+          formats: [],
+          supportedModes: [],
+          items: [],
+          itemCount: 0,
+          message: err instanceof Error ? err.message : String(err),
+        };
       }
-      const youtube = {
-        ...DEFAULT_YOUTUBE_OPTIONS,
-        ...store.get("youtube"),
-      };
-      const pinterest = {
-        ...DEFAULT_PINTEREST_OPTIONS,
-        ...store.get("pinterest"),
-      };
-      configurePinterestCookies(pinterest.cookies);
-      const system = store.get("system");
-      const ytdlpPath = await resolveConfiguredYtdlp();
-      configureYtdlp({
-        path: ytdlpPath ?? system.ytdlpPath ?? undefined,
-        enabled: Boolean(system.ytdlpEnabled) && Boolean(ytdlpPath),
-      });
-      return await extractMediaPreview(url, {
-        channelMaxVideos: opts?.channelMaxVideos ?? youtube.channelMaxVideos,
-        playlistMaxVideos: opts?.playlistMaxVideos ?? youtube.playlistMaxVideos,
-        boardMaxPins: opts?.boardMaxPins ?? pinterest.boardMaxPins,
-        preferPlaylist: opts?.preferPlaylist,
-      });
-    } catch (err) {
-      return {
-        sourceUrl: typeof url === "string" ? url : "",
-        provider: { id: "unknown", label: "Unknown", live: false },
-        mode: "single",
-        modeSupported: false,
-        formats: [],
-        supportedModes: [],
-        items: [],
-        itemCount: 0,
-        message: err instanceof Error ? err.message : String(err),
-      };
     }
-  });
+  );
 
   ipcMain.handle("media:providers", async () => listProviders());
 
@@ -884,7 +874,9 @@ export function registerIpc(): void {
             return { ok: false, message: "Enter a bot token or webhook URL." };
           }
           if (webhookUrl) {
-            if (!/^https:\/\/(discord(?:app)?\.com|discord\.com)\/api\/webhooks\//i.test(webhookUrl)) {
+            if (
+              !/^https:\/\/(discord(?:app)?\.com|discord\.com)\/api\/webhooks\//i.test(webhookUrl)
+            ) {
               return { ok: false, message: "Discord webhook URL looks invalid." };
             }
             const res = await fetch(webhookUrl);
@@ -973,7 +965,11 @@ export function registerIpc(): void {
       };
     } else list.push(next);
     store.set("customProviders", list);
-    return { provider: list.find((p) => p.id === id)!, providers: list, registry: buildRegistryList() };
+    return {
+      provider: list.find((p) => p.id === id)!,
+      providers: list,
+      registry: buildRegistryList(),
+    };
   });
 
   ipcMain.handle("providers:uninstall", async (_e, id: string) => {
@@ -1200,11 +1196,7 @@ export function registerIpc(): void {
   ipcMain.handle("tools:ffmpegStatus", async () => getFfmpegStatus());
 
   ipcMain.handle("tools:ffmpegInstall", async (e) => {
-    const send = (payload: {
-      phase: string;
-      percent: number;
-      message: string;
-    }) => {
+    const send = (payload: { phase: string; percent: number; message: string }) => {
       e.sender.send("tools:ffmpegProgress", payload);
     };
     return installFfmpeg((ev) => send(ev));
@@ -1230,11 +1222,7 @@ export function registerIpc(): void {
   ipcMain.handle("tools:ytdlpStatus", async () => getYtdlpStatus());
 
   ipcMain.handle("tools:ytdlpInstall", async (e) => {
-    const send = (payload: {
-      phase: string;
-      percent: number;
-      message: string;
-    }) => {
+    const send = (payload: { phase: string; percent: number; message: string }) => {
       e.sender.send("tools:ytdlpProgress", payload);
     };
     return installYtdlp((ev) => send(ev));
@@ -1259,11 +1247,7 @@ export function registerIpc(): void {
   ipcMain.handle("tools:playwrightStatus", async () => getPlaywrightStatus());
 
   ipcMain.handle("tools:playwrightInstall", async (e) => {
-    const send = (payload: {
-      phase: string;
-      percent: number;
-      message: string;
-    }) => {
+    const send = (payload: { phase: string; percent: number; message: string }) => {
       e.sender.send("tools:playwrightProgress", payload);
     };
     return installPlaywrightChromium((ev) => send(ev));
@@ -1289,10 +1273,8 @@ export function registerIpc(): void {
   ipcMain.handle("tools:environmentSetupComplete", async () => completeEnvironmentSetup());
 
   ipcMain.handle("update:getStatus", () => getUpdateStatus());
-  ipcMain.handle(
-    "update:check",
-    async (_e, req?: { includePrerelease?: boolean }) =>
-      checkForUpdates({ includePrerelease: req?.includePrerelease })
+  ipcMain.handle("update:check", async (_e, req?: { includePrerelease?: boolean }) =>
+    checkForUpdates({ includePrerelease: req?.includePrerelease })
   );
   ipcMain.handle("update:download", async () => downloadUpdate());
   ipcMain.handle("update:quitAndInstall", () => quitAndInstall());

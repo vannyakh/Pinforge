@@ -46,10 +46,7 @@ export interface ProcessBoardOptions extends ProcessOptions {
   }) => void;
 }
 
-async function writeResolved(
-  media: ResolvedMedia,
-  opts: ProcessOptions
-): Promise<ProcessResult> {
+async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promise<ProcessResult> {
   await fs.mkdir(opts.outDir, { recursive: true });
 
   const enhance = opts.enhance !== false && media.kind === "image" && media.buffer;
@@ -58,9 +55,7 @@ async function writeResolved(
     media.title?.trim() || (idPart ? media.provider : `${media.provider}-${Date.now()}`)
   );
   // Stable name when id known → resume / duplicate skip
-  const base = idPart
-    ? sanitizeFilename(`${titlePart}-${idPart}`.slice(0, 180))
-    : titlePart;
+  const base = idPart ? sanitizeFilename(`${titlePart}-${idPart}`.slice(0, 180)) : titlePart;
   const stamp = idPart ? "" : `-${Date.now()}`;
 
   const exists = async (p: string) => {
@@ -292,7 +287,11 @@ async function processPinterestBoard(
   const itemConcurrency = Math.max(1, opts.itemConcurrency ?? 3);
   const folderLabel =
     boardName ||
-    (kind === "profile" ? "pinterest-profile" : kind === "search" ? "pinterest-search" : "pinterest-board");
+    (kind === "profile"
+      ? "pinterest-profile"
+      : kind === "search"
+        ? "pinterest-search"
+        : "pinterest-board");
   const outDir = path.join(opts.outDir, sanitizeFilename(folderLabel));
 
   const pinMeta = new Map((pins ?? []).map((p) => [p.url, p]));
@@ -560,8 +559,7 @@ async function processTikTokProfile(
   url: string,
   opts: ProcessBoardOptions
 ): Promise<DownloadResult> {
-  const maxVideos =
-    opts.youtube?.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos;
+  const maxVideos = opts.youtube?.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos;
   const profile = await resolveTikTokProfile(url, {
     maxVideos,
     signal: opts.signal,
@@ -636,10 +634,7 @@ async function processTikTokProfile(
 }
 
 /** @deprecated Prefer processMedia — kept for desktop IPC compatibility. */
-export async function processPin(
-  url: string,
-  opts: ProcessOptions
-): Promise<ProcessResult> {
+export async function processPin(url: string, opts: ProcessOptions): Promise<ProcessResult> {
   const { results, errors } = await processMedia(url, opts);
   if (results[0]) return results[0];
   throw new Error(errors[0]?.error ?? "Download failed");

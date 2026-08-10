@@ -7,17 +7,25 @@
   opacity: 1 !important;
 }
 
-[data-theme='dark'] .send-button-custom:not(:disabled) {
+[data-theme="dark"] .send-button-custom:not(:disabled) {
   background-color: var(--aou-4, #f5f5f5) !important;
   border-color: var(--aou-4, #f5f5f5) !important;
   color: #111 !important;
 }
 
-[data-theme='dark'] .send-button-custom:disabled,
-[data-theme='dark'] .send-button-custom.arco-btn:disabled,
-[data-theme='dark'] .send-button-custom.arco-btn-primary:disabled {
-  background-color: color-mix(in srgb, var(--color-fill-4, #4e4e4e) 82%, var(--color-bg-2, #2a2a2a)) !important;
-  border-color: color-mix(in srgb, var(--color-fill-4, #4e4e4e) 88%, var(--color-bg-2, #2a2a2a)) !important;
+[data-theme="dark"] .send-button-custom:disabled,
+[data-theme="dark"] .send-button-custom.arco-btn:disabled,
+[data-theme="dark"] .send-button-custom.arco-btn-primary:disabled {
+  background-color: color-mix(
+    in srgb,
+    var(--color-fill-4, #4e4e4e) 82%,
+    var(--color-bg-2, #2a2a2a)
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--color-fill-4, #4e4e4e) 88%,
+    var(--color-bg-2, #2a2a2a)
+  ) !important;
 }
 
 .sendbox-model-btn.guid-config-btn,

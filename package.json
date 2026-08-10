@@ -15,8 +15,9 @@
     "dist:mac:x64": "node scripts/build-with-builder.js x64 --mac --x64",
     "cli": "pnpm --filter pinforge-cli start",
     "typecheck": "turbo run typecheck",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "test": "pnpm --filter @pinterest-desktop/core test",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,json,css,md,yml}\" \"packages/**/*.{ts,tsx,js,json,md}\" \"scripts/**/*.{js,md}\" \".github/**/*.{yml,md,yaml}\" \"*.md\" \"*.json\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,jsx,json,css,md,yml}\" \"packages/**/*.{ts,tsx,js,json,md}\" \"scripts/**/*.{js,md}\" \".github/**/*.{yml,md,yaml}\" \"*.md\" \"*.json\""
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {

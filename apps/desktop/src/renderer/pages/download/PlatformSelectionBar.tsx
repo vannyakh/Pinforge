@@ -84,7 +84,8 @@ const PlatformSelectionBar: React.FC<PlatformSelectionBarProps> = ({
   useEffect(() => {
     const update = () => {
       setAvailableWidth(
-        containerRef.current?.offsetWidth || (typeof window === "undefined" ? 800 : window.innerWidth)
+        containerRef.current?.offsetWidth ||
+          (typeof window === "undefined" ? 800 : window.innerWidth)
       );
     };
     update();
@@ -104,7 +105,11 @@ const PlatformSelectionBar: React.FC<PlatformSelectionBarProps> = ({
   useEffect(() => {
     if (!moreVisible) return;
     const onPointer = (event: MouseEvent) => {
-      if (barRef.current && event.target instanceof Node && !barRef.current.contains(event.target)) {
+      if (
+        barRef.current &&
+        event.target instanceof Node &&
+        !barRef.current.contains(event.target)
+      ) {
         setMoreVisible(false);
       }
     };

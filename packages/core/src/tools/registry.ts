@@ -4,11 +4,7 @@
  */
 
 import { configureFfmpeg, resolveFfmpeg, requireFfmpegMessage } from "../providers/youtube/mux";
-import {
-  configureYtdlp,
-  resolveYtdlp,
-  requireYtdlpMessage,
-} from "../providers/ytdlp/bin";
+import { configureYtdlp, resolveYtdlp, requireYtdlpMessage } from "../providers/ytdlp/bin";
 
 export type ToolName = "ffmpeg" | "ytdlp";
 

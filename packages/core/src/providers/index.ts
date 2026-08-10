@@ -24,11 +24,7 @@ export type {
   ProviderFeatureMatrix,
   CoreEngineFeature,
 } from "./capabilities";
-export {
-  registerProviderPlugin,
-  listProviderPlugins,
-  getProviderPlugin,
-} from "./plugin";
+export { registerProviderPlugin, listProviderPlugins, getProviderPlugin } from "./plugin";
 export type { ProviderPlugin, MediaInfo, RegisteredPluginInfo } from "./plugin";
 export {
   resolvePin,
@@ -50,10 +46,7 @@ export {
   normalizeTikTokProfileUrl,
   extractTikTokUsername,
 } from "./tiktok/profile";
-export type {
-  TikTokProfileVideo,
-  TikTokProfileResolveResult,
-} from "./tiktok/profile";
+export type { TikTokProfileVideo, TikTokProfileResolveResult } from "./tiktok/profile";
 export {
   isYouTubeChannelUrl,
   resolveYouTubeChannel,

@@ -65,11 +65,7 @@ async function runFfmpeg(bin: string, args: string[]): Promise<void> {
   });
 }
 
-export async function muxAv(
-  videoPath: string,
-  audioPath: string,
-  outPath: string
-): Promise<void> {
+export async function muxAv(videoPath: string, audioPath: string, outPath: string): Promise<void> {
   const bin = await resolveFfmpeg();
   if (!bin) throw new Error(requireFfmpegMessage());
   await fs.mkdir(path.dirname(outPath), { recursive: true });

@@ -3,7 +3,12 @@ import { Button, Input, Message, Select, Switch, Tag } from "@arco-design/web-re
 import { FileCode, FolderOpen, Info, Left, Upload } from "@icon-park/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
-import { api, type CustomProviderConfig, type FormatPluginConfig, type ProviderManifest } from "@renderer/api";
+import {
+  api,
+  type CustomProviderConfig,
+  type FormatPluginConfig,
+  type ProviderManifest,
+} from "@renderer/api";
 import {
   BUILTIN_PROVIDER_META,
   CAPABILITY_LABELS,
@@ -205,7 +210,7 @@ const ProviderDetailPage: React.FC = () => {
 
         const enabled = builtin
           ? !disabledBuiltin && (cfg?.enabled ?? true)
-          : cfg?.enabled ?? true;
+          : (cfg?.enabled ?? true);
 
         setForm({
           id: providerId,
@@ -222,7 +227,12 @@ const ProviderDetailPage: React.FC = () => {
           format: cfg?.format ?? settings.format ?? "best",
           engine: defaultEngine(providerId, cfg),
           formatPlugins: cfg?.formatPlugins ?? [],
-          version: cfg?.installedVersion ?? cfg?.version ?? cfg?.manifest?.version ?? (meta && "version" in meta ? meta.version : "") ?? "",
+          version:
+            cfg?.installedVersion ??
+            cfg?.version ??
+            cfg?.manifest?.version ??
+            (meta && "version" in meta ? meta.version : "") ??
+            "",
           builtin: Boolean(builtin) || Boolean(cfg?.builtin),
           createdAt: cfg?.createdAt,
           removable: !builtin || builtin.status === "stub",
@@ -246,11 +256,13 @@ const ProviderDetailPage: React.FC = () => {
 
   const goBack = () => navigate("/settings/providers");
 
-  const applyManifest = (manifest: ProviderManifest, paths: { sourcePath: string; manifestPath: string }) => {
+  const applyManifest = (
+    manifest: ProviderManifest,
+    paths: { sourcePath: string; manifestPath: string }
+  ) => {
     setForm((f) => {
       if (!f) return f;
-      const hosts =
-        (manifest.hosts?.length ? manifest.hosts.join(", ") : f.hosts) || f.hosts;
+      const hosts = (manifest.hosts?.length ? manifest.hosts.join(", ") : f.hosts) || f.hosts;
       const engine =
         (manifest.engine && PROVIDER_ENGINES.some((e) => e.id === manifest.engine)
           ? (manifest.engine as ProviderEngineId)
@@ -384,8 +396,13 @@ const ProviderDetailPage: React.FC = () => {
         installedVersion: form.version || form.manifest?.version,
         capabilities: form.capabilities as CustomProviderConfig["capabilities"],
         checksum: form.checksum,
-        origin: (form.origin as CustomProviderConfig["origin"]) ||
-          (form.builtin ? "builtin-override" : form.sourceUrl?.startsWith("registry://") ? "registry" : "local"),
+        origin:
+          (form.origin as CustomProviderConfig["origin"]) ||
+          (form.builtin
+            ? "builtin-override"
+            : form.sourceUrl?.startsWith("registry://")
+              ? "registry"
+              : "local"),
         builtin: form.builtin || Boolean(builtinProvider),
         createdAt: form.createdAt ?? Date.now(),
         updatedAt: Date.now(),
@@ -421,7 +438,8 @@ const ProviderDetailPage: React.FC = () => {
   }
 
   const engineInfo = PROVIDER_ENGINES.find((e) => e.id === form.engine);
-  const showExtractor = form.engine === "piped" || form.id === "youtube" || Boolean(form.extractorUrl);
+  const showExtractor =
+    form.engine === "piped" || form.id === "youtube" || Boolean(form.extractorUrl);
 
   return (
     <div className="provider-detail-page max-w-720px mx-auto">
@@ -547,7 +565,12 @@ const ProviderDetailPage: React.FC = () => {
         title="Extension source"
         badge={{ text: "Manifest", tone: "later" }}
         action={
-          <Button size="mini" loading={busy} icon={<Upload theme="outline" size="12" />} onClick={() => void installSource()}>
+          <Button
+            size="mini"
+            loading={busy}
+            icon={<Upload theme="outline" size="12" />}
+            onClick={() => void installSource()}
+          >
             Upload package
           </Button>
         }
@@ -591,19 +614,29 @@ const ProviderDetailPage: React.FC = () => {
               {form.manifestPath || "pinforge.provider.json — id, engine, hosts, formats"}
             </div>
           </div>
-          <Button size="mini" loading={busy} disabled={!form.sourcePath && !form.manifestPath} onClick={() => void reloadManifest()}>
+          <Button
+            size="mini"
+            loading={busy}
+            disabled={!form.sourcePath && !form.manifestPath}
+            onClick={() => void reloadManifest()}
+          >
             Reload
           </Button>
         </div>
 
         {form.manifest && (
-          <pre className="provider-manifest-preview mt-12px">{JSON.stringify(form.manifest, null, 2)}</pre>
+          <pre className="provider-manifest-preview mt-12px">
+            {JSON.stringify(form.manifest, null, 2)}
+          </pre>
         )}
       </Section>
 
       <Section title="Download defaults" badge={{ text: "Applies immediately", tone: "now" }}>
         <FieldRow label="Enabled" hint="When off, Pinforge will skip this provider.">
-          <Switch checked={form.enabled} onChange={(v) => setForm((f) => (f ? { ...f, enabled: v } : f))} />
+          <Switch
+            checked={form.enabled}
+            onChange={(v) => setForm((f) => (f ? { ...f, enabled: v } : f))}
+          />
         </FieldRow>
         <FieldRow label="Hosts" hint="Comma-separated domains this provider handles.">
           <Input
@@ -657,13 +690,19 @@ const ProviderDetailPage: React.FC = () => {
         title="Format plugins"
         badge={{ text: "Download service", tone: "later" }}
         action={
-          <Button size="mini" loading={busy} icon={<Upload theme="outline" size="12" />} onClick={() => void uploadPlugin()}>
+          <Button
+            size="mini"
+            loading={busy}
+            icon={<Upload theme="outline" size="12" />}
+            onClick={() => void uploadPlugin()}
+          >
             Upload plugin
           </Button>
         }
       >
         <div className="text-12px text-t-tertiary mb-10px">
-          Upload format helpers (.js / .json) used when resolving output for this provider’s downloads.
+          Upload format helpers (.js / .json) used when resolving output for this provider’s
+          downloads.
         </div>
         {form.formatPlugins.length === 0 ? (
           <div className="text-13px text-t-secondary py-8px">No format plugins attached.</div>

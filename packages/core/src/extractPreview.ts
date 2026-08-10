@@ -73,10 +73,7 @@ function classifyMode(providerId: string, url: string): DownloadMode {
       if (!u.searchParams.has("v") && u.searchParams.has("list")) return "playlist";
       // Single Short stays single; channel /shorts tab is profile
       if (/\/shorts\/[\w-]+/i.test(u.pathname)) return "single";
-      if (
-        /^\/(channel|c|user)\/[^/]+/i.test(u.pathname) ||
-        /^\/@[^/]+/i.test(u.pathname)
-      ) {
+      if (/^\/(channel|c|user)\/[^/]+/i.test(u.pathname) || /^\/@[^/]+/i.test(u.pathname)) {
         return "profile";
       }
     } catch {
@@ -136,7 +133,10 @@ export function coverUrlFromMediaUrl(url: string): string | undefined {
 
 /** Pure builder for single-YouTube Home extract (qualities drive the quality picker). */
 export function buildYoutubeSingleExtract(
-  base: Omit<ExtractPreview, "items" | "itemCount" | "title" | "truncated" | "message" | "qualities">,
+  base: Omit<
+    ExtractPreview,
+    "items" | "itemCount" | "title" | "truncated" | "message" | "qualities"
+  >,
   sourceUrl: string,
   preview: {
     title: string;
@@ -147,8 +147,7 @@ export function buildYoutubeSingleExtract(
     qualities: number[];
   }
 ): ExtractPreview {
-  const qualityHint =
-    preview.qualities.length > 0 ? ` · up to ${preview.qualities[0]}p` : "";
+  const qualityHint = preview.qualities.length > 0 ? ` · up to ${preview.qualities[0]}p` : "";
   return {
     ...base,
     mode: "single",
@@ -259,7 +258,12 @@ export async function extractMediaPreview(
           ? board.pins
           : board.pinUrls.map((pinUrl) => {
               const pinId = pinUrl.match(/\/pin\/(\d+)/)?.[1] ?? "";
-              return { pinId, url: pinUrl, title: undefined as string | undefined, coverUrl: undefined as string | undefined };
+              return {
+                pinId,
+                url: pinUrl,
+                title: undefined as string | undefined,
+                coverUrl: undefined as string | undefined,
+              };
             });
       const items: ExtractPreviewItem[] = list.map((p, index) => ({
         index: index + 1,
@@ -301,8 +305,7 @@ export async function extractMediaPreview(
   if (provider.id === "youtube" && (mode === "profile" || isYouTubeChannelUrl(sourceUrl))) {
     try {
       const channel = await resolveYouTubeChannel(sourceUrl, {
-        maxVideos:
-          opts.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos,
+        maxVideos: opts.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos,
       });
       const items: ExtractPreviewItem[] = channel.videos.map((v, index) => ({
         index: index + 1,
@@ -314,17 +317,9 @@ export async function extractMediaPreview(
       }));
       const more = channel.truncated ? " (truncated)" : "";
       const kind =
-        channel.tab === "shorts"
-          ? "short"
-          : channel.tab === "streams"
-            ? "stream"
-            : "video";
+        channel.tab === "shorts" ? "short" : channel.tab === "streams" ? "stream" : "video";
       const kindPlural =
-        channel.tab === "shorts"
-          ? "shorts"
-          : channel.tab === "streams"
-            ? "streams"
-            : "videos";
+        channel.tab === "shorts" ? "shorts" : channel.tab === "streams" ? "streams" : "videos";
       const label = channel.channelTitle ?? "channel";
       return {
         ...base,
@@ -337,9 +332,7 @@ export async function extractMediaPreview(
         message:
           items.length === 0
             ? `No ${kindPlural} found on ${label}.`
-            : `Found ${items.length} ${
-                items.length === 1 ? kind : kindPlural
-              } on ${label}${more}.`,
+            : `Found ${items.length} ${items.length === 1 ? kind : kindPlural} on ${label}${more}.`,
       };
     } catch (err) {
       return {
@@ -398,15 +391,12 @@ export async function extractMediaPreview(
   const listId = provider.id === "youtube" ? extractYouTubePlaylistId(sourceUrl) : null;
   const preferWatchPlaylist = Boolean(opts.preferPlaylist) && Boolean(listId);
   const isPlaylistExtract =
-    mode === "playlist" ||
-    isYouTubePlaylistUrl(sourceUrl) ||
-    preferWatchPlaylist;
+    mode === "playlist" || isYouTubePlaylistUrl(sourceUrl) || preferWatchPlaylist;
 
   if (provider.id === "youtube" && isPlaylistExtract) {
     try {
       const playlist = await resolveYouTubePlaylist(sourceUrl, {
-        maxVideos:
-          opts.playlistMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.playlistMaxVideos,
+        maxVideos: opts.playlistMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.playlistMaxVideos,
       });
       const items: ExtractPreviewItem[] = playlist.videos.map((v, index) => ({
         index: index + 1,

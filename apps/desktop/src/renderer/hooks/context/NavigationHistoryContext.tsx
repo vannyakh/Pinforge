@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { NavigationType, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 
 const MAX_HISTORY = 50;
@@ -17,7 +25,9 @@ const NavigationHistoryContext = createContext<NavigationHistoryContextValue | n
 const buildPath = (location: { pathname: string; search: string; hash: string }) =>
   `${location.pathname}${location.search}${location.hash}`;
 
-export const NavigationHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const NavigationHistoryProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const location = useLocation();
   const navigate = useNavigate();
   const navigationType = useNavigationType();

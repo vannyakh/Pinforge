@@ -22,18 +22,17 @@ export class ResumeManager {
     return new CheckpointStore(jobDir).load();
   }
 
-  async save(
-    jobDir: string,
-    cp: DownloadCheckpoint
-  ): Promise<void> {
+  async save(jobDir: string, cp: DownloadCheckpoint): Promise<void> {
     const next = { ...cp, updatedAt: Date.now() };
     await new CheckpointStore(jobDir).save(next);
     if (this.jobs) {
       await this.jobs.saveCheckpoint(next);
-      await this.jobs.updateProgress(cp.jobId, {
-        downloadedBytes: cp.downloadedBytes,
-        totalBytes: cp.totalBytes,
-      }).catch(() => undefined);
+      await this.jobs
+        .updateProgress(cp.jobId, {
+          downloadedBytes: cp.downloadedBytes,
+          totalBytes: cp.totalBytes,
+        })
+        .catch(() => undefined);
     }
   }
 
@@ -70,10 +69,7 @@ export class ResumeManager {
     return validateCheckpoint(checkpoint, live);
   }
 
-  withSegments(
-    cp: DownloadCheckpoint,
-    segments: SegmentCheckpoint[]
-  ): DownloadCheckpoint {
+  withSegments(cp: DownloadCheckpoint, segments: SegmentCheckpoint[]): DownloadCheckpoint {
     const downloadedBytes = segments
       .filter((s) => s.downloaded)
       .reduce((n, s) => n + (s.size ?? 0), 0);

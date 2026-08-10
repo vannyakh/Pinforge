@@ -13,12 +13,7 @@ import type { PlatformFilter } from "./PlatformSelectionBar";
 export type ChatRole = "user" | "assistant";
 
 export type ChatDownloadCardStatus =
-  | "queued"
-  | "extracting"
-  | "ready"
-  | "downloading"
-  | "done"
-  | "failed";
+  "queued" | "extracting" | "ready" | "downloading" | "done" | "failed";
 
 export type ChatDownloadCard = {
   id: string;
@@ -206,9 +201,7 @@ function upsertSession(sessions: ChatSession[], next: ChatSession): ChatSession[
     title: next.messages.length ? chatSessionTitle(next.messages) : prev?.title || next.title,
   };
   const rest = sessions.filter((x) => x.id !== merged.id);
-  return [merged, ...rest]
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, MAX_SESSIONS);
+  return [merged, ...rest].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_SESSIONS);
 }
 
 function withSyncedSession(
@@ -267,9 +260,7 @@ export const useHomeChatStore = create<HomeChatState>()(
       setGetPlaylistList: (getPlaylistList) => set({ getPlaylistList }),
 
       appendMessages: (messages) =>
-        set((s) =>
-          withSyncedSession(s, { messages: [...s.messages, ...messages] })
-        ),
+        set((s) => withSyncedSession(s, { messages: [...s.messages, ...messages] })),
 
       updateMessage: (id, patch) =>
         set((s) =>
@@ -278,8 +269,7 @@ export const useHomeChatStore = create<HomeChatState>()(
           })
         ),
 
-      mapMessages: (fn) =>
-        set((s) => withSyncedSession(s, { messages: fn(s.messages) })),
+      mapMessages: (fn) => set((s) => withSyncedSession(s, { messages: fn(s.messages) })),
 
       patchDownloadCard: (messageId, matchUrl, patch) =>
         set((s) =>
@@ -458,11 +448,7 @@ export function formatBatchMessage(
   msg: Pick<ChatMessage, "extract" | "detected" | "status">,
   job: ChatBatchJob
 ): string {
-  const kind =
-    job.label ||
-    msg.extract?.mode ||
-    msg.detected?.label ||
-    "batch";
+  const kind = job.label || msg.extract?.mode || msg.detected?.label || "batch";
   const title = msg.extract?.title?.trim();
   return title ? `${title} · ${kind}` : kind;
 }

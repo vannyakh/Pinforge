@@ -169,7 +169,9 @@ export interface InstallProviderResult {
 }
 
 /** Install a provider package (folder, .zip, or file+sibling manifest) into userData. */
-export async function installProviderFromSource(sourcePath: string): Promise<InstallProviderResult> {
+export async function installProviderFromSource(
+  sourcePath: string
+): Promise<InstallProviderResult> {
   if (!existsSync(sourcePath)) {
     throw new Error("Source path does not exist");
   }

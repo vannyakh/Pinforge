@@ -1,12 +1,6 @@
 import React from "react";
 
-export type PlatformId =
-  | "pinterest"
-  | "youtube"
-  | "instagram"
-  | "tiktok"
-  | "facebook"
-  | "ytdlp";
+export type PlatformId = "pinterest" | "youtube" | "instagram" | "tiktok" | "facebook" | "ytdlp";
 
 export interface PlatformDef {
   id: PlatformId;
@@ -61,10 +55,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
 ];
 
-export const PlatformIcon: React.FC<{ id: PlatformId; size?: number }> = ({
-  id,
-  size = 16,
-}) => {
+export const PlatformIcon: React.FC<{ id: PlatformId; size?: number }> = ({ id, size = 16 }) => {
   const s = size;
   switch (id) {
     case "pinterest":

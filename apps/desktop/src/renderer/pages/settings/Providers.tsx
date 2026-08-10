@@ -1,14 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Avatar, Button, Dropdown, Input, Menu, Message, Switch, Tag, Tooltip } from "@arco-design/web-react";
+import {
+  Avatar,
+  Button,
+  Dropdown,
+  Input,
+  Menu,
+  Message,
+  Switch,
+  Tag,
+  Tooltip,
+} from "@arco-design/web-react";
 import { Down, Plus, Search } from "@icon-park/react";
 import classNames from "classnames";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
-import {
-  api,
-  type InstalledProviderView,
-  type RegistryListItem,
-} from "@renderer/api";
+import { api, type InstalledProviderView, type RegistryListItem } from "@renderer/api";
 import { PROVIDER_LOGOS } from "./providerLogos";
 
 type TabKey = "builtin" | "installed" | "registry";
@@ -52,10 +58,7 @@ const ProvidersSettings: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const reload = useCallback(async () => {
-    const [inst, reg] = await Promise.all([
-      api.listInstalledProviders(),
-      api.registryList(),
-    ]);
+    const [inst, reg] = await Promise.all([api.listInstalledProviders(), api.registryList()]);
     setInstalled(inst);
     setRegistry(reg);
   }, []);
@@ -328,11 +331,7 @@ const ProvidersSettings: React.FC = () => {
                       <Tag
                         size="small"
                         color={
-                          item.installed
-                            ? item.updateAvailable
-                              ? "orangered"
-                              : "green"
-                            : "red"
+                          item.installed ? (item.updateAvailable ? "orangered" : "green") : "red"
                         }
                         className="provider-row__tag"
                       >
@@ -364,11 +363,7 @@ const ProvidersSettings: React.FC = () => {
                       disabled={saving || (item.installed && !item.updateAvailable)}
                       onClick={() => void installFromRegistry(item.id)}
                     >
-                      {item.installed
-                        ? item.updateAvailable
-                          ? "Update"
-                          : "Installed"
-                        : "Install"}
+                      {item.installed ? (item.updateAvailable ? "Update" : "Installed") : "Install"}
                     </Button>
                     {item.installed && (
                       <Button
@@ -385,9 +380,7 @@ const ProvidersSettings: React.FC = () => {
               ))
             ) : (
               <div className="providers-page__empty">
-                {search.trim()
-                  ? `No providers match “${search.trim()}”.`
-                  : "Registry is empty."}
+                {search.trim() ? `No providers match “${search.trim()}”.` : "Registry is empty."}
               </div>
             ))}
         </div>

@@ -22,30 +22,30 @@ Pinforge CI helpers. All bot comments and docs are English.
 
 ## GPT workflows
 
-| | GPT Review | GPT PR Assessment |
-| --- | --- | --- |
-| Purpose | Code quality (bugs, security, process boundaries) | Maintainer merge priority |
-| Trigger | PR checks when `ENABLE_GPT_REVIEW=true`, or manual | Same; also external contributors after quality |
-| Output | PR review | PR comment (updated in place) |
-| Language | English only | English only |
+|          | GPT Review                                         | GPT PR Assessment                              |
+| -------- | -------------------------------------------------- | ---------------------------------------------- |
+| Purpose  | Code quality (bugs, security, process boundaries)  | Maintainer merge priority                      |
+| Trigger  | PR checks when `ENABLE_GPT_REVIEW=true`, or manual | Same; also external contributors after quality |
+| Output   | PR review                                          | PR comment (updated in place)                  |
+| Language | English only                                       | English only                                   |
 
 Requires secret `OPENAI_API_KEY`.
 
 ### Composite actions
 
-1. **gather-pr-diff** — Diff + changed file list  
-2. **read-file-contents** — Prioritized file bodies for cross-file analysis  
-3. **call-openai** — Chat Completions with retries  
+1. **gather-pr-diff** — Diff + changed file list
+2. **read-file-contents** — Prioritized file bodies for cross-file analysis
+3. **call-openai** — Chat Completions with retries
 
 File read priority (high → low):
 
-1. `packages/core/` — providers, download, enhance  
-2. `apps/desktop/src/process/`, `apps/desktop/src/index.ts` — main process  
-3. `apps/desktop/src/preload/`  
-4. `apps/desktop/src/common/`  
-5. `apps/desktop/src/renderer/`  
-6. Other `.ts`/`.tsx`  
-7. Remaining files  
+1. `packages/core/` — providers, download, enhance
+2. `apps/desktop/src/process/`, `apps/desktop/src/index.ts` — main process
+3. `apps/desktop/src/preload/`
+4. `apps/desktop/src/common/`
+5. `apps/desktop/src/renderer/`
+6. Other `.ts`/`.tsx`
+7. Remaining files
 
 ## Manual build
 

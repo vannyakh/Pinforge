@@ -40,6 +40,4 @@ export interface CheckpointValidationInput {
   formatId?: string;
 }
 
-export type CheckpointValidationResult =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type CheckpointValidationResult = { ok: true } | { ok: false; reason: string };

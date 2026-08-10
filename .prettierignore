@@ -8,8 +8,13 @@ pnpm-lock.yaml
 *.min.css
 apps/desktop/out
 apps/desktop/dist
+apps/desktop/src/renderer/out-test-yt
 packages/core/dist
+packages/core/tmp-*.json
+*-player-script.js
 rust/target
 .tmp-aionui
 playwright-report
 test-results
+**/*.tsbuildinfo
+**/node_modules/**

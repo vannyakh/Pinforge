@@ -11,10 +11,7 @@ export function defaultMediaCoreRoot(override?: string): string {
   return path.join(os.homedir(), ".pinforge", "mediacore");
 }
 
-export async function ensureJobTempDir(
-  root: string,
-  jobId: string
-): Promise<string> {
+export async function ensureJobTempDir(root: string, jobId: string): Promise<string> {
   const dir = jobWorkDir(root, jobId);
   await storage.ensureDir(dir);
   await storage.ensureDir(path.join(dir, "segments"));

@@ -1,12 +1,5 @@
 import type { PropsWithChildren } from "react";
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Theme, ThemeAppearance } from "@/common/theme/types";
 import {
   CUSTOM_THEMES_STORAGE_KEY,
@@ -269,4 +262,3 @@ export const useThemeContext = () => {
   }
   return context;
 };
-

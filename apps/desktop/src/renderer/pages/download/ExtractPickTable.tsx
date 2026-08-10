@@ -103,10 +103,7 @@ const ExtractCover: React.FC<{
   const resolved = previewCoverUrl(src);
   if (!resolved) {
     return (
-      <span
-        className={`${className || ""} home-extract-pick__cover--empty`.trim()}
-        aria-hidden
-      />
+      <span className={`${className || ""} home-extract-pick__cover--empty`.trim()} aria-hidden />
     );
   }
   return (
@@ -178,10 +175,8 @@ const ExtractPickTable: React.FC<Props> = ({
   }, [listMax]);
 
   const isPinterest =
-    extract.provider.id === "pinterest" ||
-    /pinterest/i.test(extract.provider.label || "");
-  const isTikTok =
-    extract.provider.id === "tiktok" || /tiktok/i.test(extract.provider.label || "");
+    extract.provider.id === "pinterest" || /pinterest/i.test(extract.provider.label || "");
+  const isTikTok = extract.provider.id === "tiktok" || /tiktok/i.test(extract.provider.label || "");
 
   useEffect(() => {
     if (
@@ -244,9 +239,7 @@ const ExtractPickTable: React.FC<Props> = ({
           checked={allSelected}
           indeterminate={someSelected}
           disabled={rows.length === 0}
-          onChange={(checked) =>
-            onSelectionChange(checked ? rows.map((r) => r.url) : [])
-          }
+          onChange={(checked) => onSelectionChange(checked ? rows.map((r) => r.url) : [])}
         />
       ),
       width: 40,
@@ -327,9 +320,7 @@ const ExtractPickTable: React.FC<Props> = ({
     {
       title: "Format",
       width: 88,
-      render: () => (
-        <span className="text-12px text-t-secondary truncate block">{format}</span>
-      ),
+      render: () => <span className="text-12px text-t-secondary truncate block">{format}</span>,
     },
     {
       title: "Actions",
@@ -410,13 +401,14 @@ const ExtractPickTable: React.FC<Props> = ({
                   value={format}
                   onChange={(v) => onFormatChange(v as FormatPreset)}
                 >
-                  {(formats.length ? formats : (["best", "mp4", "audio-only"] as FormatPreset[])).map(
-                    (f) => (
-                      <Select.Option key={f} value={f}>
-                        {f}
-                      </Select.Option>
-                    )
-                  )}
+                  {(formats.length
+                    ? formats
+                    : (["best", "mp4", "audio-only"] as FormatPreset[])
+                  ).map((f) => (
+                    <Select.Option key={f} value={f}>
+                      {f}
+                    </Select.Option>
+                  ))}
                 </Select>
               </div>
               {showYoutube && format !== "audio-only" && (
@@ -569,10 +561,7 @@ const ExtractPickTable: React.FC<Props> = ({
                     className="home-extract-pick__pin-check"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Checkbox
-                      checked={selected}
-                      onChange={() => onToggleUrl(row.url)}
-                    />
+                    <Checkbox checked={selected} onChange={() => onToggleUrl(row.url)} />
                   </span>
                   {cover ? (
                     <Image
@@ -661,9 +650,7 @@ const ExtractPickTable: React.FC<Props> = ({
           </div>
         )}
         {extract.itemCount > 100 && viewMode === "list" && (
-          <div className="home-extract__more">
-            Showing first 100 of {extract.itemCount} items
-          </div>
+          <div className="home-extract__more">Showing first 100 of {extract.itemCount} items</div>
         )}
       </div>
     </div>

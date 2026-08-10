@@ -181,9 +181,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               : prev.enhanceFeatures,
             autoDownload: next.autoDownload ?? prev.autoDownload,
             youtube: next.youtube ? { ...prev.youtube, ...next.youtube } : prev.youtube,
-            pinterest: next.pinterest
-              ? { ...prev.pinterest, ...next.pinterest }
-              : prev.pinterest,
+            pinterest: next.pinterest ? { ...prev.pinterest, ...next.pinterest } : prev.pinterest,
           }
         : prev
     );

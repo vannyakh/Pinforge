@@ -27,8 +27,10 @@ function languageExtensions(
   return [];
 }
 
-export interface CodeEditorProps
-  extends Omit<ReactCodeMirrorProps, "theme" | "extensions" | "basicSetup"> {
+export interface CodeEditorProps extends Omit<
+  ReactCodeMirrorProps,
+  "theme" | "extensions" | "basicSetup"
+> {
   language?: CodeEditorLanguage;
   extensions?: ReactCodeMirrorProps["extensions"];
   basicSetup?: ReactCodeMirrorProps["basicSetup"];

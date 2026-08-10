@@ -172,14 +172,17 @@ export async function downloadToFile(
       const streamed = await downloadStreamToFile(url, tempPath, headers, opts);
       await fsp.rename(tempPath, destPath);
       await fsp.unlink(statePath).catch(() => undefined);
-      return { ...streamed, filePath: destPath, contentType: streamed.contentType ?? probe.contentType };
+      return {
+        ...streamed,
+        filePath: destPath,
+        contentType: streamed.contentType ?? probe.contentType,
+      };
     }
 
     const total = probe.length;
     // Larger fragments for high-bitrate / long streams improve throughput.
     const fragmentSize =
-      opts.fragmentSize ??
-      (total >= 50 * 1024 * 1024 ? 8 * 1024 * 1024 : 4 * 1024 * 1024);
+      opts.fragmentSize ?? (total >= 50 * 1024 * 1024 ? 8 * 1024 * 1024 : 4 * 1024 * 1024);
     const ranges: Array<{ start: number; end: number; index: number }> = [];
     for (let start = 0, index = 0; start < total; start += fragmentSize, index++) {
       const end = Math.min(start + fragmentSize - 1, total - 1);
@@ -272,8 +275,7 @@ export async function downloadToBuffer(
   if (probe.acceptRanges && probe.length && probe.length >= minSize && concurrency > 1) {
     const total = probe.length;
     const fragmentSize =
-      opts.fragmentSize ??
-      (total >= 50 * 1024 * 1024 ? 8 * 1024 * 1024 : 4 * 1024 * 1024);
+      opts.fragmentSize ?? (total >= 50 * 1024 * 1024 ? 8 * 1024 * 1024 : 4 * 1024 * 1024);
     const buffer = Buffer.allocUnsafe(total);
     const ranges: Array<{ start: number; end: number }> = [];
     for (let start = 0; start < total; start += fragmentSize) {

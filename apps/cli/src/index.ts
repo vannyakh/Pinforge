@@ -15,10 +15,7 @@ import { printBanner } from "./banner.js";
 
 const program = new Command();
 
-program
-  .name("pinforge")
-  .description("Pinforge — multi-source media downloader")
-  .version("0.1.0");
+program.name("pinforge").description("Pinforge — multi-source media downloader").version("0.1.0");
 
 program
   .command("providers")
@@ -26,8 +23,7 @@ program
   .action(() => {
     printBanner();
     for (const p of listProviders()) {
-      const badge =
-        p.status === "live" ? pc.green("live") : pc.yellow(p.status);
+      const badge = p.status === "live" ? pc.green("live") : pc.yellow(p.status);
       console.log(`  ${pc.bold(p.label.padEnd(22))} ${badge}`);
     }
     console.log();

@@ -50,7 +50,4 @@ export class JobScheduler {
   }
 }
 
-export type TerminalJobStatus = Extract<
-  JobStatus,
-  "completed" | "failed" | "cancelled"
->;
+export type TerminalJobStatus = Extract<JobStatus, "completed" | "failed" | "cancelled">;
