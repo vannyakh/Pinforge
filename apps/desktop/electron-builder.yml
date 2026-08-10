@@ -62,11 +62,18 @@ mac:
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 dmg:
+  # Classic drag-to-Applications installer look (resources/background.png)
+  background: background.png
   format: UDZO
   internetEnabled: false
+  title: ${productName} ${version}
+  icon: icon.png
+  iconSize: 96
   window:
     width: 540
     height: 380
+    x: 200
+    y: 120
   contents:
     - x: 140
       y: 180

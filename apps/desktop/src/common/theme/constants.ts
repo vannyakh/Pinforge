@@ -3,8 +3,8 @@ export const DARK_THEME_ID = "dark";
 /** Sentinel id stored in `theme.activeId`: resolve to Light/Dark from the OS appearance. */
 export const SYSTEM_THEME_ID = "system";
 
-/** Default active theme — same as AionUi (`LIGHT_THEME_ID`). */
-export const DEFAULT_THEME_ID = LIGHT_THEME_ID;
+/** Default active theme — follow OS light/dark (system UI preference). */
+export const DEFAULT_THEME_ID = SYSTEM_THEME_ID;
 
 /** Active appearance for FOUC (`light` | `dark`) */
 export const THEME_STORAGE_KEY = "__aionui_theme";

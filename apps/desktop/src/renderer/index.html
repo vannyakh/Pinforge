@@ -9,9 +9,20 @@
     <script>
       (function () {
         try {
-          var appearance = localStorage.getItem("__aionui_theme");
-          if (appearance !== "light" && appearance !== "dark") {
-            appearance = "light";
+          var themeId = localStorage.getItem("__aionui_theme_id");
+          var stored = localStorage.getItem("__aionui_theme");
+          var systemDark =
+            window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var appearance;
+          // Default / Follow System → OS preference; else use stored resolved appearance.
+          if (!themeId || themeId === "system") {
+            appearance = systemDark ? "dark" : "light";
+          } else if (stored === "light" || stored === "dark") {
+            appearance = stored;
+          } else if (themeId === "light" || themeId === "dark") {
+            appearance = themeId;
+          } else {
+            appearance = systemDark ? "dark" : "light";
           }
           document.documentElement.setAttribute("data-theme", appearance);
 
@@ -96,10 +107,25 @@
   <body class="splash-shell">
     <script>
       try {
-        var t = localStorage.getItem("__aionui_theme");
-        document.body.setAttribute("arco-theme", t === "dark" ? "dark" : "light");
+        var themeId = localStorage.getItem("__aionui_theme_id");
+        var stored = localStorage.getItem("__aionui_theme");
+        var systemDark =
+          window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var t;
+        if (!themeId || themeId === "system") {
+          t = systemDark ? "dark" : "light";
+        } else if (stored === "light" || stored === "dark") {
+          t = stored;
+        } else if (themeId === "light" || themeId === "dark") {
+          t = themeId;
+        } else {
+          t = systemDark ? "dark" : "light";
+        }
+        document.body.setAttribute("arco-theme", t);
       } catch (e) {
-        document.body.setAttribute("arco-theme", "light");
+        var dark =
+          window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.body.setAttribute("arco-theme", dark ? "dark" : "light");
       }
     </script>
     <div id="root">

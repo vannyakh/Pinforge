@@ -147,8 +147,12 @@ jobs:
       - name: Build distributables
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Unsigned CI builds unless Apple / Windows signing secrets are configured.
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # Sign + notarize on macOS when CSC_LINK (Developer ID .p12) is configured.
+          # See .github/APPLE_SIGNING.md
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_NAME: ${{ secrets.CSC_NAME }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' && 'true' || 'false' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
