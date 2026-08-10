@@ -35,6 +35,24 @@ pnpm --filter @pinterest-desktop/core exec playwright install chromium
 pnpm --filter desktop run dev
 ```
 
+## macOS note (Intel & Apple Silicon)
+
+Release builds are **not Apple-notarized** yet, so Gatekeeper may show _“Apple could not verify Pinforge…”_ (common on Intel x64). That is unsigned CI, not malware.
+
+**Open anyway (one-time):**
+
+1. Right-click the app → **Open** → **Open**, or  
+2. **System Settings → Privacy & Security → Open Anyway**, or  
+3. In Terminal (after mounting the DMG / unzipping):
+
+```bash
+xattr -cr /Applications/Pinforge.app
+# or the path to Pinforge.app from the DMG/zip
+open /Applications/Pinforge.app
+```
+
+Use the `*-x64.dmg` / `*-x64.zip` asset on Intel Macs, and `*-arm64.*` on Apple Silicon.
+
 ## CLI
 
 ```bash

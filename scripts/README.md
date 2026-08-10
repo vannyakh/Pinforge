@@ -83,7 +83,21 @@ Release checklist:
 4. Tag and push: `git tag v0.1.1 && git push origin v0.1.1`
 5. Watch **Release** workflow; GitHub Release is published when all platform jobs finish.
 
-Optional signing / notarization secrets (macOS): `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (and code-sign certs if configured). Unsigned CI builds set `CSC_IDENTITY_AUTO_DISCOVERY=false`.
+### macOS signing / Gatekeeper
+
+Unsigned CI builds set `CSC_IDENTITY_AUTO_DISCOVERY=false`, so downloaded apps trigger Gatekeeper (“Apple could not verify…”). Users can clear quarantine with `xattr -cr Pinforge.app` (see root README).
+
+To ship notarized builds, add GitHub secrets and a Developer ID cert:
+
+| Secret | Purpose |
+| --- | --- |
+| `CSC_LINK` | Base64 `.p12` Developer ID Application cert |
+| `CSC_KEY_PASSWORD` | Password for that `.p12` |
+| `APPLE_ID` | Apple ID for notarytool |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password |
+| `APPLE_TEAM_ID` | Team ID |
+
+Then set `CSC_IDENTITY_AUTO_DISCOVERY=true` (or remove the override) on the macOS release jobs so electron-builder signs and `afterSign.js` can notarize.
 
 ## Related
 

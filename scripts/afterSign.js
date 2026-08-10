@@ -37,8 +37,16 @@ exports.default = async function afterSign(context) {
     return;
   }
 
-  if (!process.env.appleId || !process.env.appleIdPassword) {
-    console.log("Skipping notarization - missing Apple ID credentials");
+  // Prefer CI secret names; keep lowercase aliases for local builds.
+  const appleId = process.env.APPLE_ID || process.env.appleId;
+  const appleIdPassword =
+    process.env.APPLE_APP_SPECIFIC_PASSWORD || process.env.appleIdPassword;
+  const teamId = process.env.APPLE_TEAM_ID || process.env.teamId;
+
+  if (!appleId || !appleIdPassword || !teamId) {
+    console.log(
+      "Skipping notarization - missing APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID"
+    );
     return;
   }
 
@@ -49,9 +57,9 @@ exports.default = async function afterSign(context) {
       tool: "notarytool",
       appBundleId,
       appPath,
-      appleId: process.env.appleId,
-      appleIdPassword: process.env.appleIdPassword,
-      teamId: process.env.teamId,
+      appleId,
+      appleIdPassword,
+      teamId,
     });
     console.log("Notarization completed successfully");
   } catch (error) {
