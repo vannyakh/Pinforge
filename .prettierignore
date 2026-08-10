@@ -16,5 +16,7 @@ rust/target
 .tmp-aionui
 playwright-report
 test-results
+tests/e2e/report
+tests/e2e/results
 **/*.tsbuildinfo
 **/node_modules/**

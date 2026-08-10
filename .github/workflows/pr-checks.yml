@@ -39,3 +39,6 @@ jobs:
 
       - name: Unit tests
         run: pnpm test
+
+      - name: E2E harness
+        run: pnpm test:e2e

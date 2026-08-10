@@ -16,11 +16,14 @@
     "cli": "pnpm --filter pinforge-cli start",
     "typecheck": "turbo run typecheck",
     "test": "pnpm --filter @pinterest-desktop/core test",
-    "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,json,css,md,yml}\" \"packages/**/*.{ts,tsx,js,json,md}\" \"scripts/**/*.{js,md}\" \".github/**/*.{yml,md,yaml}\" \"*.md\" \"*.json\"",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,jsx,json,css,md,yml}\" \"packages/**/*.{ts,tsx,js,json,md}\" \"scripts/**/*.{js,md}\" \".github/**/*.{yml,md,yaml}\" \"*.md\" \"*.json\""
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,json,css,md,yml}\" \"packages/**/*.{ts,tsx,js,json,md}\" \"scripts/**/*.{js,md}\" \"tests/**/*.{ts,md}\" \".github/**/*.{yml,md,yaml}\" \"*.md\" \"*.json\" \"playwright.config.ts\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,jsx,json,css,md,yml}\" \"packages/**/*.{ts,tsx,js,json,md}\" \"scripts/**/*.{js,md}\" \"tests/**/*.{ts,md}\" \".github/**/*.{yml,md,yaml}\" \"*.md\" \"*.json\" \"playwright.config.ts\""
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "prettier": "^3.9.6",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0"

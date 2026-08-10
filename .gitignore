@@ -49,6 +49,8 @@ Desktop.ini
 # Electron / Playwright
 playwright-report/
 test-results/
+tests/e2e/report/
+tests/e2e/results/
 *.dmg
 *.exe
 *.AppImage
