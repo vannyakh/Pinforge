@@ -374,13 +374,18 @@ export const BUILTIN_PROVIDER_META: Record<
     version: "1.0.0",
   },
   tiktok: {
-    description: "Videos from TikTok share links.",
+    description: "Videos and profile uploads from TikTok.",
     hosts: "tiktok.com, vm.tiktok.com, vt.tiktok.com",
     formats: ["best", "mp4"],
     engine: "http-meta",
-    capabilities: ["video.download", "metadata.fetch", "batch.download"],
+    capabilities: [
+      "video.download",
+      "profile.download",
+      "metadata.fetch",
+      "batch.download",
+    ],
     category: "video",
-    version: "1.0.0",
+    version: "1.1.0",
   },
   pinterest: {
     description: "Pins and boards — images and videos.",

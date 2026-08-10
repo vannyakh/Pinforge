@@ -22,6 +22,13 @@ export {
 export type { YoutubeChannelVideo, YoutubeChannelResolveResult } from "./providers";
 export type { YoutubePlaylistVideo, YoutubePlaylistResolveResult } from "./providers";
 export {
+  isTikTokProfileUrl,
+  resolveTikTokProfile,
+  normalizeTikTokProfileUrl,
+  extractTikTokUsername,
+} from "./providers";
+export type { TikTokProfileVideo, TikTokProfileResolveResult } from "./providers";
+export {
   listProviders,
   getProvider,
   detectProvider,
@@ -34,8 +41,29 @@ export {
 } from "./providers";
 export type { PageMeta, ScrapeMetaOptions } from "./providers";
 export { runPipeline } from "./pipeline/runPipeline";
-export { mapPool, runPool, downloadToFile, downloadToBuffer } from "./download";
-export type { FragmentDownloadOptions, FragmentDownloadResult, MapPoolOptions } from "./download";
+export {
+  mapPool,
+  runPool,
+  downloadToFile,
+  downloadToBuffer,
+  rangeDownloadToFile,
+  probeRangeResource,
+  downloadSegments,
+  ResumeManager,
+  CheckpointStore,
+  validateCheckpoint,
+  recoverCheckpoint,
+} from "./download";
+export type {
+  FragmentDownloadOptions,
+  FragmentDownloadResult,
+  MapPoolOptions,
+  RangeDownloadOptions,
+  RangeProbe,
+  SegmentDownloadOptions,
+  SegmentDownloadResult,
+  RecoveryResult,
+} from "./download";
 export { resolveWorkerBinary, rustPing, rustEnhance, rustDownload } from "./worker/rustWorker";
 export { configureFfmpeg, clearFfmpegCache, resolveFfmpeg } from "./providers/youtube/mux";
 export {
@@ -66,3 +94,66 @@ export type {
   YoutubeDownloadOptions,
   PinterestOptions,
 } from "./types";
+
+/* MediaCore — jobs, resume, tools, SDK */
+export {
+  MediaCore,
+  getMediaCore,
+  configureMediaCore,
+  jobStatusToPackStatus,
+  JobScheduler,
+  runJobWorker,
+} from "./engine";
+export type {
+  MediaCoreOptions,
+  MediaCoreDownloadOptions,
+  MediaCoreJobHandle,
+  JobWorkerOptions,
+} from "./engine";
+export {
+  JobManager,
+  FileJobStore,
+  createJobId,
+  progressPercent,
+  isActiveStatus,
+  isUnfinishedStatus,
+  isTerminalStatus,
+  isRecoverableCrashStatus,
+  canPause,
+  canResume,
+  canCancel,
+} from "./jobs";
+export type {
+  JobStatus,
+  JobProgress,
+  JobFiles,
+  JobFormat,
+  DownloadJob,
+  CreateJobInput,
+  ListJobsFilter,
+  CancelJobOptions,
+  DownloadCheckpoint,
+  SegmentCheckpoint,
+  CheckpointType,
+  JobStore,
+  JobEvent,
+  JobEventListener,
+} from "./jobs";
+export {
+  downloadHlsResumable,
+  fetchAndParseHls,
+  parseM3u8,
+  remuxSegmentFilesToMp4,
+} from "./extractors";
+export type { HlsExtractOptions, ParsedHlsPlaylist } from "./extractors";
+export { ToolRegistry, tools } from "./tools";
+export type { ToolName, ToolResolveResult } from "./tools";
+export {
+  FilesystemStorage,
+  defaultMediaCoreRoot,
+  ensureJobTempDir,
+  jobWorkDir,
+  partPathFor,
+  checkpointPathFor,
+  segmentsDirFor,
+} from "./storage";

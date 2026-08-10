@@ -17,9 +17,11 @@ win:
   artifactName: ${productName}-${version}-Setup.${ext}
 mac:
   icon: resources/icon.png
+  # zip is required for electron-updater on macOS
   target:
     - dmg
-  artifactName: ${productName}-${version}.${ext}
+    - zip
+  artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
   icon: resources/icon.png
   target:
@@ -28,3 +30,9 @@ linux:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  differentialPackage: false
+publish:
+  provider: github
+  owner: vannyakh
+  repo: Pinforge
+  publishAutoUpdate: true

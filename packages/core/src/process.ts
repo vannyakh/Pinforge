@@ -15,10 +15,13 @@ import {
   isPinterestCollectionUrl,
   isYouTubeChannelUrl,
   isYouTubePlaylistUrl,
+  isTikTokProfileUrl,
   resolveBoard,
   resolvePin,
   resolveYouTubeChannel,
   resolveYouTubePlaylist,
+  resolveTikTokProfile,
+  extractTikTok,
   type MediaProvider,
 } from "./providers";
 import { resolveYouTubeVideo } from "./providers/youtube/service";
@@ -191,6 +194,10 @@ export async function processMedia(
 
   if (provider.id === "youtube" && isYouTubePlaylistUrl(url)) {
     return processYouTubePlaylist(url, opts);
+  }
+
+  if (provider.id === "tiktok" && isTikTokProfileUrl(url)) {
+    return processTikTokProfile(url, opts);
   }
 
   const resolved = await provider.resolve(url, {
@@ -541,6 +548,80 @@ async function processYouTubePlaylist(
   }
 
   return { results, errors, provider: "youtube", kind: "batch" };
+}
+
+async function processTikTokProfile(
+  url: string,
+  opts: ProcessBoardOptions
+): Promise<DownloadResult> {
+  const maxVideos =
+    opts.youtube?.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos;
+  const profile = await resolveTikTokProfile(url, {
+    maxVideos,
+    signal: opts.signal,
+  });
+
+  if (profile.videos.length === 0) {
+    throw new Error(
+      profile.displayName
+        ? `No videos found on ${profile.displayName}.`
+        : "No videos found on this TikTok profile."
+    );
+  }
+
+  opts.onProgress?.({
+    current: 0,
+    total: profile.videos.length,
+    url,
+    title: profile.displayName,
+    phase: "resolved",
+    percent: 0,
+  });
+
+  const delayMs = opts.delayMs ?? 400;
+  const itemConcurrency = Math.max(1, Math.min(2, opts.itemConcurrency ?? 2));
+  const outDir = profile.username
+    ? path.join(opts.outDir, sanitizeFilename(`tiktok-${profile.username}`))
+    : opts.outDir;
+
+  const outcomes = await mapPool(profile.videos, itemConcurrency, async (video, i) => {
+    if (i > 0 && delayMs > 0) await sleep(Math.min(delayMs, 400));
+    opts.signal?.throwIfAborted?.();
+    try {
+      const media = await extractTikTok(video.url, opts.format ?? "best", {
+        fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+        signal: opts.signal,
+      });
+      const result = await writeResolved(media, { ...opts, outDir });
+      opts.onProgress?.({
+        current: i + 1,
+        total: profile.videos.length,
+        url: video.url,
+        title: result.title ?? video.title,
+        result,
+        percent: Math.round(((i + 1) / profile.videos.length) * 100),
+      });
+      return { ok: true as const, index: i, result, url: video.url };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      opts.onProgress?.({
+        current: i + 1,
+        total: profile.videos.length,
+        url: video.url,
+        error: message,
+      });
+      return { ok: false as const, index: i, error: message, url: video.url };
+    }
+  });
+
+  const results: ProcessResult[] = [];
+  const errors: { url: string; error: string }[] = [];
+  for (const o of outcomes) {
+    if (o.ok) results.push(o.result);
+    else errors.push({ url: o.url, error: o.error });
+  }
+
+  return { results, errors, provider: "tiktok", kind: "batch" };
 }
 
 /** @deprecated Prefer processMedia — kept for desktop IPC compatibility. */

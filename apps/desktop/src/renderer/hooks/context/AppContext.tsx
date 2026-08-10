@@ -54,6 +54,7 @@ interface AppContextValue {
   refresh: () => Promise<void>;
   processUrl: (url: string, opts?: ProcessOpts) => Promise<ProcessResponse | null>;
   cancelDownload: () => Promise<boolean>;
+  pauseDownload: () => Promise<boolean>;
   updateSettings: (partial: SettingsPartial) => Promise<void>;
   clearHistory: () => Promise<void>;
   clearPacks: () => Promise<void>;
@@ -162,6 +163,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return res.ok;
   }, []);
 
+  const pauseDownload = useCallback(async () => {
+    const res = await api.pauseJob();
+    return res.ok;
+  }, []);
+
   const updateSettings = useCallback(async (partial: SettingsPartial) => {
     const next = await api.setSettings(partial);
     setSettings((prev) =>
@@ -220,6 +226,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refresh,
       processUrl,
       cancelDownload,
+      pauseDownload,
       updateSettings,
       clearHistory,
       clearPacks,
@@ -235,6 +242,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refresh,
       processUrl,
       cancelDownload,
+      pauseDownload,
       updateSettings,
       clearHistory,
       clearPacks,

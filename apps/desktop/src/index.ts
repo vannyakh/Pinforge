@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerIpc } from "./process/ipc";
 import { getStore } from "./process/store";
+import { initAutoUpdater } from "./process/autoUpdater";
 import {
   applyLoginItem,
   markAppQuitting,
@@ -116,6 +117,12 @@ app.whenReady().then(() => {
   applyLoginItem(getStore().get("system"));
   registerIpc();
   createWindow();
+  initAutoUpdater();
+
+  // Mark crash-interrupted downloads as paused for resume UI
+  void import("./process/mediacore")
+    .then(({ recoverJobsOnStartup }) => recoverJobsOnStartup())
+    .catch(() => undefined);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

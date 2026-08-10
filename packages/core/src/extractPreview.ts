@@ -10,6 +10,8 @@ import {
   isYouTubePlaylistUrl,
   extractYouTubePlaylistId,
   resolveYouTubePlaylist,
+  isTikTokProfileUrl,
+  resolveTikTokProfile,
 } from "./providers";
 import { DEFAULT_YOUTUBE_OPTIONS } from "./types";
 
@@ -300,6 +302,47 @@ export async function extractMediaPreview(
             : `Found ${items.length} ${
                 items.length === 1 ? kind : kindPlural
               } on ${label}${more}.`,
+      };
+    } catch (err) {
+      return {
+        ...base,
+        mode: "profile",
+        modeSupported: true,
+        items: [],
+        itemCount: 0,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  // TikTok @profile → video list
+  if (provider.id === "tiktok" && (mode === "profile" || isTikTokProfileUrl(sourceUrl))) {
+    try {
+      const profile = await resolveTikTokProfile(sourceUrl, {
+        maxVideos: opts.channelMaxVideos ?? DEFAULT_YOUTUBE_OPTIONS.channelMaxVideos,
+      });
+      const items: ExtractPreviewItem[] = profile.videos.map((v, index) => ({
+        index: index + 1,
+        url: v.url,
+        title: v.title || `Video ${v.id}`,
+        coverUrl: v.coverUrl,
+        durationText: v.durationText,
+        durationSec: v.durationSec,
+      }));
+      const more = profile.truncated ? " (truncated — raise Max and Get list)" : "";
+      const label = profile.displayName || `@${profile.username}`;
+      return {
+        ...base,
+        mode: "profile",
+        modeSupported: true,
+        title: label,
+        items,
+        itemCount: items.length,
+        truncated: profile.truncated,
+        message:
+          items.length === 0
+            ? `No videos found on ${label}.`
+            : `Found ${items.length} video${items.length === 1 ? "" : "s"} on ${label}${more}.`,
       };
     } catch (err) {
       return {

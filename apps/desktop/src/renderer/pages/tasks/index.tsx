@@ -341,6 +341,7 @@ const TasksPage: React.FC = () => {
     clearPacks,
     removePacks,
     cancelDownload,
+    pauseDownload,
   } = useApp();
   const cardRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(360);
@@ -378,6 +379,10 @@ const TasksPage: React.FC = () => {
   >({});
   const [queue, setQueue] = useState<QueuedJob[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [resumeOpen, setResumeOpen] = useState(false);
+  const [resumeJobs, setResumeJobs] = useState<
+    Array<{ id: string; url: string; title?: string; percent?: number; checked: boolean }>
+  >([]);
   const stopBatchRef = useRef(false);
   const tableScrollHideRef = useRef<number | null>(null);
   const dragSelectRef = useRef<{
@@ -396,6 +401,33 @@ const TasksPage: React.FC = () => {
   const isProcessing =
     busy || batchRunning || tasks.some((t) => t.status === "running");
   const pushNotify = settings?.system?.notifyOnDownloadComplete !== false;
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.listUnfinishedJobs().then((jobs) => {
+      if (cancelled || !jobs.length) return;
+      const paused = jobs.filter(
+        (j) =>
+          j.status === "paused" ||
+          j.status === "queued" ||
+          j.status === "downloading",
+      );
+      if (!paused.length) return;
+      setResumeJobs(
+        paused.map((j) => ({
+          id: j.id,
+          url: j.url,
+          title: j.title,
+          percent: j.progress?.percent,
+          checked: true,
+        })),
+      );
+      setResumeOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -795,30 +827,14 @@ const TasksPage: React.FC = () => {
     if (settings?.outDir) void api.openPath(settings.outDir);
   };
 
-  const exportZip = async (row: TaskRow) => {
+  const resolveTaskFolder = (row: TaskRow): string | null => {
     const items = row.isChild
       ? history.filter((h) => h.id === row.id)
       : itemsForPack(row.id);
     const first = items.find((h) => h.outPath)?.outPath;
-    if (!first) {
-      Message.warning("No downloaded files to zip for this task.");
-      return;
-    }
+    if (!first) return null;
     const folder = first.replace(/[\\/][^\\/]+$/, "");
-    if (!folder) {
-      Message.warning("Could not resolve download folder.");
-      return;
-    }
-    const hide = Message.loading({ content: "Creating ZIP…", duration: 0 });
-    try {
-      const { zipPath } = await api.zipFolder(folder);
-      hide();
-      Message.success(`ZIP saved: ${zipPath}`);
-      void api.showItemInFolder(zipPath);
-    } catch (err) {
-      hide();
-      Message.error(err instanceof Error ? err.message : "ZIP failed");
-    }
+    return folder || null;
   };
 
   const selectedRows = useMemo(
@@ -828,6 +844,38 @@ const TasksPage: React.FC = () => {
       ),
     [rows, selectedKeys],
   );
+
+  /** ZIP is batch-only (toolbar when rows are selected). */
+  const batchZip = async () => {
+    const folders = new Set<string>();
+    for (const row of selectedRows) {
+      if (row.status === "running") continue;
+      const folder = resolveTaskFolder(row);
+      if (folder) folders.add(folder);
+    }
+    if (folders.size === 0) {
+      Message.warning("No downloaded files to zip for the selection.");
+      return;
+    }
+    const hide = Message.loading({ content: "Creating ZIP…", duration: 0 });
+    try {
+      let lastZip: string | undefined;
+      for (const folder of folders) {
+        const { zipPath } = await api.zipFolder(folder);
+        lastZip = zipPath;
+      }
+      hide();
+      Message.success(
+        folders.size === 1
+          ? `ZIP saved: ${lastZip}`
+          : `Created ${folders.size} ZIP files`,
+      );
+      if (lastZip) void api.showItemInFolder(lastZip);
+    } catch (err) {
+      hide();
+      Message.error(err instanceof Error ? err.message : "ZIP failed");
+    }
+  };
 
   const selectedSize = useMemo(() => {
     let estimate = 0;
@@ -850,10 +898,21 @@ const TasksPage: React.FC = () => {
     };
   }, [selectedRows]);
 
+  const canRetryStatus = (status: TaskRowStatus): boolean =>
+    status === "failed" || status === "partial" || status === "queued";
+
   const batchRetry = async () => {
     const list = selectedRows.filter(
-      (r) => r.status !== "running" && r.url && r.url !== "…",
+      (r) =>
+        !r.isChild &&
+        canRetryStatus(r.status) &&
+        r.url &&
+        r.url !== "…",
     );
+    if (list.length === 0) {
+      Message.info("Select queued, failed, or partial tasks to retry.");
+      return;
+    }
     for (const r of list) {
       if (r.status === "queued" || r.queued) {
         const queued = queue.find((q) => q.id === r.id);
@@ -933,15 +992,21 @@ const TasksPage: React.FC = () => {
       ? "Continue"
       : "Start";
 
-  const stopDownloads = async () => {
+  const pauseDownloads = async () => {
+    stopBatchRef.current = true;
+    const ok = await pauseDownload();
+    Message.info(ok ? "Paused — press Continue to resume" : "No active download");
+  };
+
+  const cancelActiveDownload = async () => {
     stopBatchRef.current = true;
     const ok = await cancelDownload();
-    Message.info(ok ? "Stopping…" : "No active download");
+    Message.info(ok ? "Cancelled" : "No active download");
   };
 
   const startOrContinueDownloads = async () => {
     if (isProcessing || batchRunning) {
-      await stopDownloads();
+      await pauseDownloads();
       return;
     }
     const jobs = unfinishedRows;
@@ -1024,8 +1089,26 @@ const TasksPage: React.FC = () => {
   };
 
   const toggleStartStop = () => {
-    if (isProcessing || batchRunning) void stopDownloads();
+    if (isProcessing || batchRunning) void pauseDownloads();
     else void startOrContinueDownloads();
+  };
+
+  const resumeSelectedJobs = async () => {
+    const selected = resumeJobs.filter((j) => j.checked);
+    setResumeOpen(false);
+    if (!selected.length) return;
+    stopBatchRef.current = false;
+    setBatchRunning(true);
+    try {
+      for (const job of selected) {
+        if (stopBatchRef.current) break;
+        await api.resumeJob(job.id);
+        await processUrl(job.url);
+      }
+      Message.success("Resume finished");
+    } finally {
+      setBatchRunning(false);
+    }
   };
 
   const submitAddTask = () => {
@@ -1403,7 +1486,7 @@ const TasksPage: React.FC = () => {
     },
     {
       title: "Actions",
-      width: 120,
+      width: 88,
       align: "right",
       fixed: "right",
       className: "tasks-table__col-actions",
@@ -1413,9 +1496,8 @@ const TasksPage: React.FC = () => {
           (row.files > 0 || row.isChild) && row.status !== "running";
         const canRetry =
           !row.isChild &&
-          (row.status === "failed" ||
-            row.status === "partial" ||
-            row.status === "done");
+          canRetryStatus(row.status) &&
+          Boolean(row.url && row.url !== "…");
         return (
           <div className="tasks-table__actions flex items-center justify-end gap-2px">
             {canOpen && (
@@ -1428,17 +1510,7 @@ const TasksPage: React.FC = () => {
                 />
               </Tooltip>
             )}
-            {canOpen && !row.isChild && (
-              <Tooltip content="Export folder as ZIP">
-                <Button
-                  type="text"
-                  size="mini"
-                  icon={<FileZip theme="outline" size="14" />}
-                  onClick={() => void exportZip(row)}
-                />
-              </Tooltip>
-            )}
-            {canRetry && row.url && row.url !== "…" && (
+            {canRetry && (
               <Tooltip content="Retry download">
                 <Button
                   type="text"
@@ -1547,14 +1619,36 @@ const TasksPage: React.FC = () => {
                   {selectedKeys.length}
                   <span className="tasks-header-btn__label"> selected</span>
                 </span>
-                <Tooltip content="Retry selected">
+                <Tooltip content="ZIP selected download folders">
+                  <Button
+                    className="tasks-header-btn"
+                    size="small"
+                    type="outline"
+                    icon={<FileZip theme="outline" size="14" />}
+                    disabled={
+                      busy ||
+                      selectedRows.every(
+                        (r) =>
+                          r.status === "running" || !resolveTaskFolder(r),
+                      )
+                    }
+                    onClick={() => void batchZip()}
+                    aria-label="ZIP selected"
+                  >
+                    <span className="tasks-header-btn__label">ZIP</span>
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Retry selected (queued / failed / partial)">
                   <Button
                     className="tasks-header-btn"
                     size="small"
                     type="outline"
                     icon={<Redo theme="outline" size="14" />}
                     disabled={
-                      selectedRows.every((r) => r.status === "running") || busy
+                      busy ||
+                      selectedRows.every(
+                        (r) => r.isChild || !canRetryStatus(r.status),
+                      )
                     }
                     onClick={() => void batchRetry()}
                     aria-label="Retry selected"
@@ -1596,7 +1690,7 @@ const TasksPage: React.FC = () => {
                 <Tooltip
                   content={
                     isProcessing || batchRunning
-                      ? "Stop current download — Continue later resumes the queue"
+                      ? "Pause current download — Continue resumes from checkpoint"
                       : unfinishedRows.length === 0
                         ? "Add links that are not downloaded yet"
                         : `${startLabel} ${unfinishedRows.length} unfinished download${unfinishedRows.length === 1 ? "" : "s"}`
@@ -1606,7 +1700,6 @@ const TasksPage: React.FC = () => {
                     className="tasks-header-btn"
                     size="small"
                     type={isProcessing || batchRunning ? "outline" : "primary"}
-                    status={isProcessing || batchRunning ? "danger" : undefined}
                     icon={
                       isProcessing || batchRunning ? (
                         <Pause theme="outline" size="14" />
@@ -1620,14 +1713,29 @@ const TasksPage: React.FC = () => {
                     }
                     onClick={toggleStartStop}
                     aria-label={
-                      isProcessing || batchRunning ? "Stop" : startLabel
+                      isProcessing || batchRunning ? "Pause" : startLabel
                     }
                   >
                     <span className="tasks-header-btn__label">
-                      {isProcessing || batchRunning ? "Stop" : startLabel}
+                      {isProcessing || batchRunning ? "Pause" : startLabel}
                     </span>
                   </Button>
                 </Tooltip>
+                {isProcessing || batchRunning ? (
+                  <Tooltip content="Cancel current download (keep partial files)">
+                    <Button
+                      className="tasks-header-btn"
+                      size="small"
+                      type="outline"
+                      status="danger"
+                      icon={<Close theme="outline" size="14" />}
+                      onClick={() => void cancelActiveDownload()}
+                      aria-label="Cancel"
+                    >
+                      <span className="tasks-header-btn__label">Cancel</span>
+                    </Button>
+                  </Tooltip>
+                ) : null}
                 <Tooltip
                   content={pushNotify ? "Push notify: on" : "Push notify: off"}
                 >
@@ -1954,6 +2062,48 @@ const TasksPage: React.FC = () => {
 
           <div className="tasks-add-modal__note">
             Links are queued here — press Start on the Tasks page to download.
+          </div>
+        </div>
+      </AionModal>
+
+      <AionModal
+        title="Resume downloads?"
+        visible={resumeOpen}
+        onCancel={() => setResumeOpen(false)}
+        onOk={() => void resumeSelectedJobs()}
+        okText="Resume Selected"
+        cancelText="Not now"
+        style={{ width: 480 }}
+      >
+        <div className="flex flex-col gap-12px">
+          <div className="text-13px text-t-secondary">
+            {resumeJobs.length} unfinished download
+            {resumeJobs.length === 1 ? "" : "s"} found after restart.
+          </div>
+          <div className="flex flex-col gap-8px max-h-280px overflow-auto">
+            {resumeJobs.map((j) => (
+              <label
+                key={j.id}
+                className="flex items-center gap-10px text-13px text-t-primary cursor-pointer"
+              >
+                <Checkbox
+                  checked={j.checked}
+                  onChange={(checked) =>
+                    setResumeJobs((prev) =>
+                      prev.map((x) =>
+                        x.id === j.id ? { ...x, checked: Boolean(checked) } : x,
+                      ),
+                    )
+                  }
+                />
+                <span className="flex-1 truncate">
+                  {j.title || j.url}
+                  {typeof j.percent === "number"
+                    ? ` — ${Math.round(j.percent)}%`
+                    : ""}
+                </span>
+              </label>
+            ))}
           </div>
         </div>
       </AionModal>

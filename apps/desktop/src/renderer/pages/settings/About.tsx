@@ -1,21 +1,50 @@
 import React, { useEffect, useState } from "react";
-import { Button, Divider, Message, Switch, Typography } from "@arco-design/web-react";
+import { Button, Divider, Message, Progress, Switch, Typography } from "@arco-design/web-react";
 import { Github, Right } from "@icon-park/react";
-import { api } from "@renderer/api";
+import { api, type AutoUpdateStatus } from "@renderer/api";
 
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.1.0";
-const GITHUB_URL = "https://github.com/search?q=pinforge";
+const GITHUB_URL = "https://github.com/vannyakh/Pinforge";
+const RELEASES_URL = `${GITHUB_URL}/releases`;
+const ISSUES_URL = `${GITHUB_URL}/issues`;
 
 type LinkItem =
   | { title: string; url: string }
   | { title: string; onClick: () => void };
 
+function statusHint(status: AutoUpdateStatus | null): string {
+  if (!status) return "";
+  switch (status.status) {
+    case "checking":
+      return "Checking for updates…";
+    case "available":
+      return status.version
+        ? `Update available: v${status.version}`
+        : "Update available";
+    case "not-available":
+      return "You're up to date";
+    case "downloading":
+      return `Downloading… ${Math.round(status.progress?.percent ?? 0)}%`;
+    case "downloaded":
+      return status.version
+        ? `Ready to install v${status.version}`
+        : "Ready to install";
+    case "error":
+      return status.error || "Update check failed";
+    default:
+      return "";
+  }
+}
+
 const AboutSettings: React.FC = () => {
   const [includePrerelease, setIncludePrerelease] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<AutoUpdateStatus | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setIncludePrerelease(localStorage.getItem("update.includePrerelease") === "true");
+    void api.getUpdateStatus().then(setUpdateStatus).catch(() => undefined);
+    return api.onUpdateStatus(setUpdateStatus);
   }, []);
 
   const openLink = async (url: string) => {
@@ -32,19 +61,103 @@ const AboutSettings: React.FC = () => {
   };
 
   const checkUpdate = async () => {
-    if (checking) return;
-    setChecking(true);
+    if (busy) return;
+    setBusy(true);
     try {
-      await new Promise((r) => setTimeout(r, 600));
-      Message.info(
-        includePrerelease
-          ? `You're on v${APP_VERSION}. Prerelease checks will use GitHub releases when publishing is set up.`
-          : `You're on v${APP_VERSION} — latest local build.`
-      );
+      const status = await api.checkForUpdates({ includePrerelease });
+      setUpdateStatus(status);
+      if (status.status === "not-available") {
+        Message.success(`You're on v${status.currentVersion} — up to date.`);
+      } else if (status.status === "available" && status.version) {
+        Message.info(`v${status.version} is available.`);
+      } else if (status.status === "error") {
+        Message.error(status.error || "Update check failed");
+      }
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : String(e));
     } finally {
-      setChecking(false);
+      setBusy(false);
     }
   };
+
+  const downloadUpdate = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const status = await api.downloadUpdate();
+      setUpdateStatus(status);
+      if (status.status === "error") {
+        Message.error(status.error || "Download failed");
+      } else if (status.status === "downloaded") {
+        Message.success("Update downloaded — restart to install.");
+      }
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const quitAndInstall = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await api.quitAndInstallUpdate();
+      if (!res.ok) {
+        Message.error(res.message || "Could not install update");
+        setBusy(false);
+      }
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+
+  const openRelease = () => {
+    const url = updateStatus?.releaseUrl || RELEASES_URL;
+    void openLink(url);
+  };
+
+  const primaryAction = (() => {
+    const s = updateStatus?.status;
+    if (s === "downloaded") {
+      return {
+        label: "Restart & install",
+        loading: busy,
+        onClick: () => void quitAndInstall(),
+      };
+    }
+    if (s === "downloading") {
+      return {
+        label: "Downloading…",
+        loading: true,
+        onClick: () => undefined,
+      };
+    }
+    if (s === "available") {
+      if (updateStatus?.canInstall) {
+        return {
+          label: "Download update",
+          loading: busy,
+          onClick: () => void downloadUpdate(),
+        };
+      }
+      return {
+        label: "Open release page",
+        loading: busy,
+        onClick: openRelease,
+      };
+    }
+    return {
+      label: busy || s === "checking" ? "Checking…" : "Check for updates",
+      loading: busy || s === "checking",
+      onClick: () => void checkUpdate(),
+    };
+  })();
+
+  const hint = statusHint(updateStatus);
+  const showProgress =
+    updateStatus?.status === "downloading" && updateStatus.progress != null;
 
   const linkItems: LinkItem[] = [
     {
@@ -53,11 +166,11 @@ const AboutSettings: React.FC = () => {
     },
     {
       title: "Update Log",
-      onClick: () => Message.info("Release notes will open here once published."),
+      onClick: () => void openLink(updateStatus?.releaseUrl || RELEASES_URL),
     },
     {
       title: "Report Issue",
-      onClick: () => Message.info("Issue reporting will open here once the repo is public."),
+      url: ISSUES_URL,
     },
     {
       title: "Contact Me",
@@ -81,7 +194,9 @@ const AboutSettings: React.FC = () => {
           </Typography.Text>
 
           <div className="flex items-center justify-center gap-8px mb-16px">
-            <span className="about-version-pill">v{APP_VERSION}</span>
+            <span className="about-version-pill">
+              v{updateStatus?.currentVersion || APP_VERSION}
+            </span>
             <button
               type="button"
               className="about-github-btn"
@@ -94,9 +209,36 @@ const AboutSettings: React.FC = () => {
           </div>
 
           <div className="about-update-box flex flex-col items-center gap-12px w-full max-w-300px">
-            <Button type="primary" long loading={checking} onClick={() => void checkUpdate()}>
-              {checking ? "Checking…" : "Check for updates"}
+            <Button
+              type="primary"
+              long
+              loading={primaryAction.loading}
+              disabled={updateStatus?.status === "downloading"}
+              onClick={primaryAction.onClick}
+            >
+              {primaryAction.label}
             </Button>
+            {hint ? (
+              <Typography.Text
+                className={`text-12px text-center ${
+                  updateStatus?.status === "error" ? "text-danger" : "text-t-secondary"
+                }`}
+              >
+                {hint}
+              </Typography.Text>
+            ) : null}
+            {showProgress ? (
+              <Progress
+                percent={Math.round(updateStatus!.progress!.percent)}
+                showText
+                style={{ width: "100%" }}
+              />
+            ) : null}
+            {updateStatus?.status === "available" && updateStatus.canInstall === false ? (
+              <Typography.Text className="text-12px text-t-secondary text-center">
+                In-app install needs a packaged build. Use the release page to download.
+              </Typography.Text>
+            ) : null}
             <div className="flex items-center justify-between w-full gap-12px">
               <Typography.Text className="text-12px text-t-secondary">
                 Include prerelease/dev builds

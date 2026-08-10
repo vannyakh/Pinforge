@@ -1,4 +1,38 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { AutoUpdateStatus, UpdateCheckRequest } from "../common/update/types";
+
+export type { AutoUpdateStatus, UpdateCheckRequest };
+
+export type JobStatus =
+  | "queued"
+  | "analyzing"
+  | "downloading"
+  | "paused"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface JobProgress {
+  downloadedBytes: number;
+  totalBytes?: number;
+  percent?: number;
+}
+
+export interface DownloadJob {
+  id: string;
+  url: string;
+  status: JobStatus;
+  provider?: string;
+  progress: JobProgress;
+  files: { temp?: string; final?: string; jobDir?: string };
+  outputDir?: string;
+  title?: string;
+  error?: string;
+  packId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export type PresetName = "auto" | "soft" | "crisp" | "upscale";
 export type FormatPreset = "best" | "mp4" | "audio-only";
@@ -524,6 +558,44 @@ const api = {
     ipcRenderer.on("tools:ffmpegProgress", listener);
     return () => ipcRenderer.removeListener("tools:ffmpegProgress", listener);
   },
+
+  getUpdateStatus: (): Promise<AutoUpdateStatus> =>
+    ipcRenderer.invoke("update:getStatus"),
+  checkForUpdates: (req?: UpdateCheckRequest): Promise<AutoUpdateStatus> =>
+    ipcRenderer.invoke("update:check", req),
+  downloadUpdate: (): Promise<AutoUpdateStatus> =>
+    ipcRenderer.invoke("update:download"),
+  quitAndInstallUpdate: (): Promise<{ ok: boolean; message?: string }> =>
+    ipcRenderer.invoke("update:quitAndInstall"),
+  onUpdateStatus: (cb: (status: AutoUpdateStatus) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, status: AutoUpdateStatus) =>
+      cb(status);
+    ipcRenderer.on("update:status", listener);
+    return () => ipcRenderer.removeListener("update:status", listener);
+  },
+
+  listJobs: (filter?: {
+    status?: JobStatus[];
+    limit?: number;
+  }): Promise<DownloadJob[]> => ipcRenderer.invoke("jobs:list", filter),
+  getJob: (id: string): Promise<DownloadJob | null> =>
+    ipcRenderer.invoke("jobs:get", id),
+  pauseJob: (
+    id?: string
+  ): Promise<{ ok: boolean; message?: string; job: DownloadJob | null }> =>
+    ipcRenderer.invoke("jobs:pause", id),
+  resumeJob: (
+    id: string
+  ): Promise<{ ok: boolean; job: DownloadJob }> =>
+    ipcRenderer.invoke("jobs:resume", id),
+  cancelJob: (payload?: {
+    id?: string;
+    deleteFiles?: boolean;
+  }): Promise<{ ok: boolean; message?: string; job: DownloadJob | null }> =>
+    ipcRenderer.invoke("jobs:cancel", payload ?? {}),
+  recoverJobs: (): Promise<DownloadJob[]> => ipcRenderer.invoke("jobs:recover"),
+  listUnfinishedJobs: (): Promise<DownloadJob[]> =>
+    ipcRenderer.invoke("jobs:listUnfinished"),
 
   windowMinimize: (): Promise<void> => ipcRenderer.invoke("window:minimize"),
   windowToggleMaximize: (): Promise<void> => ipcRenderer.invoke("window:toggleMaximize"),

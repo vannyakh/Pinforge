@@ -31,6 +31,11 @@ import type {
   ProviderPrefs,
   RegistryListItem,
   InstalledProviderView,
+  AutoUpdateStatus,
+  UpdateCheckRequest,
+  DownloadJob,
+  JobStatus,
+  JobProgress,
 } from "../../preload/index";
 
 export type {
@@ -66,6 +71,11 @@ export type {
   ProviderPrefs,
   RegistryListItem,
   InstalledProviderView,
+  AutoUpdateStatus,
+  UpdateCheckRequest,
+  DownloadJob,
+  JobStatus,
+  JobProgress,
 };
 
 export const api = {
@@ -137,4 +147,19 @@ export const api = {
   onFfmpegProgress: (
     cb: (event: { phase: string; percent: number; message: string }) => void
   ) => window.api.onFfmpegProgress(cb),
+  getUpdateStatus: () => window.api.getUpdateStatus(),
+  checkForUpdates: (req?: UpdateCheckRequest) => window.api.checkForUpdates(req),
+  downloadUpdate: () => window.api.downloadUpdate(),
+  quitAndInstallUpdate: () => window.api.quitAndInstallUpdate(),
+  onUpdateStatus: (cb: (status: AutoUpdateStatus) => void) =>
+    window.api.onUpdateStatus(cb),
+  listJobs: (filter?: { status?: JobStatus[]; limit?: number }) =>
+    window.api.listJobs(filter),
+  getJob: (id: string) => window.api.getJob(id),
+  pauseJob: (id?: string) => window.api.pauseJob(id),
+  resumeJob: (id: string) => window.api.resumeJob(id),
+  cancelJob: (payload?: { id?: string; deleteFiles?: boolean }) =>
+    window.api.cancelJob(payload),
+  recoverJobs: () => window.api.recoverJobs(),
+  listUnfinishedJobs: () => window.api.listUnfinishedJobs(),
 };

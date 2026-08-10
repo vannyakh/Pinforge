@@ -19,6 +19,16 @@ export { extractYouTubeViaPiped as extractYouTube } from "./extractors/youtube";
 export { extractInstagram } from "./extractors/instagram";
 export { extractTikTok } from "./extractors/tiktok";
 export {
+  isTikTokProfileUrl,
+  resolveTikTokProfile,
+  normalizeTikTokProfileUrl,
+  extractTikTokUsername,
+} from "./tiktok/profile";
+export type {
+  TikTokProfileVideo,
+  TikTokProfileResolveResult,
+} from "./tiktok/profile";
+export {
   isYouTubeChannelUrl,
   resolveYouTubeChannel,
   detectYouTubeChannelTab,

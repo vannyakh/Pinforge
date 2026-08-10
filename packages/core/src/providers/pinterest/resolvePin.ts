@@ -389,11 +389,28 @@ async function downloadBinary(
 async function downloadHlsAsMp4(m3u8Url: string): Promise<{ buffer: Buffer; ext: string }> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pinforge-hls-"));
   const outPath = path.join(tmpDir, "video.mp4");
+  const jobId = `hls_${Date.now().toString(36)}`;
   try {
-    await remuxHlsToMp4(m3u8Url, outPath, {
-      referer: "https://www.pinterest.com/",
-      userAgent: USER_AGENT,
-    });
+    // Prefer segment checkpoint resume; fall back to ffmpeg playlist remux.
+    try {
+      const { downloadHlsResumable } = await import("../../extractors/hls");
+      await downloadHlsResumable(m3u8Url, {
+        jobId,
+        jobDir: tmpDir,
+        outPath,
+        referer: "https://www.pinterest.com/",
+        headers: {
+          "User-Agent": USER_AGENT,
+          ...pinterestRequestHeaders(),
+        },
+        provider: "pinterest",
+      });
+    } catch {
+      await remuxHlsToMp4(m3u8Url, outPath, {
+        referer: "https://www.pinterest.com/",
+        userAgent: USER_AGENT,
+      });
+    }
     const buffer = await fs.readFile(outPath);
     return { buffer, ext: "mp4" };
   } finally {

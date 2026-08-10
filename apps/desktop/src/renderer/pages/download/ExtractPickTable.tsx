@@ -1,7 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, InputNumber, Select, Table, Tag, Tooltip } from "@arco-design/web-react";
+import {
+  Button,
+  Checkbox,
+  Image,
+  InputNumber,
+  Select,
+  Table,
+  Tag,
+  Tooltip,
+} from "@arco-design/web-react";
 import type { ColumnProps } from "@arco-design/web-react/es/Table/interface";
-import { Download, LinkOne, Refresh } from "@icon-park/react";
+import { Download, Info, LinkOne, PreviewOpen, Refresh } from "@icon-park/react";
 import type {
   AudioContainer,
   ExtractPreview,
@@ -71,6 +80,69 @@ function formatDuration(item: ExtractPreviewItem): string {
   return "—";
 }
 
+function isHttpUrl(url?: string): url is string {
+  return Boolean(url && /^https?:\/\//i.test(url));
+}
+
+/** Prefer mid-size pinimg URLs in the renderer (originals often fail to load). */
+function previewCoverUrl(url?: string): string | undefined {
+  if (!isHttpUrl(url)) return undefined;
+  return url
+    .replace(/\/originals\//i, "/474x/")
+    .replace(/\/1200x\//i, "/474x/")
+    .replace(/\/75x75(?:_RS)?\//i, "/474x/");
+}
+
+const ExtractCover: React.FC<{
+  src?: string;
+  className?: string;
+  width?: number | string;
+  height?: number | string;
+}> = ({ src, className, width, height }) => {
+  const resolved = previewCoverUrl(src);
+  if (!resolved) {
+    return (
+      <span
+        className={`${className || ""} home-extract-pick__cover--empty`.trim()}
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <Image
+      className={className}
+      src={resolved}
+      alt=""
+      width={width}
+      height={height}
+      preview={false}
+      lazyload
+      referrerPolicy="no-referrer"
+      loader={false}
+    />
+  );
+};
+
+const GridAction: React.FC<{
+  tip: string;
+  onClick: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}> = ({ tip, onClick, children }) => (
+  <Tooltip content={tip}>
+    <button
+      type="button"
+      className="home-extract-pick__pin-action"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick(e);
+      }}
+    >
+      {children}
+    </button>
+  </Tooltip>
+);
+
 const ExtractPickTable: React.FC<Props> = ({
   extract,
   selectedUrls,
@@ -96,6 +168,7 @@ const ExtractPickTable: React.FC<Props> = ({
 }) => {
   const [maxDraft, setMaxDraft] = useState(listMax);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [previewSrc, setPreviewSrc] = useState<string | undefined>();
   const cardRef = useRef<HTMLDivElement>(null);
   const tableScrollHideRef = useRef<number | null>(null);
 
@@ -106,23 +179,29 @@ const ExtractPickTable: React.FC<Props> = ({
   const isPinterest =
     extract.provider.id === "pinterest" ||
     /pinterest/i.test(extract.provider.label || "");
+  const isTikTok =
+    extract.provider.id === "tiktok" || /tiktok/i.test(extract.provider.label || "");
 
   useEffect(() => {
-    if (isPinterest && (extract.mode === "board" || extract.mode === "profile")) {
+    if (
+      (isPinterest && (extract.mode === "board" || extract.mode === "profile")) ||
+      (isTikTok && extract.mode === "profile")
+    ) {
       setViewMode("grid");
     }
-  }, [isPinterest, extract.mode, extract.sourceUrl]);
+  }, [isPinterest, isTikTok, extract.mode, extract.sourceUrl]);
 
   const showMaxControl =
     (showYoutube && (extract.mode === "playlist" || extract.mode === "profile")) ||
-    (isPinterest && (extract.mode === "board" || extract.mode === "profile"));
+    (isPinterest && (extract.mode === "board" || extract.mode === "profile")) ||
+    (isTikTok && extract.mode === "profile");
 
   const rows: ExtractPickRow[] = useMemo(
     () =>
       extract.items.map((item) => ({
         ...item,
         key: `${item.index}-${item.url}`,
-        cover: item.coverUrl || coverUrlFromMediaUrl(item.url),
+        cover: previewCoverUrl(item.coverUrl || coverUrlFromMediaUrl(item.url)),
       })),
     [extract.items]
   );
@@ -200,16 +279,12 @@ const ExtractPickTable: React.FC<Props> = ({
       render: (_col, row) => (
         <div className="tasks-table__task">
           <div className="tasks-table__task-main home-extract-pick__task">
-            {row.cover && /^https?:\/\//i.test(row.cover) ? (
-              <img
-                className="home-extract-pick__cover"
-                src={row.cover}
-                alt=""
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="home-extract-pick__cover home-extract-pick__cover--empty" />
-            )}
+            <ExtractCover
+              src={row.cover}
+              className="home-extract-pick__cover"
+              width={44}
+              height={44}
+            />
             <div className="tasks-table__task-body min-w-0">
               <Tooltip content={row.title || row.url}>
                 <div className="tasks-table__task-line">
@@ -325,142 +400,146 @@ const ExtractPickTable: React.FC<Props> = ({
         <div className="home-extract-pick__config">
           <div className="home-extract-pick__config-title">Download options</div>
           <div className="home-extract-pick__config-row">
-            <div className="home-extract-pick__field">
-              <span className="home-extract-pick__field-label">Format</span>
-              <Select
-                size="small"
-                style={{ width: 120 }}
-                value={format}
-                onChange={(v) => onFormatChange(v as FormatPreset)}
-              >
-                {(formats.length ? formats : (["best", "mp4", "audio-only"] as FormatPreset[])).map(
-                  (f) => (
-                    <Select.Option key={f} value={f}>
-                      {f}
-                    </Select.Option>
-                  )
-                )}
-              </Select>
-            </div>
-            {showYoutube && format !== "audio-only" && (
+            <div className="home-extract-pick__fields">
               <div className="home-extract-pick__field">
-                <span className="home-extract-pick__field-label">Quality</span>
+                <span className="home-extract-pick__field-label">Format</span>
                 <Select
                   size="small"
-                  style={{ width: 110 }}
-                  value={ytQuality}
-                  onChange={(v) => onYtQualityChange(v as YoutubeQuality)}
+                  style={{ width: 120 }}
+                  value={format}
+                  onChange={(v) => onFormatChange(v as FormatPreset)}
                 >
-                  {(
-                    ["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]
-                  ).map((q) => (
-                    <Select.Option key={q} value={q}>
-                      {q === "best" ? "Best" : `${q}p`}
-                    </Select.Option>
-                  ))}
+                  {(formats.length ? formats : (["best", "mp4", "audio-only"] as FormatPreset[])).map(
+                    (f) => (
+                      <Select.Option key={f} value={f}>
+                        {f}
+                      </Select.Option>
+                    )
+                  )}
                 </Select>
               </div>
-            )}
-            {showYoutube && format === "audio-only" && (
+              {showYoutube && format !== "audio-only" && (
+                <div className="home-extract-pick__field">
+                  <span className="home-extract-pick__field-label">Quality</span>
+                  <Select
+                    size="small"
+                    style={{ width: 110 }}
+                    value={ytQuality}
+                    onChange={(v) => onYtQualityChange(v as YoutubeQuality)}
+                  >
+                    {(
+                      ["best", "2160", "1440", "1080", "720", "480", "360"] as YoutubeQuality[]
+                    ).map((q) => (
+                      <Select.Option key={q} value={q}>
+                        {q === "best" ? "Best" : `${q}p`}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+              {showYoutube && format === "audio-only" && (
+                <div className="home-extract-pick__field">
+                  <span className="home-extract-pick__field-label">Audio</span>
+                  <Select
+                    size="small"
+                    style={{ width: 100 }}
+                    value={audio}
+                    onChange={(v) => onAudioChange(v as AudioContainer)}
+                  >
+                    {(["m4a", "mp3", "flac"] as AudioContainer[]).map((a) => (
+                      <Select.Option key={a} value={a}>
+                        {a.toUpperCase()}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+              {showYoutube && (
+                <div className="home-extract-pick__field">
+                  <span className="home-extract-pick__field-label">Subtitles</span>
+                  <Select
+                    size="small"
+                    style={{ width: 130 }}
+                    value={subs}
+                    onChange={(v) => onSubsChange(v as SubtitleMode)}
+                  >
+                    <Select.Option value="none">None</Select.Option>
+                    <Select.Option value="separate">Separate</Select.Option>
+                    <Select.Option value="embed">Embed</Select.Option>
+                  </Select>
+                </div>
+              )}
+              {showMaxControl && (
+                <div className="home-extract-pick__field">
+                  <span className="home-extract-pick__field-label">Max</span>
+                  <div className="home-extract-pick__max-row">
+                    <InputNumber
+                      size="small"
+                      style={{ width: 88 }}
+                      min={1}
+                      max={isPinterest ? 2000 : 500}
+                      step={isPinterest ? 25 : 10}
+                      value={maxDraft}
+                      disabled={Boolean(listLoading || busy)}
+                      onChange={(v) => {
+                        const cap = isPinterest ? 2000 : 500;
+                        const next = Math.max(1, Math.min(cap, Number(v) || listMax));
+                        setMaxDraft(next);
+                        onListMaxChange?.(next);
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      type="secondary"
+                      loading={listLoading}
+                      disabled={busy}
+                      icon={<Refresh theme="outline" size="14" />}
+                      onClick={() => void onReloadList(maxDraft)}
+                    >
+                      Get list
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="home-extract-pick__field">
-                <span className="home-extract-pick__field-label">Audio</span>
+                <span className="home-extract-pick__field-label">View</span>
                 <Select
                   size="small"
                   style={{ width: 100 }}
-                  value={audio}
-                  onChange={(v) => onAudioChange(v as AudioContainer)}
+                  value={viewMode}
+                  onChange={(v) => setViewMode(v as "list" | "grid")}
                 >
-                  {(["m4a", "mp3", "flac"] as AudioContainer[]).map((a) => (
-                    <Select.Option key={a} value={a}>
-                      {a.toUpperCase()}
-                    </Select.Option>
-                  ))}
+                  <Select.Option value="list">List</Select.Option>
+                  <Select.Option value="grid">Grid</Select.Option>
                 </Select>
               </div>
-            )}
-            {showYoutube && (
-              <div className="home-extract-pick__field">
-                <span className="home-extract-pick__field-label">Subtitles</span>
-                <Select
-                  size="small"
-                  style={{ width: 130 }}
-                  value={subs}
-                  onChange={(v) => onSubsChange(v as SubtitleMode)}
-                >
-                  <Select.Option value="none">None</Select.Option>
-                  <Select.Option value="separate">Separate</Select.Option>
-                  <Select.Option value="embed">Embed</Select.Option>
-                </Select>
-              </div>
-            )}
-            {showMaxControl && (
-              <div className="home-extract-pick__field">
-                <span className="home-extract-pick__field-label">Max</span>
-                <div className="home-extract-pick__max-row">
-                  <InputNumber
-                    size="small"
-                    style={{ width: 88 }}
-                    min={1}
-                    max={isPinterest ? 2000 : 500}
-                    step={isPinterest ? 25 : 10}
-                    value={maxDraft}
-                    disabled={Boolean(listLoading || busy)}
-                    onChange={(v) => {
-                      const cap = isPinterest ? 2000 : 500;
-                      const next = Math.max(1, Math.min(cap, Number(v) || listMax));
-                      setMaxDraft(next);
-                      onListMaxChange?.(next);
-                    }}
-                  />
-                  <Button
-                    size="small"
-                    type="secondary"
-                    loading={listLoading}
-                    disabled={busy}
-                    icon={<Refresh theme="outline" size="14" />}
-                    onClick={() => void onReloadList(maxDraft)}
-                  >
-                    Get list
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div className="home-extract-pick__field">
-              <span className="home-extract-pick__field-label">View</span>
-              <Select
-                size="small"
-                style={{ width: 100 }}
-                value={viewMode}
-                onChange={(v) => setViewMode(v as "list" | "grid")}
-              >
-                <Select.Option value="list">List</Select.Option>
-                <Select.Option value="grid">Grid</Select.Option>
-              </Select>
             </div>
             <div className="home-extract-pick__config-actions">
               <span className="home-extract__sel-count">
                 {selectedCount} selected
                 {extract.truncated ? " · truncated" : ""}
               </span>
-              <Button
-                size="mini"
-                onClick={() => onSelectionChange(rows.map((r) => r.url))}
-                disabled={rows.length === 0}
-              >
-                All
-              </Button>
-              <Button size="mini" onClick={() => onSelectionChange([])}>
-                None
-              </Button>
-              <Button
-                type="primary"
-                size="small"
-                loading={busy}
-                disabled={selectedCount === 0}
-                onClick={onDownloadSelected}
-              >
-                Download {selectedCount}
-              </Button>
+              <div className="home-extract-pick__config-action-btns">
+                <Button
+                  size="mini"
+                  onClick={() => onSelectionChange(rows.map((r) => r.url))}
+                  disabled={rows.length === 0}
+                >
+                  All
+                </Button>
+                <Button size="mini" onClick={() => onSelectionChange([])}>
+                  None
+                </Button>
+                <Button
+                  type="primary"
+                  size="small"
+                  loading={busy}
+                  disabled={selectedCount === 0}
+                  onClick={onDownloadSelected}
+                >
+                  Download {selectedCount}
+                </Button>
+              </div>
             </div>
           </div>
           {showMaxControl && (
@@ -474,50 +553,78 @@ const ExtractPickTable: React.FC<Props> = ({
           <div className="home-extract-pick__masonry" role="list">
             {rows.map((row) => {
               const selected = selectedUrls.some((u) => urlsEqual(u, row.url));
+              const title = row.title?.trim() || `Pin ${row.index}`;
+              const cover = row.cover;
               return (
-                <button
+                <div
                   key={row.key}
-                  type="button"
                   role="listitem"
-                  className={`home-extract-pick__tile${selected ? " is-selected" : ""}`}
+                  className={`home-extract-pick__pin${selected ? " is-selected" : ""}`}
                   onClick={() => onToggleUrl(row.url)}
                 >
-                  <span className="home-extract-pick__tile-check">
-                    <Checkbox checked={selected} />
+                  <span
+                    className="home-extract-pick__pin-check"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Checkbox
+                      checked={selected}
+                      onChange={() => onToggleUrl(row.url)}
+                    />
                   </span>
-                  {row.cover && /^https?:\/\//i.test(row.cover) ? (
-                    <img
-                      className="home-extract-pick__tile-img"
-                      src={row.cover}
+                  {cover ? (
+                    <Image
+                      className="home-extract-pick__pin-img"
+                      src={cover}
                       alt=""
+                      width="100%"
+                      title={title}
+                      description={extract.provider.label || undefined}
+                      footerPosition="inner"
+                      simple
+                      lazyload
                       referrerPolicy="no-referrer"
-                      loading="lazy"
+                      loader={false}
+                      preview={false}
+                      actions={[
+                        <GridAction
+                          key="preview"
+                          tip="Preview"
+                          onClick={() => setPreviewSrc(cover)}
+                        >
+                          <PreviewOpen theme="outline" size="14" fill="#fff" />
+                        </GridAction>,
+                        <GridAction
+                          key="download"
+                          tip="Download"
+                          onClick={() => {
+                            if (!busy) onDownloadOne(row);
+                          }}
+                        >
+                          <Download theme="outline" size="14" fill="#fff" />
+                        </GridAction>,
+                        <GridAction
+                          key="info"
+                          tip="Open on site"
+                          onClick={() => void api.openExternal(row.url)}
+                        >
+                          <Info theme="outline" size="14" fill="#fff" />
+                        </GridAction>,
+                      ]}
                     />
                   ) : (
-                    <span className="home-extract-pick__tile-img home-extract-pick__tile-img--empty" />
+                    <div className="home-extract-pick__pin-empty" aria-hidden />
                   )}
-                  <span className="home-extract-pick__tile-meta">
-                    <span className="home-extract-pick__tile-title">
-                      {row.title?.trim() || `Item ${row.index}`}
-                    </span>
-                    <span className="home-extract-pick__tile-actions">
-                      <Tooltip content="Download">
-                        <Button
-                          type="text"
-                          size="mini"
-                          disabled={busy}
-                          icon={<Download theme="outline" size="14" />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDownloadOne(row);
-                          }}
-                        />
-                      </Tooltip>
-                    </span>
-                  </span>
-                </button>
+                </div>
               );
             })}
+            <Image.Preview
+              src={previewSrc || ""}
+              visible={Boolean(previewSrc)}
+              onVisibleChange={(visible) => {
+                if (!visible) setPreviewSrc(undefined);
+              }}
+              imgAttributes={{ referrerPolicy: "no-referrer" }}
+            />
           </div>
         ) : (
           <div ref={cardRef} className="tasks-table-card home-extract-pick__card">
@@ -539,7 +646,7 @@ const ExtractPickTable: React.FC<Props> = ({
                   const target = e.target as HTMLElement;
                   if (
                     target.closest(
-                      "button, a, input, .arco-checkbox, .arco-select, .home-extract-pick__actions"
+                      "button, a, input, .arco-checkbox, .arco-select, .arco-image, .home-extract-pick__actions"
                     )
                   ) {
                     return;

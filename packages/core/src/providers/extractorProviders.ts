@@ -44,7 +44,7 @@ export const tiktokProvider: MediaProvider = {
   label: "TikTok",
   live: true,
   formats: ["best", "mp4"],
-  modes: ["single"],
+  modes: ["single", "profile"],
   match: (url) => hostMatches(url, /^(www\.)?(tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)$/i),
   resolve: (url, ctx) =>
     extractTikTok(url, ctx?.format === "audio-only" ? "best" : (ctx?.format ?? "best"), {

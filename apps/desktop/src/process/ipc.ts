@@ -1,6 +1,5 @@
 import { ipcMain, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import {
-  processMedia,
   listProviders,
   extractMediaPreview,
   PRESETS,
@@ -9,12 +8,16 @@ import {
   DEFAULT_PINTEREST_OPTIONS,
   configurePinterestCookies,
   zipFolder,
+  jobStatusToPackStatus,
   type PresetName,
   type FormatPreset,
   type ProcessResult,
   type EnhanceFeatures,
   type YoutubeDownloadOptions,
   type PinterestOptions,
+  type DownloadJob,
+  type JobStatus,
+  type CancelJobOptions,
 } from "@pinterest-desktop/core";
 import {
   getStore,
@@ -43,9 +46,18 @@ import {
 } from "./providerResolve";
 import { PROVIDER_REGISTRY } from "../common/providers/types";
 import { getFfmpegStatus, installFfmpeg, resolveConfiguredFfmpeg } from "./ffmpegInstall";
+import {
+  checkForUpdates,
+  downloadUpdate,
+  getUpdateStatus,
+  quitAndInstall,
+} from "./autoUpdater";
+import { ensureMediaCore } from "./mediacore";
 
-/** Active download abort — Tasks Stop cancels the current job. */
+/** Active download abort — Tasks Stop / pause / cancel. */
 let activeAbort: AbortController | null = null;
+let activeJobId: string | null = null;
+let activePackId: string | null = null;
 
 function emitProgress(
   e: IpcMainInvokeEvent,
@@ -191,6 +203,11 @@ async function runProcess(
   const abort = new AbortController();
   activeAbort?.abort();
   activeAbort = abort;
+  activePackId = packId;
+  activeJobId = null;
+
+  const core = ensureMediaCore();
+  await core.init();
 
   try {
     const { configureFfmpeg } = await import("@pinterest-desktop/core");
@@ -200,11 +217,25 @@ async function runProcess(
       path: ffPath ?? system.ffmpegPath ?? undefined,
       enabled: Boolean(system.ffmpegEnabled) && Boolean(ffPath),
     });
+    core.tools.configureFfmpeg({
+      path: ffPath ?? system.ffmpegPath ?? undefined,
+      enabled: Boolean(system.ffmpegEnabled) && Boolean(ffPath),
+    });
 
     const progressStartedAt = Date.now();
     let lastDownloaded = 0;
 
-    const res = await processMedia(url, {
+    const mcJob = await core.jobs.create({
+      url,
+      outputDir: outDir,
+      packId,
+    });
+    activeJobId = mcJob.id;
+    core.jobs.attachAbort(mcJob.id, abort);
+    await core.jobs.updateStatus(mcJob.id, "analyzing");
+
+    const { job, result: res } = await core.runExistingJob(mcJob.id, {
+      url,
       preset,
       outDir,
       enhance,
@@ -217,7 +248,18 @@ async function runProcess(
       itemConcurrency: 3,
       fragmentConcurrency: 4,
       signal: abort.signal,
-      onProgress: (info) => {
+      packId,
+      onProgress: (info: {
+        current: number;
+        total: number;
+        percent?: number;
+        downloaded?: number;
+        totalBytes?: number | null;
+        phase?: string;
+        title?: string;
+        error?: string;
+        result?: { title?: string };
+      }) => {
         if (abort.signal.aborted) return;
         const percent =
           typeof info.percent === "number"
@@ -262,10 +304,37 @@ async function runProcess(
       },
     });
 
-    if (abort.signal.aborted) {
-      const stopErr = new Error("Download stopped");
-      stopErr.name = "AbortError";
-      throw stopErr;
+    const abortReason = core.jobs.lastAbortReason(mcJob.id);
+    if (abort.signal.aborted || job.status === "paused" || job.status === "cancelled") {
+      const paused = job.status === "paused" || abortReason === "pause";
+      const pack: DownloadPack = {
+        ...runningPack,
+        title: job.title,
+        provider: job.provider as DownloadPack["provider"],
+        status: "partial",
+        errorCount: 0,
+        updatedAt: Date.now(),
+      };
+      upsertPack(pack);
+      emitProgress(e, {
+        packId,
+        url,
+        current: 0,
+        total: 1,
+        status: "partial",
+        title: job.title,
+        message: paused ? "Paused" : "Cancelled",
+      });
+      return {
+        kind: "pin" as const,
+        provider: job.provider as DownloadPack["provider"],
+        packId,
+        pack,
+        jobId: job.id,
+        job,
+        results: res.results,
+        errors: [{ url, error: paused ? "Paused" : "Cancelled" }],
+      };
     }
 
     const items = toHistory(url, preset, packId, res.results);
@@ -277,8 +346,8 @@ async function runProcess(
     const pack: DownloadPack = {
       id: packId,
       url,
-      title: res.results[0]?.title ?? items[0]?.title,
-      provider: res.provider,
+      title: res.results[0]?.title ?? items[0]?.title ?? job.title,
+      provider: (res.provider ?? job.provider) as DownloadPack["provider"],
       status,
       preset,
       itemIds: items.map((i) => i.id),
@@ -308,13 +377,15 @@ async function runProcess(
       provider: res.provider,
       packId,
       pack,
+      jobId: job.id,
+      job,
       results: res.results,
       errors: res.errors,
     };
   } catch (err) {
     const aborted =
       abort.signal.aborted ||
-      (err instanceof Error && (err.name === "AbortError" || /aborted|stopped/i.test(err.message)));
+      (err instanceof Error && (err.name === "AbortError" || /aborted|stopped|paused|cancelled/i.test(err.message)));
     const message = aborted
       ? "Stopped"
       : err instanceof Error
@@ -341,13 +412,19 @@ async function runProcess(
         provider: undefined,
         packId,
         pack,
+        jobId: activeJobId ?? undefined,
         results: [],
         errors: [{ url, error: "Stopped" }],
       };
     }
     throw err;
   } finally {
+    if (activeJobId) {
+      ensureMediaCore().jobs.detachAbort(activeJobId);
+    }
     if (activeAbort === abort) activeAbort = null;
+    activeJobId = null;
+    activePackId = null;
   }
 }
 
@@ -362,9 +439,78 @@ export function registerIpc(): void {
   ipcMain.handle("media:process", async (e, payload) => runProcess(e, payload));
   ipcMain.handle("pin:process", async (e, payload) => runProcess(e, payload));
   ipcMain.handle("media:cancel", async () => {
+    const core = ensureMediaCore();
+    if (activeJobId) {
+      await core.jobs.cancel(activeJobId, { deleteFiles: false });
+      return { ok: true, message: "Cancelling…" };
+    }
     if (!activeAbort) return { ok: false, message: "No active download" };
     activeAbort.abort();
     return { ok: true, message: "Stopping…" };
+  });
+
+  ipcMain.handle("jobs:list", async (_e, filter?: { status?: JobStatus[]; limit?: number }) => {
+    const core = ensureMediaCore();
+    return core.listJobs(filter);
+  });
+  ipcMain.handle("jobs:get", async (_e, id: string) => {
+    const core = ensureMediaCore();
+    return core.jobs.get(id);
+  });
+  ipcMain.handle("jobs:pause", async (_e, id?: string) => {
+    const core = ensureMediaCore();
+    const jobId = id || activeJobId;
+    if (!jobId) return { ok: false, message: "No active job", job: null as DownloadJob | null };
+    const job = await core.jobs.pause(jobId);
+    if (activePackId) {
+      const store = getStore();
+      const packs = store.get("packs");
+      const pack = packs.find((p) => p.id === activePackId);
+      if (pack) {
+        upsertPack({ ...pack, status: "partial", updatedAt: Date.now() });
+      }
+    }
+    return { ok: true, message: "Paused", job };
+  });
+  ipcMain.handle("jobs:resume", async (_e, id: string) => {
+    const core = ensureMediaCore();
+    const job = await core.jobs.resume(id);
+    return { ok: true, job };
+  });
+  ipcMain.handle(
+    "jobs:cancel",
+    async (_e, payload: { id?: string; deleteFiles?: boolean } | string) => {
+      const core = ensureMediaCore();
+      const id = typeof payload === "string" ? payload : payload?.id || activeJobId;
+      const deleteFiles =
+        typeof payload === "object" && payload ? Boolean(payload.deleteFiles) : false;
+      if (!id) return { ok: false, message: "No job id", job: null as DownloadJob | null };
+      const job = await core.jobs.cancel(id, { deleteFiles } satisfies CancelJobOptions);
+      return { ok: true, job };
+    }
+  );
+  ipcMain.handle("jobs:recover", async () => {
+    const core = ensureMediaCore();
+    const recovered = await core.recover();
+    // Mirror unfinished packs as partial for Tasks UI
+    const store = getStore();
+    const packs = store.get("packs");
+    for (const job of recovered) {
+      if (!job.packId) continue;
+      const pack = packs.find((p) => p.id === job.packId);
+      if (pack && pack.status === "running") {
+        upsertPack({
+          ...pack,
+          status: jobStatusToPackStatus(job.status),
+          updatedAt: Date.now(),
+        });
+      }
+    }
+    return recovered;
+  });
+  ipcMain.handle("jobs:listUnfinished", async () => {
+    const core = ensureMediaCore();
+    return core.jobs.listUnfinished();
   });
 
   ipcMain.handle("media:detect", async (_e, url: string) => {
@@ -1036,4 +1182,13 @@ export function registerIpc(): void {
     const status = await getFfmpegStatus();
     return status;
   });
+
+  ipcMain.handle("update:getStatus", () => getUpdateStatus());
+  ipcMain.handle(
+    "update:check",
+    async (_e, req?: { includePrerelease?: boolean }) =>
+      checkForUpdates({ includePrerelease: req?.includePrerelease })
+  );
+  ipcMain.handle("update:download", async () => downloadUpdate());
+  ipcMain.handle("update:quitAndInstall", () => quitAndInstall());
 }
