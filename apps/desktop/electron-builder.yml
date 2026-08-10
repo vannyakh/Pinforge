@@ -10,36 +10,22 @@ directories:
   output: release
   buildResources: resources
 
+# Exclude-style patterns so electron-builder still packs production node_modules
+# (pnpm). Do not whitelist individual packages — that drops transitive deps like conf.
 files:
   - out/**/*
   - package.json
-  # Native / heavy Node deps kept external by electron-vite
-  - node_modules/sharp/**/*
-  - node_modules/@img/**/*
-  - node_modules/detect-libc/**/*
-  - node_modules/semver/**/*
-  - node_modules/color/**/*
-  - node_modules/color-string/**/*
-  - node_modules/color-convert/**/*
-  - node_modules/color-name/**/*
-  - node_modules/simple-swizzle/**/*
-  - node_modules/is-arrayish/**/*
-  - node_modules/playwright/**/*
-  - node_modules/playwright-core/**/*
-  - node_modules/electron-store/**/*
-  - node_modules/conf/**/*
-  - node_modules/electron-log/**/*
-  - node_modules/electron-updater/**/*
-  - node_modules/@distube/ytdl-core/**/*
-  - node_modules/youtubei.js/**/*
-  - node_modules/undici/**/*
-  # Trim noise
   - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
   - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
   - "!**/node_modules/*/{*.test.js,*.spec.js,*.test.ts,*.spec.ts}"
   - "!**/node_modules/.bin"
   - "!**/*.{map,md}"
-  - "!**/src/**"
+  - "!src/**"
+  - "!electron.vite.config.*"
+  - "!uno.config.*"
+  - "!tsconfig*.json"
+  - "!release/**"
+  - "!resources/**"
 
 asarUnpack:
   - "**/*.node"

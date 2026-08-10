@@ -18,16 +18,17 @@ const MAIN_EXTERNALS = [
   "@distube/ytdl-core",
   "youtubei.js",
   "undici",
-  "electron-store",
-  "conf",
   "node:sqlite",
 ];
+
+/** Bundle these into main so pnpm nested deps (e.g. conf) are not required at runtime. */
+const MAIN_BUNDLE_DEPS = ["@pinterest-desktop/core", "electron-store", "electron-log", "electron-updater"];
 
 export default defineConfig({
   main: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ["@pinterest-desktop/core"],
+        exclude: MAIN_BUNDLE_DEPS,
       }),
     ],
     resolve: {
