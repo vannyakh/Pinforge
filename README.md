@@ -4,15 +4,13 @@
 
 # Pinforge
 
-Local multi-source media downloader — **Electron desktop** + **CLI**, shared `@pinterest-desktop/core`.
+Download and organize media from YouTube, Pinterest, Instagram, TikTok, Facebook, and more — all on your machine, with optional enhancement and batch workflows.
 
-Personal / local use only. Respect site terms and rate limits.
+For personal use. Always follow each site’s terms and rate limits.
 
 [Setup](#setup) · [Providers](#providers) · [CLI](#cli) · [Contributing](CONTRIBUTING.md)
 
 </div>
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) / [AGENTS.md](AGENTS.md) for local setup conventions.
 
 ## Setup
 
@@ -21,19 +19,6 @@ pnpm install
 pnpm --filter @pinterest-desktop/core exec playwright install chromium
 pnpm --filter desktop run dev
 ```
-
-**No yt-dlp.** YouTube uses a built-in JS extractor (optional Piped URL in Settings). Instagram / TikTok / Pinterest use fetch first, then **Playwright** Chromium to scrape Open Graph meta on SPA pages.
-
-## Providers
-
-| Provider | Status | Notes |
-|---|---|---|
-| Pinterest | Live | Pins, boards, carousels; sharp enhance; HLS resume |
-| YouTube | Live | Built-in JS extractor (`best` / `mp4` / `audio-only`); playlists & channels |
-| Instagram | Live | Public posts / reels / carousels; Playwright meta fallback |
-| TikTok | Live | Public videos & photo posts; profile batch |
-| Facebook | Live | Public videos / Watch / photos (no login) |
-
 ## CLI
 
 ```bash
