@@ -41,8 +41,8 @@ Release builds are **not Apple-notarized** yet, so Gatekeeper may show _“Apple
 
 **Open anyway (one-time):**
 
-1. Right-click the app → **Open** → **Open**, or  
-2. **System Settings → Privacy & Security → Open Anyway**, or  
+1. Right-click the app → **Open** → **Open**, or
+2. **System Settings → Privacy & Security → Open Anyway**, or
 3. In Terminal (after mounting the DMG / unzipping):
 
 ```bash

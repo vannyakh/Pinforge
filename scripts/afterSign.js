@@ -39,8 +39,7 @@ exports.default = async function afterSign(context) {
 
   // Prefer CI secret names; keep lowercase aliases for local builds.
   const appleId = process.env.APPLE_ID || process.env.appleId;
-  const appleIdPassword =
-    process.env.APPLE_APP_SPECIFIC_PASSWORD || process.env.appleIdPassword;
+  const appleIdPassword = process.env.APPLE_APP_SPECIFIC_PASSWORD || process.env.appleIdPassword;
   const teamId = process.env.APPLE_TEAM_ID || process.env.teamId;
 
   if (!appleId || !appleIdPassword || !teamId) {

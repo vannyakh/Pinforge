@@ -38,7 +38,7 @@ This cert signs apps distributed **outside** the Mac App Store (DMG / ZIP from G
 CI needs the cert + private key as a password-protected `.p12`.
 
 1. On the Mac where the cert was installed, open **Keychain Access**.
-2. Find **Developer ID Application: …** (under *My Certificates*).
+2. Find **Developer ID Application: …** (under _My Certificates_).
 3. Expand it → select the cert **and** the private key.
 4. Right-click → **Export 2 items…** → save as `developer-id.p12`.
 5. Set a strong export password (you will store this as `CSC_KEY_PASSWORD`).
@@ -73,18 +73,18 @@ Notarytool uses an app-specific password, not your normal Apple ID password.
 
 Repo → **Settings → Secrets and variables → Actions → New repository secret**.
 
-| Secret | Value |
-| --- | --- |
-| `CSC_LINK` | Full contents of `developer-id.p12.base64` (one line) |
-| `CSC_KEY_PASSWORD` | Password you set when exporting the `.p12` |
-| `APPLE_ID` | Your Apple ID email |
-| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from Step 4 |
-| `APPLE_TEAM_ID` | Team ID from Step 1 |
+| Secret                        | Value                                                 |
+| ----------------------------- | ----------------------------------------------------- |
+| `CSC_LINK`                    | Full contents of `developer-id.p12.base64` (one line) |
+| `CSC_KEY_PASSWORD`            | Password you set when exporting the `.p12`            |
+| `APPLE_ID`                    | Your Apple ID email                                   |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from Step 4                     |
+| `APPLE_TEAM_ID`               | Team ID from Step 1                                   |
 
 Optional (electron-builder):
 
-| Secret | Purpose |
-| --- | --- |
+| Secret     | Purpose                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------- |
 | `CSC_NAME` | Exact cert Common Name if auto-detect fails, e.g. `Developer ID Application: Name (TEAMID)` |
 
 ---
@@ -136,23 +136,23 @@ git push origin v0.1.2
 
 ## Environment checklist
 
-| Environment | What you need |
-| --- | --- |
+| Environment     | What you need                                                                   |
+| --------------- | ------------------------------------------------------------------------------- |
 | Local Mac build | Cert in Keychain + `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` |
-| GitHub Actions | All 5 secrets above; macOS runners (`macos-14`) |
-| End users | Nothing — signed + notarized app opens normally |
-| Without secrets | Ad-hoc / unsigned build; users need `xattr -cr Pinforge.app` (see root README) |
+| GitHub Actions  | All 5 secrets above; macOS runners (`macos-14`)                                 |
+| End users       | Nothing — signed + notarized app opens normally                                 |
+| Without secrets | Ad-hoc / unsigned build; users need `xattr -cr Pinforge.app` (see root README)  |
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Fix |
-| --- | --- |
-| “Apple could not verify…” after CI | Secrets missing or notarization skipped — check release logs |
-| `errSecInternalComponent` / unlock keychain | CI: ensure `CSC_LINK` is valid base64 `.p12` |
-| Notarytool auth failed | Regenerate app-specific password; confirm `APPLE_TEAM_ID` |
-| Wrong arch dialog / crash | Use `x64` DMG on Intel, `arm64` on Apple Silicon |
-| `afterSign` “Skipping notarization” | Missing `APPLE_*` env/secrets |
+| Symptom                                     | Fix                                                          |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| “Apple could not verify…” after CI          | Secrets missing or notarization skipped — check release logs |
+| `errSecInternalComponent` / unlock keychain | CI: ensure `CSC_LINK` is valid base64 `.p12`                 |
+| Notarytool auth failed                      | Regenerate app-specific password; confirm `APPLE_TEAM_ID`    |
+| Wrong arch dialog / crash                   | Use `x64` DMG on Intel, `arm64` on Apple Silicon             |
+| `afterSign` “Skipping notarization”         | Missing `APPLE_*` env/secrets                                |
 
 Related code: `scripts/afterSign.js`, `apps/desktop/electron-builder.yml`, `.github/workflows/release.yml`.

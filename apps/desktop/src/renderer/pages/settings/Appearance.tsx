@@ -179,8 +179,7 @@ const AppearanceSettings: React.FC = () => {
   // Virtual "Follow System" card first (default preference) — not part of BUILTIN_THEMES.
   const displayThemes = useMemo(() => {
     const systemDark =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
+      typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
     const systemCard: Theme = {
       id: SYSTEM_THEME_ID,
       name: "System",
@@ -199,8 +198,8 @@ const AppearanceSettings: React.FC = () => {
           <div>
             <div className="text-14px text-t-primary leading-22px mb-4px">Theme</div>
             <div className="text-14px text-t-secondary leading-22px">
-              Default follows your system light/dark preference. Pick Light, Dark, or a custom
-              theme anytime.
+              Default follows your system light/dark preference. Pick Light, Dark, or a custom theme
+              anytime.
             </div>
           </div>
           <Button

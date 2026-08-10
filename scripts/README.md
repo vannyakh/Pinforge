@@ -70,9 +70,9 @@ Add `apps/desktop/resources/icon.png` (and `.ico` / `.icns` if desired) before s
 
 macOS DMG drag-to-Applications art:
 
-| File | Size |
-| --- | --- |
-| `apps/desktop/resources/background.png` | 540×380 |
+| File                                       | Size              |
+| ------------------------------------------ | ----------------- |
+| `apps/desktop/resources/background.png`    | 540×380           |
 | `apps/desktop/resources/background@2x.png` | 1080×760 (Retina) |
 
 Configured in `electron-builder.yml` → `dmg.background` / `dmg.contents` (app at 140,180 → Applications at 400,180).
