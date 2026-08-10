@@ -1,4 +1,5 @@
 import type { DownloadMode, FormatPreset, ProviderId, ResolvedMedia, YoutubeDownloadOptions } from "../types";
+import type { ProviderFeatureMatrix } from "./capabilities";
 
 export interface ResolveContext {
   format?: FormatPreset;
@@ -19,11 +20,13 @@ export interface ResolveContext {
 export interface MediaProvider {
   id: ProviderId;
   label: string;
-  /** false = stub / coming soon */
+  /** false = stub / not downloadable */
   live: boolean;
   formats?: FormatPreset[];
   /** Supported download shapes for this site. */
   modes?: DownloadMode[];
+  /** Platform feature matrix (yes / limited / no). */
+  features?: ProviderFeatureMatrix;
   match: (url: string) => boolean;
   resolve: (url: string, ctx?: ResolveContext) => Promise<ResolvedMedia | ResolvedMedia[]>;
 }
@@ -33,7 +36,7 @@ export class ProviderNotImplementedError extends Error {
   readonly providerLabel: string;
 
   constructor(id: ProviderId, label: string) {
-    super(`${label} download is coming soon`);
+    super(`${label} download is not available`);
     this.name = "ProviderNotImplementedError";
     this.providerId = id;
     this.providerLabel = label;

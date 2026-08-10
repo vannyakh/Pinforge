@@ -1,0 +1,10 @@
+# CODEOWNERS for Pinforge
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @vannyakh
+
+/apps/desktop/ @vannyakh
+/apps/cli/ @vannyakh
+/packages/core/ @vannyakh
+/scripts/ @vannyakh
+/.github/ @vannyakh

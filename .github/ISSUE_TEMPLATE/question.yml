@@ -1,0 +1,66 @@
+name: Question
+description: Ask a question about Pinforge
+title: '[Question]: '
+labels: ['question']
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      description: Which area does this question belong to?
+      options:
+        - Desktop UI
+        - Downloads & Tasks
+        - Providers — Pinterest
+        - Providers — YouTube
+        - Providers — Instagram
+        - Providers — TikTok
+        - Providers — Facebook
+        - Enhance (sharp)
+        - Settings & Updates
+        - CLI
+        - Core / packages
+        - Packaging / Build
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: question_category
+    attributes:
+      label: Question Category
+      options:
+        - Installation & Setup
+        - Configuration
+        - Usage & Features
+        - Troubleshooting
+        - Development
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to achieve?
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+        - CLI only
+        - Not applicable

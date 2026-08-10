@@ -1,36 +1,111 @@
 appId: com.pinterestdesktop.app
 productName: Pinforge
+executableName: Pinforge
+copyright: Copyright © Pinforge
+
+asar:
+  smartUnpack: true
+
 directories:
   output: release
   buildResources: resources
+
 files:
   - out/**/*
   - package.json
+  # Native / heavy Node deps kept external by electron-vite
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
+  - node_modules/detect-libc/**/*
+  - node_modules/semver/**/*
+  - node_modules/color/**/*
+  - node_modules/color-string/**/*
+  - node_modules/color-convert/**/*
+  - node_modules/color-name/**/*
+  - node_modules/simple-swizzle/**/*
+  - node_modules/is-arrayish/**/*
+  - node_modules/playwright/**/*
+  - node_modules/playwright-core/**/*
+  - node_modules/electron-store/**/*
+  - node_modules/conf/**/*
+  - node_modules/electron-log/**/*
+  - node_modules/electron-updater/**/*
+  - node_modules/@distube/ytdl-core/**/*
+  - node_modules/youtubei.js/**/*
+  - node_modules/undici/**/*
+  # Trim noise
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*/{*.test.js,*.spec.js,*.test.ts,*.spec.ts}"
+  - "!**/node_modules/.bin"
+  - "!**/*.{map,md}"
+  - "!**/src/**"
+
 asarUnpack:
   - "**/*.node"
   - "**/sharp/**"
   - "**/@img/**"
+  - "**/detect-libc/**"
+  - "**/playwright/**"
+  - "**/playwright-core/**"
+
+afterPack: ../../scripts/afterPack.js
+afterSign: ../../scripts/afterSign.js
+
+npmRebuild: false
+buildDependenciesFromSource: false
+nodeGypRebuild: false
+compression: normal
+removePackageScripts: true
+
 win:
-  icon: resources/icon.png
+  icon: icon.png
   target:
     - nsis
   artifactName: ${productName}-${version}-Setup.${ext}
+
 mac:
-  icon: resources/icon.png
   # zip is required for electron-updater on macOS
+  icon: icon.png
   target:
     - dmg
     - zip
+  category: public.app-category.photography
+  hardenedRuntime: true
+  gatekeeperAssess: false
   artifactName: ${productName}-${version}-${arch}.${ext}
+
+dmg:
+  format: UDZO
+  internetEnabled: false
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 140
+      y: 180
+      type: file
+    - x: 400
+      y: 180
+      type: link
+      path: /Applications
+
 linux:
-  icon: resources/icon.png
+  icon: icon.png
   target:
     - AppImage
+  category: Utility
   artifactName: ${productName}-${version}.${ext}
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
   differentialPackage: false
+
 publish:
   provider: github
   owner: vannyakh

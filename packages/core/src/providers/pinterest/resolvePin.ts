@@ -164,7 +164,7 @@ function titleFromPin(pin: Record<string, unknown>): string | undefined {
 function extractFromPinObject(
   pin: Record<string, unknown>,
   allowHls: boolean
-): { imageUrl: string | null; videoUrl: string | null; title?: string; fallbacks: string[] } {
+): { imageUrl: string | null; videoUrl: string | null; title?: string; fallbacks: string[]; carouselImages?: string[] } {
   const title = titleFromPin(pin);
   const fallbacks: string[] = [];
 
@@ -194,14 +194,40 @@ function extractFromPinObject(
     }
   }
 
-  // Carousel: first slot original
+  // Carousel: all slots (originals when available)
   const carousel = pin.carousel_data;
   if (carousel && typeof carousel === "object") {
     const slots = (carousel as { carousel_slots?: unknown[] }).carousel_slots;
-    if (Array.isArray(slots) && slots[0] && typeof slots[0] === "object") {
-      const slot = slots[0] as { images?: unknown };
-      const img = imageUrlFromImagesMap(slot.images);
-      if (img) return { imageUrl: img, videoUrl: null, title, fallbacks };
+    if (Array.isArray(slots) && slots.length) {
+      const carouselImages: string[] = [];
+      for (const raw of slots) {
+        if (!raw || typeof raw !== "object") continue;
+        const slot = raw as { images?: unknown; videos?: unknown };
+        if (slot.videos) {
+          const vids = extractVideoList(slot.videos, allowHls);
+          const videoUrl = pickBestVideo(vids, allowHls);
+          if (videoUrl) {
+            // Prefer first video edge as primary for mixed carousels
+            if (!carouselImages.length) {
+              return { imageUrl: null, videoUrl, title, fallbacks, carouselImages: [] };
+            }
+          }
+        }
+        const img = imageUrlFromImagesMap(slot.images);
+        if (img) carouselImages.push(img);
+      }
+      if (carouselImages.length === 1) {
+        return { imageUrl: carouselImages[0]!, videoUrl: null, title, fallbacks };
+      }
+      if (carouselImages.length > 1) {
+        return {
+          imageUrl: carouselImages[0]!,
+          videoUrl: null,
+          title,
+          fallbacks,
+          carouselImages,
+        };
+      }
     }
   }
 
@@ -457,10 +483,10 @@ function extractPinId(url: string): string | undefined {
 }
 
 /**
- * Resolve a pin URL to original image or best video buffer.
- * Uses PinResource / pin-scoped JSON so related-pin thumbnails are not downloaded.
+ * Resolve a pin URL to original image(s) or best video buffer.
+ * Carousel pins return one PinAsset per slot.
  */
-export async function resolvePin(url: string): Promise<PinAsset> {
+export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
   const pinUrl = normalizePinUrl(url);
   const pinId = extractPinId(pinUrl);
   if (!pinId) throw new Error("Not a Pinterest pin URL");
@@ -471,6 +497,7 @@ export async function resolvePin(url: string): Promise<PinAsset> {
   let videoUrl: string | null = null;
   let title: string | undefined;
   let fallbacks: string[] = [];
+  let carouselImages: string[] = [];
   let html = "";
   let appVersion: string | undefined;
 
@@ -492,6 +519,7 @@ export async function resolvePin(url: string): Promise<PinAsset> {
         videoUrl = extracted.videoUrl;
         title = extracted.title;
         fallbacks = extracted.fallbacks;
+        carouselImages = extracted.carouselImages ?? [];
       }
     }
   } catch {
@@ -508,6 +536,7 @@ export async function resolvePin(url: string): Promise<PinAsset> {
         videoUrl = extracted.videoUrl;
         title = title || extracted.title;
         fallbacks = extracted.fallbacks;
+        if (extracted.carouselImages?.length) carouselImages = extracted.carouselImages;
       }
     } catch {
       /* fall through */
@@ -526,6 +555,7 @@ export async function resolvePin(url: string): Promise<PinAsset> {
           title = title || extracted.title;
           fallbacks = [...extracted.fallbacks, ...fallbacks];
         }
+        if (extracted.carouselImages?.length) carouselImages = extracted.carouselImages;
       }
     } catch {
       /* keep HTML result */
@@ -601,23 +631,29 @@ export async function resolvePin(url: string): Promise<PinAsset> {
     );
   }
 
-  const finalImage = await resolveBestImageUrl(imageUrl, [
-    ...fallbacks,
-    imageUrl.replace(/\/originals\//, "/1200x/"),
-    imageUrl.replace(/\/originals\//, "/736x/"),
-  ]);
+  const slots =
+    carouselImages.length > 1 ? carouselImages : [imageUrl];
+  const assets: PinAsset[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const slotUrl = slots[i]!;
+    const finalImage = await resolveBestImageUrl(slotUrl, [
+      ...fallbacks,
+      slotUrl.replace(/\/originals\//, "/1200x/"),
+      slotUrl.replace(/\/originals\//, "/736x/"),
+    ]);
+    const { buffer, ext } = await downloadBinary(
+      finalImage,
+      "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+    );
+    assets.push({
+      buffer,
+      ext,
+      sourceUrl: finalImage,
+      title: slots.length > 1 ? `${title ?? "pin"} (${i + 1})` : title,
+      kind: "image",
+      pinId: slots.length > 1 ? `${pinId}_${i}` : pinId,
+    });
+  }
 
-  const { buffer, ext } = await downloadBinary(
-    finalImage,
-    "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
-  );
-
-  return {
-    buffer,
-    ext,
-    sourceUrl: finalImage,
-    title,
-    kind: "image",
-    pinId,
-  };
+  return assets.length === 1 ? assets[0]! : assets;
 }

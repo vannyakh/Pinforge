@@ -20,11 +20,11 @@ pnpm --filter desktop run dev
 
 | Provider | Status | Notes |
 |---|---|---|
-| Pinterest | Live | Pins, boards; sharp enhance for images; Playwright meta fallback |
-| YouTube | Live | Built-in JS extractor (`best` / `mp4` / `audio-only`); optional Piped URL |
-| Instagram | Live | Public posts / reels; Playwright meta fallback |
-| TikTok | Live | Public videos; Playwright meta fallback |
-| Facebook, Douyin, Spotify, Apple Music, CapCut, Bluesky, RedNote, Threads, Kuaishou, Weibo | Coming soon | URL detect only |
+| Pinterest | Live | Pins, boards, carousels; sharp enhance; HLS resume |
+| YouTube | Live | Built-in JS extractor (`best` / `mp4` / `audio-only`); playlists & channels |
+| Instagram | Live | Public posts / reels / carousels; Playwright meta fallback |
+| TikTok | Live | Public videos & photo posts; profile batch |
+| Facebook | Live | Public videos / Watch / photos (no login) |
 
 ## CLI
 

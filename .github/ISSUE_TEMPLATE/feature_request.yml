@@ -1,0 +1,50 @@
+name: Feature Request
+description: Suggest an idea for Pinforge
+title: '[Feature]: '
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: feature_description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature you'd like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem_statement
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like this feature to work?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feature_category
+    attributes:
+      label: Feature Category
+      description: Which category does this feature belong to?
+      options:
+        - UI / UX
+        - New provider
+        - Download / enhance
+        - CLI
+        - Performance
+        - Packaging / updates
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Use cases, examples, mockups, etc.

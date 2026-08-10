@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Community Discussions
+    url: https://github.com/vannyakh/Pinforge/discussions
+    about: Ask questions, share ideas, and discuss Pinforge with the community
+  - name: Contributing guide
+    url: https://github.com/vannyakh/Pinforge/blob/main/CONTRIBUTING.md
+    about: Setup, PR rules, and Conventional Commits
+  - name: Security Issues
+    url: https://github.com/vannyakh/Pinforge/security/advisories/new
+    about: Report security vulnerabilities privately (do not create public issues)

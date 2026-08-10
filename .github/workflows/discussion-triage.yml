@@ -1,0 +1,48 @@
+name: Discussion Triage
+
+# Post a welcome comment that @-mentions the on-duty owner.
+# Announcements are skipped.
+
+on:
+  discussion:
+    types: [created]
+
+permissions:
+  discussions: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Welcome comment with owner mention
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const CATEGORY_OWNERS = {
+              announcements: null,
+              'q-a': 'vannyakh',
+              ideas: 'vannyakh',
+            };
+            const FALLBACK_OWNER = 'vannyakh';
+
+            const discussion = context.payload.discussion;
+            const slug = discussion.category?.slug ?? '';
+            const owner = Object.hasOwn(CATEGORY_OWNERS, slug) ? CATEGORY_OWNERS[slug] : FALLBACK_OWNER;
+
+            if (owner === null) {
+              core.info(`Category "${slug}" is muted — no comment.`);
+              return;
+            }
+
+            core.info(`Category "${slug}" → @${owner}`);
+            await github.graphql(
+              `mutation($discussionId: ID!, $body: String!) {
+                addDiscussionComment(input: { discussionId: $discussionId, body: $body }) {
+                  comment { id }
+                }
+              }`,
+              {
+                discussionId: discussion.node_id,
+                body: `Thanks for posting! @${owner} will take a look soon.`,
+              }
+            );

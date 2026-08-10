@@ -25,16 +25,7 @@ export type ProviderId =
   | "youtube"
   | "instagram"
   | "tiktok"
-  | "facebook"
-  | "douyin"
-  | "spotify"
-  | "apple-music"
-  | "capcut"
-  | "bluesky"
-  | "rednote"
-  | "threads"
-  | "kuaishou"
-  | "weibo";
+  | "facebook";
 
 export type FormatPreset = "best" | "mp4" | "audio-only";
 
@@ -204,6 +195,8 @@ export interface ProviderInfo {
   formats?: FormatPreset[];
   /** Supported download modes (single media, board, profile, …). */
   modes?: DownloadMode[];
+  /** Platform capability matrix when available. */
+  features?: import("./providers/capabilities").ProviderFeatureMatrix;
 }
 
 export const PRESETS: Record<

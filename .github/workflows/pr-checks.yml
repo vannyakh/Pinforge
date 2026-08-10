@@ -1,0 +1,58 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, master, dev]
+  push:
+    branches: [main, master, dev]
+
+concurrency:
+  group: pr-checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Format & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  gpt-review:
+    name: GPT Review
+    needs: quality
+    if: github.event_name == 'pull_request' && vars.ENABLE_GPT_REVIEW == 'true'
+    uses: ./.github/workflows/gpt-review.yml
+    secrets: inherit
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+
+  gpt-assessment:
+    name: GPT PR Assessment
+    needs: quality
+    if: >
+      github.event_name == 'pull_request' &&
+      vars.ENABLE_GPT_REVIEW == 'true' &&
+      github.event.pull_request.author_association != 'OWNER' &&
+      github.event.pull_request.author_association != 'MEMBER'
+    uses: ./.github/workflows/gpt-pr-assessment.yml
+    secrets: inherit
+    with:
+      pr_number: ${{ github.event.pull_request.number }}

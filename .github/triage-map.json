@@ -1,0 +1,19 @@
+{
+  "$comment": "Issue module → area label → owner. Must match Module dropdown options in bug_report.yml and question.yml.",
+  "modules": [
+    { "module": "Desktop UI", "label": "area/desktop-ui", "owner": "vannyakh" },
+    { "module": "Downloads & Tasks", "label": "area/downloads", "owner": "vannyakh" },
+    { "module": "Providers — Pinterest", "label": "area/provider-pinterest", "owner": "vannyakh" },
+    { "module": "Providers — YouTube", "label": "area/provider-youtube", "owner": "vannyakh" },
+    { "module": "Providers — Instagram", "label": "area/provider-instagram", "owner": "vannyakh" },
+    { "module": "Providers — TikTok", "label": "area/provider-tiktok", "owner": "vannyakh" },
+    { "module": "Providers — Facebook", "label": "area/provider-facebook", "owner": "vannyakh" },
+    { "module": "Enhance (sharp)", "label": "area/enhance", "owner": "vannyakh" },
+    { "module": "Settings & Updates", "label": "area/settings", "owner": "vannyakh" },
+    { "module": "CLI", "label": "area/cli", "owner": "vannyakh" },
+    { "module": "Core / packages", "label": "area/core", "owner": "vannyakh" },
+    { "module": "Packaging / Build", "label": "area/build", "owner": "vannyakh" },
+    { "module": "Other", "label": "area/other", "owner": "vannyakh" }
+  ],
+  "fallback": { "label": "needs-triage", "owner": "vannyakh" }
+}

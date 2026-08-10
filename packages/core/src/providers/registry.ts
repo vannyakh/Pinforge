@@ -1,6 +1,7 @@
 import type { MediaProvider } from "./types";
 import type { ProviderId, ProviderInfo } from "../types";
 import { ProviderNotFoundError } from "./types";
+import { featuresForProvider } from "./capabilities";
 
 const providers: MediaProvider[] = [];
 
@@ -17,6 +18,7 @@ export function listProviders(): ProviderInfo[] {
     status: p.live ? "live" : "stub",
     formats: p.formats,
     modes: p.modes,
+    features: p.features ?? (p.live ? featuresForProvider(p.id) : undefined),
   }));
 }
 

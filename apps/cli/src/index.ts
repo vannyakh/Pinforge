@@ -22,12 +22,12 @@ program
 
 program
   .command("providers")
-  .description("List live and stub providers")
+  .description("List available providers")
   .action(() => {
     printBanner();
     for (const p of listProviders()) {
       const badge =
-        p.status === "live" ? pc.green("live") : pc.yellow("coming soon");
+        p.status === "live" ? pc.green("live") : pc.yellow(p.status);
       console.log(`  ${pc.bold(p.label.padEnd(22))} ${badge}`);
     }
     console.log();

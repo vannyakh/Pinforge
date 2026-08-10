@@ -190,7 +190,7 @@ const ProviderDetailPage: React.FC = () => {
           (meta && "description" in meta ? meta.description : "") ||
           (builtin?.status === "live"
             ? "Ready to use — paste a matching link on Home to download."
-            : "Configure this provider. Download support may still be coming soon.");
+            : "Configure formats and options for this provider.");
         const hosts = cfg?.hosts || (meta && "hosts" in meta ? meta.hosts : "") || "";
         const formats =
           cfg?.manifest?.formats ||

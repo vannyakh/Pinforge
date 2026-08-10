@@ -39,4 +39,9 @@ pnpm --filter @pinterest-desktop/core exec playwright install chromium
 pnpm --filter desktop run dev
 pnpm typecheck
 pnpm format
+
+# Distributables (see scripts/README.md)
+pnpm dist:win
+pnpm dist:mac
+pnpm dist:linux
 ```

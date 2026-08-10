@@ -1,0 +1,88 @@
+name: Manual Build
+
+permissions:
+  contents: read
+  actions: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        type: choice
+        options:
+          - windows-x64
+          - macos-arm64
+          - macos-x64
+          - linux-x64
+          - all
+        default: windows-x64
+
+jobs:
+  prepare-matrix:
+    name: Prepare matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        shell: bash
+        run: |
+          PLATFORM="${{ inputs.platform }}"
+          W='{"platform":"windows-x64","os":"windows-latest","args":"x64 --win --x64"}'
+          MA='{"platform":"macos-arm64","os":"macos-14","args":"arm64 --mac --arm64"}'
+          MX='{"platform":"macos-x64","os":"macos-14","args":"x64 --mac --x64"}'
+          L='{"platform":"linux-x64","os":"ubuntu-latest","args":"x64 --linux --x64"}'
+
+          case "$PLATFORM" in
+            all) MATRIX="{\"include\":[$W,$MA,$MX,$L]}" ;;
+            windows-x64) MATRIX="{\"include\":[$W]}" ;;
+            macos-arm64) MATRIX="{\"include\":[$MA]}" ;;
+            macos-x64) MATRIX="{\"include\":[$MX]}" ;;
+            linux-x64) MATRIX="{\"include\":[$L]}" ;;
+            *) echo "Unknown platform: $PLATFORM"; exit 1 ;;
+          esac
+
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: prepare-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @pinterest-desktop/core exec playwright install --with-deps chromium
+
+      - name: Build distributables
+        run: node scripts/build-with-builder.js ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinforge-${{ matrix.platform }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.yml
+            apps/desktop/release/*.blockmap
+          if-no-files-found: warn

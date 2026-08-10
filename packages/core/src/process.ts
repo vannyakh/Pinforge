@@ -301,27 +301,33 @@ async function processPinterestBoard(
     if (i > 0 && delayMs > 0) await sleep(Math.min(delayMs, 250));
     try {
       const meta = pinMeta.get(pinUrl);
-      const asset = await resolvePin(pinUrl);
-      const result = await writeResolved(
-        {
-          kind: asset.kind ?? "image",
-          buffer: asset.buffer,
-          ext: asset.ext,
-          sourceUrl: asset.sourceUrl,
-          title: asset.title || meta?.title,
-          provider: providerId,
-          id: asset.pinId || meta?.pinId,
-        },
-        { ...opts, outDir }
-      );
+      const assetOrList = await resolvePin(pinUrl);
+      const assets = Array.isArray(assetOrList) ? assetOrList : [assetOrList];
+      const written = [];
+      for (const asset of assets) {
+        const result = await writeResolved(
+          {
+            kind: asset.kind ?? "image",
+            buffer: asset.buffer,
+            ext: asset.ext,
+            sourceUrl: asset.sourceUrl,
+            title: asset.title || meta?.title,
+            provider: providerId,
+            id: asset.pinId || meta?.pinId,
+          },
+          { ...opts, outDir }
+        );
+        written.push(result);
+      }
+      const result = written[written.length - 1]!;
       opts.onProgress?.({
         current: i + 1,
         total: pinUrls.length,
         url: pinUrl,
         result,
-        title: asset.title || meta?.title,
+        title: assets[0]?.title || meta?.title,
       });
-      return { ok: true as const, index: i, result, url: pinUrl };
+      return { ok: true as const, index: i, result, results: written, url: pinUrl };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       opts.onProgress?.({
@@ -337,7 +343,7 @@ async function processPinterestBoard(
   const results: ProcessResult[] = [];
   const errors: { url: string; error: string }[] = [];
   for (const o of outcomes) {
-    if (o.ok) results.push(o.result);
+    if (o.ok) results.push(...(o.results?.length ? o.results : [o.result]));
     else errors.push({ url: o.url, error: o.error });
   }
 
@@ -588,11 +594,16 @@ async function processTikTokProfile(
     if (i > 0 && delayMs > 0) await sleep(Math.min(delayMs, 400));
     opts.signal?.throwIfAborted?.();
     try {
-      const media = await extractTikTok(video.url, opts.format ?? "best", {
+      const mediaOrList = await extractTikTok(video.url, opts.format ?? "best", {
         fragmentConcurrency: opts.fragmentConcurrency ?? 4,
         signal: opts.signal,
       });
-      const result = await writeResolved(media, { ...opts, outDir });
+      const list = Array.isArray(mediaOrList) ? mediaOrList : [mediaOrList];
+      const written: ProcessResult[] = [];
+      for (const media of list) {
+        written.push(await writeResolved(media, { ...opts, outDir }));
+      }
+      const result = written[written.length - 1]!;
       opts.onProgress?.({
         current: i + 1,
         total: profile.videos.length,
@@ -601,7 +612,7 @@ async function processTikTokProfile(
         result,
         percent: Math.round(((i + 1) / profile.videos.length) * 100),
       });
-      return { ok: true as const, index: i, result, url: video.url };
+      return { ok: true as const, index: i, result, results: written, url: video.url };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       opts.onProgress?.({
@@ -617,7 +628,7 @@ async function processTikTokProfile(
   const results: ProcessResult[] = [];
   const errors: { url: string; error: string }[] = [];
   for (const o of outcomes) {
-    if (o.ok) results.push(o.result);
+    if (o.ok) results.push(...(o.results?.length ? o.results : [o.result]));
     else errors.push({ url: o.url, error: o.error });
   }
 

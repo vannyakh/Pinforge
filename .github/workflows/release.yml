@@ -14,7 +14,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            dist_args: auto --win
+          - os: macos-latest
+            dist_args: auto --mac
+          - os: ubuntu-latest
+            dist_args: auto --linux
     steps:
       - uses: actions/checkout@v4
 
@@ -30,10 +36,25 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build desktop
-        run: pnpm --filter desktop run build
+      - name: Install Playwright Chromium
+        run: pnpm --filter @pinterest-desktop/core exec playwright install chromium
 
-      - name: Package & publish
+      - name: Build distributables
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm --filter desktop run package:publish
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
+        run: node scripts/build-with-builder.js ${{ matrix.dist_args }}
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.yml
+            apps/desktop/release/*.blockmap
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

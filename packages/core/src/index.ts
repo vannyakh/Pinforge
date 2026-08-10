@@ -38,8 +38,23 @@ export {
   scrapePageMeta,
   fetchHtmlOrPlaywrightMeta,
   closePlaywrightBrowser,
+  registerProviderPlugin,
+  listProviderPlugins,
+  getProviderPlugin,
+  featuresForProvider,
+  PROVIDER_FEATURE_MATRIX,
+  CORE_ENGINE_FEATURES,
 } from "./providers";
 export type { PageMeta, ScrapeMetaOptions } from "./providers";
+export type {
+  ProviderPlugin,
+  MediaInfo,
+  RegisteredPluginInfo,
+  FeatureSupport,
+  PlatformFeature,
+  ProviderFeatureMatrix,
+} from "./providers";
+export { extractInstagram, extractTikTok, extractFacebook } from "./providers";
 export { runPipeline } from "./pipeline/runPipeline";
 export {
   mapPool,

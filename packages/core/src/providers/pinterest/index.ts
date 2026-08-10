@@ -3,6 +3,7 @@ import type { ResolvedMedia } from "../../types";
 import { resolvePin } from "./resolvePin";
 import { isPinterestCollectionUrl, isPinterestUrl } from "./resolveBoard";
 import { registerProvider } from "../registry";
+import { PINTEREST_FEATURES } from "../capabilities";
 
 export const pinterestProvider: MediaProvider = {
   id: "pinterest",
@@ -10,6 +11,7 @@ export const pinterestProvider: MediaProvider = {
   live: true,
   formats: ["best"],
   modes: ["single", "board", "profile"],
+  features: PINTEREST_FEATURES,
   match: (url) => isPinterestUrl(url),
   async resolve(url: string): Promise<ResolvedMedia | ResolvedMedia[]> {
     if (isPinterestCollectionUrl(url)) {
@@ -18,16 +20,18 @@ export const pinterestProvider: MediaProvider = {
       );
     }
 
-    const asset = await resolvePin(url);
-    return {
-      kind: asset.kind ?? "image",
+    const assetOrList = await resolvePin(url);
+    const assets = Array.isArray(assetOrList) ? assetOrList : [assetOrList];
+    const mapped = assets.map((asset) => ({
+      kind: asset.kind ?? ("image" as const),
       buffer: asset.buffer,
       ext: asset.ext,
       sourceUrl: asset.sourceUrl,
       title: asset.title,
-      provider: "pinterest",
+      provider: "pinterest" as const,
       id: asset.pinId,
-    };
+    }));
+    return mapped.length === 1 ? mapped[0]! : mapped;
   },
 };
 
