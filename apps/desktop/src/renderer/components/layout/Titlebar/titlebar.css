@@ -20,6 +20,8 @@
 .app-titlebar--mac {
   height: 45px;
   min-height: 36px;
+  /* Clear native traffic lights (hiddenInset + trafficLightPosition x:16). */
+  padding-left: 78px;
   padding-right: 12px;
 }
 

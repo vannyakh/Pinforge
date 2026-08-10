@@ -60,7 +60,8 @@ function createWindow(): void {
     ...(existsSync(iconPath) ? { icon: iconPath } : {}),
     backgroundColor: "#00000000",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    trafficLightPosition: process.platform === "darwin" ? { x: 14, y: 14 } : undefined,
+    // Centered in the 45px mac titlebar; leave ~78px for renderer controls.
+    trafficLightPosition: process.platform === "darwin" ? { x: 16, y: 16 } : undefined,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,

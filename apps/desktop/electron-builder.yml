@@ -62,8 +62,7 @@ mac:
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 dmg:
-  # Classic drag-to-Applications installer look (resources/background.png)
-  background: background.png
+  background: resources/background.png
   format: UDZO
   internetEnabled: false
   title: ${productName} ${version}

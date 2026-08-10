@@ -25,7 +25,9 @@ let installing = false;
 const requireFromMain = createRequire(__filename);
 
 function resolvePlaywrightCli(): string {
-  return requireFromMain.resolve("playwright/cli.js");
+  // `playwright/cli.js` is not in package "exports"; resolve via package.json then join.
+  const pkgJson = requireFromMain.resolve("playwright/package.json");
+  return path.join(path.dirname(pkgJson), "cli.js");
 }
 
 async function chromiumExecutablePath(): Promise<string | null> {
