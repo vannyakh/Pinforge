@@ -24,6 +24,7 @@ const MAIN_EXTERNALS = [
 /** Bundle these into main so pnpm nested deps (e.g. conf) are not required at runtime. */
 const MAIN_BUNDLE_DEPS = [
   "@pinforge/core",
+  "@pinforge/api",
   "@pinforge/types",
   "@pinforge/download",
   "@pinforge/providers",

@@ -1,6 +1,6 @@
 {
   "name": "pinforge-cli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "bin": {
@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pinforge/api": "workspace:*",
     "@pinforge/core": "workspace:*",
     "commander": "^12.1.0",
     "ora": "^8.1.1",

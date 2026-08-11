@@ -5,8 +5,13 @@ import pc from "picocolors";
 import prompts from "prompts";
 import path from "node:path";
 import { processMedia } from "@pinforge/core/process";
-import { listProviders, detectProvider } from "@pinforge/core/providers";
-import type { FormatPreset, PresetName } from "@pinforge/core/types";
+import { listProviders } from "@pinforge/core/providers";
+import { normalizeDownloadOptions } from "@pinforge/api/download";
+import {
+  DEFAULT_PROVIDER_PREFS,
+  ProviderDisabledError,
+  resolveProviderForUrl,
+} from "@pinforge/api/providers";
 import { printBanner } from "./banner.js";
 
 const program = new Command();
@@ -84,12 +89,10 @@ program
       return;
     }
     printBanner();
-    const enhanceOff = opts.enhance === "off" || opts.enhance === "false";
     await runDownload(url, {
       outDir: opts.out,
-      format: opts.format as FormatPreset,
-      enhance: !enhanceOff,
-      preset: (enhanceOff ? "auto" : opts.enhance) as PresetName,
+      format: opts.format,
+      preset: opts.enhance,
       extractorUrl: opts.extractor,
     });
   });
@@ -98,31 +101,42 @@ async function runDownload(
   url: string,
   opts: {
     outDir: string;
-    format?: FormatPreset;
+    format?: string;
     enhance?: boolean;
-    preset?: PresetName;
+    preset?: string;
     extractorUrl?: string;
   }
 ) {
   try {
-    const provider = detectProvider(url);
+    const provider = resolveProviderForUrl(url, DEFAULT_PROVIDER_PREFS, []);
+    if (!provider) {
+      throw new Error("No provider matched this URL");
+    }
     console.log(
       `  Provider: ${pc.cyan(provider.label)}${provider.live ? "" : pc.yellow(" (stub)")}`
     );
   } catch (e) {
-    console.error(pc.red(e instanceof Error ? e.message : String(e)));
+    if (e instanceof ProviderDisabledError) {
+      console.error(pc.red(e.message));
+    } else {
+      console.error(pc.red(e instanceof Error ? e.message : String(e)));
+    }
     process.exitCode = 1;
     return;
   }
 
+  const processOpts = normalizeDownloadOptions({
+    outDir: opts.outDir,
+    format: opts.format,
+    enhance: opts.enhance,
+    preset: opts.preset,
+    extractorUrl: opts.extractorUrl,
+  });
+
   const spinner = ora("Downloading…").start();
   try {
     const res = await processMedia(url, {
-      outDir: opts.outDir,
-      preset: opts.preset ?? "auto",
-      enhance: opts.enhance,
-      format: opts.format,
-      extractorUrl: opts.extractorUrl,
+      ...processOpts,
       onProgress: (info) => {
         spinner.text = `Downloading ${info.current}/${info.total}…`;
       },

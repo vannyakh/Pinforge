@@ -1,6 +1,6 @@
 {
   "name": "@pinforge/core",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -20,7 +20,8 @@
     "./storage": "./src/storage.ts",
     "./tools": "./src/tools.ts",
     "./worker": "./src/worker.ts",
-    "./zip": "./src/zip/index.ts"
+    "./zip": "./src/zip/index.ts",
+    "./api": "./src/api.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -29,6 +30,7 @@
     "smoke": "tsx scripts/smoke.mts"
   },
   "dependencies": {
+    "@pinforge/api": "workspace:*",
     "@pinforge/download": "workspace:*",
     "@pinforge/enhance": "workspace:*",
     "@pinforge/engine": "workspace:*",

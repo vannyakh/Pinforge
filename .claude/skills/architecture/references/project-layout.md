@@ -20,6 +20,7 @@ project-root/
 │   └── cli/                # pinforge CLI
 ├── packages/
 │   ├── core/               # @pinforge/core façade
+│   ├── api/                # @pinforge/api (CLI + desktop helpers)
 │   ├── providers/          # @pinforge/providers
 │   ├── download/           # @pinforge/download
 │   ├── engine/             # @pinforge/engine

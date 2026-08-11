@@ -9,6 +9,7 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 | `apps/desktop/` | Electron app (main / preload / renderer) |
 | `apps/cli/` | CLI |
 | `packages/core/` | Thin `@pinforge/core` façade (`process`, `preview`, `zip`) |
+| `packages/api/` | App-level helpers shared by CLI + desktop (provider prefs/resolve, download options) |
 | `packages/providers/` | Site providers + registry |
 | `packages/download/` | HTTP/range/segment/HLS download |
 | `packages/engine/` | MediaCore, jobs, storage |
@@ -20,7 +21,7 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 
 ## Shared library (`@pinforge/*`)
 
-Apps import the façade subpaths (preferred):
+Apps prefer façade subpaths; API can also be imported directly:
 
 | Import | Package |
 | ------ | ------- |
@@ -34,6 +35,11 @@ Apps import the façade subpaths (preferred):
 | `@pinforge/core/pipeline` | `@pinforge/enhance` |
 | `@pinforge/core/tools` | `@pinforge/tools` |
 | `@pinforge/core/worker` | `@pinforge/worker` |
+| `@pinforge/core/api` | `@pinforge/api` (alias) |
+| `@pinforge/api/providers` | provider prefs / resolve |
+| `@pinforge/api/download` | `normalizeDownloadOptions` |
+
+No shared `@pinforge/ui` — React UI stays in `apps/desktop`. Electron IPC/store stay in desktop.
 
 Provider side-effect registration runs on `@pinforge/providers` / `@pinforge/core/providers` and the root `@pinforge/core` barrel.
 
@@ -53,7 +59,7 @@ Provider side-effect registration runs on `@pinforge/providers` / `@pinforge/cor
 ## Conventions
 
 - TypeScript strict; prefer explicit types over `any`
-- Path aliases: `@renderer/*`, `@common/*`, `@/` (desktop), `@pinforge/core` (+ subpaths)
+- Path aliases: `@renderer/*`, `@common/*`, `@/` (desktop), `@pinforge/core` (+ subpaths), `@pinforge/api`
 - English for user-facing copy (no i18n layer yet)
 - Atomic PRs; Conventional Commits (`feat:`, `fix:`, `chore:`, …)
 

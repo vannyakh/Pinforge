@@ -28,6 +28,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@pinforge/api':
+        specifier: workspace:*
+        version: link:../../packages/api
       '@pinforge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -71,6 +74,9 @@ importers:
       '@icon-park/react':
         specifier: ^1.4.2
         version: 1.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@pinforge/api':
+        specifier: workspace:*
+        version: link:../../packages/api
       '@pinforge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -163,8 +169,27 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.1)
 
+  packages/api:
+    dependencies:
+      '@pinforge/providers':
+        specifier: workspace:*
+        version: link:../providers
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/core:
     dependencies:
+      '@pinforge/api':
+        specifier: workspace:*
+        version: link:../api
       '@pinforge/download':
         specifier: workspace:*
         version: link:../download
@@ -190,6 +215,9 @@ importers:
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.1
+      sharp:
+        specifier: ^0.33.5
+        version: 0.33.5
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
