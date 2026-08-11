@@ -10,6 +10,7 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 | `apps/cli/` | CLI |
 | `packages/core/` | Thin `@pinforge/core` façade (`process`, `preview`, `zip`) |
 | `packages/api/` | App-level helpers shared by CLI + desktop (provider prefs/resolve, download options) |
+| `packages/common/` | Cross-package shared helpers (`@pinforge/common` — URL scrape utils, etc.) |
 | `packages/providers/` | Site providers + registry |
 | `packages/download/` | HTTP/range/segment/HLS download |
 | `packages/engine/` | MediaCore, jobs, storage |
@@ -36,6 +37,7 @@ Apps prefer façade subpaths; API can also be imported directly:
 | `@pinforge/core/tools` | `@pinforge/tools` |
 | `@pinforge/core/worker` | `@pinforge/worker` |
 | `@pinforge/core/api` | `@pinforge/api` (alias) |
+| `@pinforge/core/common` | `@pinforge/common` |
 | `@pinforge/api/providers` | provider prefs / resolve |
 | `@pinforge/api/download` | `normalizeDownloadOptions` |
 

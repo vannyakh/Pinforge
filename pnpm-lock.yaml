@@ -185,11 +185,26 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/common:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsx:
+        specifier: ^4.23.11
+        version: 4.23.11
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@pinforge/api':
         specifier: workspace:*
         version: link:../api
+      '@pinforge/common':
+        specifier: workspace:*
+        version: link:../common
       '@pinforge/download':
         specifier: workspace:*
         version: link:../download
@@ -293,6 +308,9 @@ importers:
       '@distube/ytdl-core':
         specifier: ^4.16.12
         version: 4.16.12
+      '@pinforge/common':
+        specifier: workspace:*
+        version: link:../common
       '@pinforge/download':
         specifier: workspace:*
         version: link:../download

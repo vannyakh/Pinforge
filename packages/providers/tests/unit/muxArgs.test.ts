@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { muxAvCopyArgs, muxAvRemuxArgs } from "../../src/youtube/muxArgs.ts";
+import { muxAvCopyArgs, muxAvRemuxArgs } from "../../src/media/muxArgs.ts";
 
 describe("muxAvCopyArgs", () => {
   it("uses stream copy with faststart", () => {

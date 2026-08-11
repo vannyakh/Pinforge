@@ -8,7 +8,7 @@ import {
   qualityCap,
   youtubeQualityChoices,
   type YtStreamFormat,
-} from "../../src/youtube/formats.ts";
+} from "../../src/sites/youtube/formats.ts";
 
 describe("youtubeQualityChoices", () => {
   it("returns the default ladder when preview heights are empty", () => {

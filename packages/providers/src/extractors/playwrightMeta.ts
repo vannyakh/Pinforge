@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext } from "playwright";
-import { metaContent } from "./http";
+import { EXTRACTOR_HEADERS, metaContent } from "@pinforge/download";
+import { uniqStrings } from "@pinforge/common";
 
 export interface PageMeta {
   url: string;
@@ -59,17 +60,6 @@ export async function closePlaywrightBrowser(): Promise<void> {
   }
 }
 
-function uniq(urls: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const u of urls) {
-    if (!u || seen.has(u)) continue;
-    seen.add(u);
-    out.push(u);
-  }
-  return out;
-}
-
 /**
  * Load a URL in Chromium and scrape Open Graph / Twitter / JSON-LD / media URLs
  * from the rendered DOM (works when fetch-only HTML lacks meta).
@@ -84,6 +74,7 @@ export async function scrapePageMeta(
   try {
     context = await browser.newContext({
       userAgent:
+        EXTRACTOR_HEADERS["User-Agent"] ??
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       locale: "en-US",
       extraHTTPHeaders: opts.referer ? { Referer: opts.referer } : undefined,
@@ -206,8 +197,8 @@ export async function scrapePageMeta(
         extracted.ogVideo ||
         metaContent(html, "og:video") ||
         metaContent(html, "og:video:secure_url"),
-      images: uniq(extracted.images),
-      videos: uniq(extracted.videos),
+      images: uniqStrings(extracted.images),
+      videos: uniqStrings(extracted.videos),
       jsonLd: extracted.jsonLd,
     };
   } finally {

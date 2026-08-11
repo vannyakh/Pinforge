@@ -94,6 +94,7 @@ export {
   DEFAULT_YOUTUBE_OPTIONS,
   DEFAULT_PINTEREST_OPTIONS,
 } from "@pinforge/types";
+export { cleanUrl, uniqHttpUrls, uniqStrings, isHttpUrl } from "@pinforge/common";
 export type {
   PresetName,
   ProcessOptions,

@@ -7,6 +7,7 @@
 - **Workspace root stays minimal**: root keeps shared config, scripts, tests, docs, assets, and package manager files.
 - **Desktop app source lives under `apps/desktop/`**.
 - **Shared media logic is split under `packages/@pinforge/*`** with a thin `@pinforge/core` façade. Prefer façade subpaths from apps.
+- Cross-cutting helpers (URL scrape utils, etc.) live in `packages/common` (`@pinforge/common`).
 - **README translations** → `docs/readme/`, not root. Only main `readme.md` stays at root.
 - **Guide documents** (`*_GUIDE.md`, `CODE_STYLE.md`) → `docs/`
 - **Build artifacts** (`out/`, `node_modules/`) are gitignored
@@ -21,6 +22,7 @@ project-root/
 ├── packages/
 │   ├── core/               # @pinforge/core façade
 │   ├── api/                # @pinforge/api (CLI + desktop helpers)
+│   ├── common/             # @pinforge/common (shared helpers)
 │   ├── providers/          # @pinforge/providers
 │   ├── download/           # @pinforge/download
 │   ├── engine/             # @pinforge/engine

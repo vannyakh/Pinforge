@@ -15,7 +15,7 @@
     "dist:mac:x64": "node scripts/build-with-builder.js x64 --mac --x64",
     "cli": "pnpm --filter pinforge-cli start",
     "typecheck": "turbo run typecheck",
-    "test": "pnpm --filter @pinforge/core test && pnpm --filter @pinforge/providers test",
+    "test": "pnpm --filter @pinforge/common test && pnpm --filter @pinforge/core test && pnpm --filter @pinforge/providers test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,json,css,md,yml}\" \"packages/**/*.{ts,tsx,js,json,md}\" \"scripts/**/*.{js,md}\" \"tests/**/*.{ts,md}\" \".github/**/*.{yml,md,yaml}\" \"*.md\" \"*.json\" \"playwright.config.ts\"",

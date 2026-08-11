@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 import {
   buildYtdlpDownloadArgs,
   buildYtdlpProbeArgs,
-  isHttpUrl,
   ytdlpFormatSelector,
-} from "../../src/ytdlp/args.ts";
+} from "../../src/sites/ytdlp/args.ts";
+import { isHttpUrl } from "@pinforge/common";
 
 describe("isHttpUrl", () => {
   it("accepts http(s) and rejects others", () => {

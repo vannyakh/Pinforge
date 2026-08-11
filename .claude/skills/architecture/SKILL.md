@@ -41,8 +41,11 @@ Is it used by BOTH main and renderer processes?
   └── YES → apps/desktop/src/common/
 
 Is it shared media/download/provider logic (no Electron)?
-  └── YES → packages/{providers,download,engine,enhance,types,tools,worker}/
+  └── YES → packages/{providers,download,engine,enhance,types,tools,worker,common}/
              (apps import via `@pinforge/core/<subpath>`)
+
+Is it a cross-cutting helper used by multiple packages (URL scrape, etc.)?
+  └── YES → packages/common/  (`@pinforge/common`)
 
 Is it an HTTP/WebSocket endpoint?
   └── YES → apps/desktop/src/process/webserver/

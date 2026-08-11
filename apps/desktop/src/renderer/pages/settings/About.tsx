@@ -238,12 +238,6 @@ const AboutSettings: React.FC = () => {
                 In-app install needs a packaged build. Use the release page to download.
               </Typography.Text>
             ) : null}
-            <div className="flex items-center justify-between w-full gap-12px">
-              <Typography.Text className="text-12px text-t-secondary">
-                Include prerelease/dev builds
-              </Typography.Text>
-              <Switch size="small" checked={includePrerelease} onChange={handlePrereleaseChange} />
-            </div>
           </div>
         </div>
 

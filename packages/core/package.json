@@ -21,7 +21,8 @@
     "./tools": "./src/tools.ts",
     "./worker": "./src/worker.ts",
     "./zip": "./src/zip/index.ts",
-    "./api": "./src/api.ts"
+    "./api": "./src/api.ts",
+    "./common": "./src/common.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -31,6 +32,7 @@
   },
   "dependencies": {
     "@pinforge/api": "workspace:*",
+    "@pinforge/common": "workspace:*",
     "@pinforge/download": "workspace:*",
     "@pinforge/enhance": "workspace:*",
     "@pinforge/engine": "workspace:*",
