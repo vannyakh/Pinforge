@@ -83,7 +83,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @pinterest-desktop/core exec playwright install --with-deps chromium
+        run: pnpm --filter @pinforge/core exec playwright install --with-deps chromium
 
       - name: Build distributables
         env:

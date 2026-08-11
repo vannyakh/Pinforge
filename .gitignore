@@ -63,3 +63,4 @@ tests/e2e/results/
 # Accidental youtubei / player dump scripts
 *-player-script.js
 apps/desktop/src/renderer/out-test-yt/
+.pnpm-store

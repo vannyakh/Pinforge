@@ -43,7 +43,7 @@ Configure under **Settings → Secrets and variables → Actions**.
 
 ```bash
 pnpm install
-pnpm --filter @pinterest-desktop/core exec playwright install chromium
+pnpm --filter @pinforge/core exec playwright install chromium
 
 pnpm dist:win    # Windows NSIS → apps/desktop/release/
 pnpm dist:mac    # macOS DMG + zip

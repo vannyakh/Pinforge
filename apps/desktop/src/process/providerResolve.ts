@@ -1,4 +1,4 @@
-import { detectProvider, listProviders } from "@pinterest-desktop/core";
+import { detectProvider, listProviders } from "@pinforge/core/providers";
 import {
   BUILTIN_PROVIDER_META,
   PROVIDER_REGISTRY,

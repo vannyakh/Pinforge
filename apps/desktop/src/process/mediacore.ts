@@ -4,12 +4,8 @@
 
 import { app } from "electron";
 import { join } from "node:path";
-import {
-  configureMediaCore,
-  getMediaCore,
-  type MediaCore,
-  type DownloadJob,
-} from "@pinterest-desktop/core";
+import { configureMediaCore, getMediaCore, type MediaCore } from "@pinforge/core/engine";
+import type { DownloadJob } from "@pinforge/core/jobs";
 
 let configured = false;
 

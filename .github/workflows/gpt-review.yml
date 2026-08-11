@@ -106,7 +106,7 @@ jobs:
               '- Preload: apps/desktop/src/preload (thin contextBridge)',
               '- Renderer: apps/desktop/src/renderer (React; use window.api, never Node APIs)',
               '- Shared logic: packages/core (providers, download, enhance)',
-              '- Path aliases: @renderer/*, @common/*, @/, @pinterest-desktop/core',
+              '- Path aliases: @renderer/*, @common/*, @/, @pinforge/core',
               '',
               '## Code Conventions',
               '- TypeScript strict; prefer explicit types over any',

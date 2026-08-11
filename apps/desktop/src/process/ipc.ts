@@ -1,26 +1,26 @@
 import { app, ipcMain, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import {
   listProviders,
-  extractMediaPreview,
+  configurePinterestCookies,
+  configureYtdlp,
+} from "@pinforge/core/providers";
+import { extractMediaPreview } from "@pinforge/core/preview";
+import {
   PRESETS,
   DEFAULT_ENHANCE_FEATURES,
   DEFAULT_YOUTUBE_OPTIONS,
   DEFAULT_PINTEREST_OPTIONS,
-  configurePinterestCookies,
-  configureFfmpeg,
-  configureYtdlp,
-  zipFolder,
-  jobStatusToPackStatus,
   type PresetName,
   type FormatPreset,
   type ProcessResult,
   type EnhanceFeatures,
   type YoutubeDownloadOptions,
   type PinterestOptions,
-  type DownloadJob,
-  type JobStatus,
-  type CancelJobOptions,
-} from "@pinterest-desktop/core";
+} from "@pinforge/core/types";
+import { configureFfmpeg } from "@pinforge/core/tools";
+import { zipFolder } from "@pinforge/core/zip";
+import { jobStatusToPackStatus } from "@pinforge/core/engine";
+import type { DownloadJob, JobStatus, CancelJobOptions } from "@pinforge/core/jobs";
 import {
   getStore,
   resolveSystemPaths,

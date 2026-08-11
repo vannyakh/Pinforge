@@ -9,12 +9,12 @@ import type {
   EnhanceFeatures,
   YoutubeDownloadOptions,
   PinterestOptions,
-} from "@pinterest-desktop/core";
+} from "@pinforge/core/types";
 import {
   DEFAULT_ENHANCE_FEATURES,
   DEFAULT_YOUTUBE_OPTIONS,
   DEFAULT_PINTEREST_OPTIONS,
-} from "@pinterest-desktop/core";
+} from "@pinforge/core/types";
 import {
   DEFAULT_REMOTE,
   DEFAULT_TUNNEL,

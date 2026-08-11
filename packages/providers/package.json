@@ -1,0 +1,30 @@
+{
+  "name": "@pinforge/providers",
+  "version": "0.1.3",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./youtube/service": "./src/youtube/service.ts",
+    "./ytdlp": "./src/ytdlp/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test": "tsx --test tests/unit/**/*.test.ts"
+  },
+  "dependencies": {
+    "@pinforge/types": "workspace:*",
+    "@pinforge/download": "workspace:*",
+    "@pinforge/tools": "workspace:*",
+    "@distube/ytdl-core": "^4.16.12",
+    "playwright": "^1.62.1",
+    "youtubei.js": "17.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

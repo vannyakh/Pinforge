@@ -5,42 +5,46 @@
 ### Rules
 
 - **Workspace root stays minimal**: root keeps shared config, scripts, tests, docs, assets, and package manager files.
-- **Desktop app source lives under `packages/desktop/`**: do not add new app runtime code back to the root.
+- **Desktop app source lives under `apps/desktop/`**.
+- **Shared media logic is split under `packages/@pinforge/*`** with a thin `@pinforge/core` façade. Prefer façade subpaths from apps.
 - **README translations** → `docs/readme/`, not root. Only main `readme.md` stays at root.
 - **Guide documents** (`*_GUIDE.md`, `CODE_STYLE.md`) → `docs/`
 - **Build artifacts** (`out/`, `node_modules/`) are gitignored
 
-### Current Root Structure (M1)
+### Current Root Structure
 
 ```
 project-root/
+├── apps/
+│   ├── desktop/            # Electron desktop app
+│   └── cli/                # pinforge CLI
 ├── packages/
-│   └── desktop/            # Electron desktop workspace
+│   ├── core/               # @pinforge/core façade
+│   ├── providers/          # @pinforge/providers
+│   ├── download/           # @pinforge/download
+│   ├── engine/             # @pinforge/engine
+│   ├── enhance/            # @pinforge/enhance
+│   ├── types/              # @pinforge/types
+│   ├── tools/              # @pinforge/tools
+│   └── worker/             # @pinforge/worker
+├── rust/                   # Optional native worker
 ├── tests/                  # Shared test suites
-├── docs/                   # All documentation
+├── docs/                   # Documentation
 ├── scripts/                # Build and tooling scripts
-├── resources/              # Static resources (icons, images, installers)
-├── public/                 # Shared Vite public assets
-├── patches/                # npm/bun patches
-├── homebrew/               # Homebrew formula
+├── patches/                # npm/pnpm patches
 ├── package.json            # Workspace root config
-├── tsconfig.json           # Shared TS config
-├── vitest.config.ts        # Shared test config
 ├── AGENTS.md               # Agent conventions
-├── CLAUDE.md               # Claude-specific config
-└── ...                     # Other root-level tooling config
+└── ...
 ```
-
-> **Migration rule**: New desktop runtime modules go under `packages/desktop/`, not the repository root.
 
 ---
 
-## `packages/desktop/` Layout
+## `apps/desktop/` Layout
 
 ### Workspace Structure
 
 ```
-packages/desktop/
+apps/desktop/
 ├── src/
 │   ├── renderer/          # Renderer layer — React UI, no Node.js APIs
 │   ├── process/           # Main process layer — Node.js / Electron business logic
@@ -53,27 +57,9 @@ packages/desktop/
 └── package.json
 ```
 
-### `packages/desktop/src/` Structure
-
-```
-packages/desktop/src/
-├── renderer/              # React UI, browser-only code
-├── process/               # Electron main-process and worker code
-│   ├── bridge/            # IPC handlers
-│   ├── services/          # Business logic
-│   ├── agent/             # AI platform connections
-│   ├── channels/          # Multi-channel messaging
-│   ├── extensions/        # Plugin system
-│   ├── webserver/         # WebUI server
-│   └── worker/            # Background workers
-├── common/                # Shared types, adapters, utilities
-├── preload/               # contextBridge / ipcRenderer exposure
-├── index.ts               # Main process entry point
-└── types.d.ts             # Ambient declarations
-```
-
 ### Placement Rules
 
-- New Electron runtime code belongs in `packages/desktop/src/**`.
-- Root-level scripts and config may reference `packages/desktop/**`, but should not duplicate app source.
-- Tests remain under `tests/**` and should reference desktop source through aliases or `packages/desktop/...` paths.
+- New Electron runtime code belongs in `apps/desktop/src/**`.
+- Shared media/download logic belongs in the owning `@pinforge/*` package (apps import via `@pinforge/core/<subpath>`).
+- Root-level scripts and config may reference `apps/desktop/**`, but should not duplicate app source.
+- Tests remain under `tests/**` or package-local `tests/` and should reference source through package names or aliases.

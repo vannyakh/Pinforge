@@ -4,13 +4,9 @@ import ora from "ora";
 import pc from "picocolors";
 import prompts from "prompts";
 import path from "node:path";
-import {
-  processMedia,
-  listProviders,
-  detectProvider,
-  type FormatPreset,
-  type PresetName,
-} from "@pinterest-desktop/core";
+import { processMedia } from "@pinforge/core/process";
+import { listProviders, detectProvider } from "@pinforge/core/providers";
+import type { FormatPreset, PresetName } from "@pinforge/core/types";
 import { printBanner } from "./banner.js";
 
 const program = new Command();

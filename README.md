@@ -31,7 +31,7 @@ For personal use. Always follow each site’s terms and rate limits.
 
 ```bash
 pnpm install
-pnpm --filter @pinterest-desktop/core exec playwright install chromium
+pnpm --filter @pinforge/core exec playwright install chromium
 pnpm --filter desktop run dev
 ```
 

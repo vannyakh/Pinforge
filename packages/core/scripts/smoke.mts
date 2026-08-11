@@ -1,8 +1,8 @@
 /**
  * Smoke: provider detect + pipeline + optional live pin / youtube extractors.
- * Usage: pnpm --filter @pinterest-desktop/core smoke
+ * Usage: pnpm --filter @pinforge/core smoke
  */
-import { runPipeline } from "../src/pipeline/runPipeline.ts";
+import { runPipeline } from "@pinforge/enhance";
 import { detectProvider, listProviders, processMedia } from "../src/index.ts";
 import sharp from "sharp";
 import fs from "node:fs/promises";

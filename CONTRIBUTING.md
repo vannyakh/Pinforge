@@ -12,7 +12,7 @@ Repo: [github.com/vannyakh/Pinforge](https://github.com/vannyakh/Pinforge)
 
 ```bash
 pnpm install
-pnpm --filter @pinterest-desktop/core exec playwright install chromium
+pnpm --filter @pinforge/core exec playwright install chromium
 pnpm --filter desktop run dev
 ```
 

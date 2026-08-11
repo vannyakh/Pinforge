@@ -95,7 +95,7 @@ On a Mac with the cert in Keychain:
 
 ```bash
 pnpm install
-pnpm --filter @pinterest-desktop/core exec playwright install chromium
+pnpm --filter @pinforge/core exec playwright install chromium
 
 export APPLE_ID="you@example.com"
 export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"

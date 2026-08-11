@@ -23,31 +23,35 @@ Determine correct file placement and structure for an Electron multi-process pro
 
 ```
 Is it UI (React components, hooks, pages)?
-  └── YES → packages/desktop/src/renderer/              → see references/renderer.md
+  └── YES → apps/desktop/src/renderer/              → see references/renderer.md
 
 Is it an IPC handler responding to renderer calls?
-  └── YES → packages/desktop/src/process/bridge/        → see references/process.md
+  └── YES → apps/desktop/src/process/bridge/        → see references/process.md
 
 Is it business logic running in the main process?
-  └── YES → packages/desktop/src/process/services/      → see references/process.md
+  └── YES → apps/desktop/src/process/services/      → see references/process.md
 
 Is it an AI platform connection (API client, message protocol)?
-  └── YES → packages/desktop/src/process/agent/<platform>/
+  └── YES → apps/desktop/src/process/agent/<platform>/
 
 Is it a background task that runs in a worker thread?
-  └── YES → packages/desktop/src/process/worker/
+  └── YES → apps/desktop/src/process/worker/
 
 Is it used by BOTH main and renderer processes?
-  └── YES → packages/desktop/src/common/
+  └── YES → apps/desktop/src/common/
+
+Is it shared media/download/provider logic (no Electron)?
+  └── YES → packages/{providers,download,engine,enhance,types,tools,worker}/
+             (apps import via `@pinforge/core/<subpath>`)
 
 Is it an HTTP/WebSocket endpoint?
-  └── YES → packages/desktop/src/process/webserver/
+  └── YES → apps/desktop/src/process/webserver/
 
 Is it a plugin/extension resolver or loader?
-  └── YES → packages/desktop/src/process/extensions/
+  └── YES → apps/desktop/src/process/extensions/
 
 Is it a messaging channel (Lark, DingTalk, Telegram)?
-  └── YES → packages/desktop/src/process/channels/
+  └── YES → apps/desktop/src/process/channels/
 ```
 
 ---

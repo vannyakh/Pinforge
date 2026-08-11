@@ -54,7 +54,7 @@ Pinforge packs **`sharp`** (image enhance). Binaries must live outside the ASAR 
 Playwright Chromium is **not** bundled (size). Users / CI should run:
 
 ```bash
-pnpm --filter @pinterest-desktop/core exec playwright install chromium
+pnpm --filter @pinforge/core exec playwright install chromium
 ```
 
 ## Artifacts
@@ -70,12 +70,15 @@ Add `apps/desktop/resources/icon.png` (and `.ico` / `.icns` if desired) before s
 
 macOS DMG drag-to-Applications art:
 
-| File                                       | Size              |
-| ------------------------------------------ | ----------------- |
-| `apps/desktop/resources/background.png`    | 540×380           |
-| `apps/desktop/resources/background@2x.png` | 1080×760 (Retina) |
+| File                                       | Size                                       |
+| ------------------------------------------ | ------------------------------------------ |
+| `apps/desktop/resources/background.png`    | 540×380                                    |
+| `apps/desktop/resources/background@2x.png` | 1080×760 (Retina)                          |
+| `apps/desktop/resources/background.tiff`   | Multi-res TIFF (`tiffutil -cathidpicheck`) |
 
-Configured in `electron-builder.yml` → `dmg.background` / `dmg.contents` (app at 140,180 → Applications at 400,180).
+`electron-builder.yml` leaves `dmg.background` unset so `buildResources` auto-picks `background.tiff`. Icon slots: app at 140,180 → Applications at 400,180.
+
+`dmg-builder@24.13.3` is patched (`patches/dmg-builder@24.13.3.patch`) to skip corrupt Finder `pBBk` bookmarks that hide custom backgrounds on modern macOS.
 
 ## CI / Release
 

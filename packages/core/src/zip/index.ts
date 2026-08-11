@@ -1,0 +1,1 @@
+export { zipFolder } from "./folderZip";

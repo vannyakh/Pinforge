@@ -142,7 +142,29 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @pinterest-desktop/core exec playwright install --with-deps chromium
+        run: pnpm --filter @pinforge/core exec playwright install --with-deps chromium
+
+      - name: Check Apple signing secrets (macOS)
+        if: runner.os == 'macOS'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -z "${CSC_LINK:-}" ]] && missing+=("CSC_LINK")
+          [[ -z "${APPLE_ID:-}" ]] && missing+=("APPLE_ID")
+          [[ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]] && missing+=("APPLE_APP_SPECIFIC_PASSWORD")
+          [[ -z "${APPLE_TEAM_ID:-}" ]] && missing+=("APPLE_TEAM_ID")
+          if ((${#missing[@]} > 0)); then
+            echo "::warning::Apple signing/notarization secrets missing: ${missing[*]}"
+            echo "::warning::Gatekeeper will block the app (\"Apple could not verify Pinforge\")."
+            echo "::warning::Follow .github/APPLE_SIGNING.md to add Developer ID + notarization secrets."
+          else
+            echo "Apple signing + notarization secrets present."
+          fi
 
       - name: Build distributables
         env:

@@ -59,10 +59,15 @@ mac:
   category: public.app-category.photography
   hardenedRuntime: true
   gatekeeperAssess: false
+  # Required for Developer ID notarization (see .github/APPLE_SIGNING.md).
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 dmg:
-  background: resources/background.png
+  # Omit explicit background path so electron-builder picks
+  # resources/background.tiff (then .png) from buildResources.
+  # dmg-builder is patched to skip corrupt pBBk bookmarks (electron-builder#9072).
   format: UDZO
   internetEnabled: false
   title: ${productName} ${version}

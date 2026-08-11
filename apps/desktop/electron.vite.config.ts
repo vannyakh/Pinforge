@@ -22,7 +22,18 @@ const MAIN_EXTERNALS = [
 ];
 
 /** Bundle these into main so pnpm nested deps (e.g. conf) are not required at runtime. */
-const MAIN_BUNDLE_DEPS = ["@pinterest-desktop/core", "electron-store", "electron-updater"];
+const MAIN_BUNDLE_DEPS = [
+  "@pinforge/core",
+  "@pinforge/types",
+  "@pinforge/download",
+  "@pinforge/providers",
+  "@pinforge/engine",
+  "@pinforge/enhance",
+  "@pinforge/tools",
+  "@pinforge/worker",
+  "electron-store",
+  "electron-updater",
+];
 
 export default defineConfig({
   main: {
@@ -37,8 +48,8 @@ export default defineConfig({
         "@common": resolve("src/common"),
         "@process": resolve("src/process"),
         "@renderer": rendererRoot,
-        "@pinterest-desktop/core": resolve("../../packages/core/src/index.ts"),
       },
+      // Resolve `@pinforge/core` and subpaths via package.json `exports`.
       extensions: [".ts", ".tsx", ".js", ".json"],
     },
     build: {

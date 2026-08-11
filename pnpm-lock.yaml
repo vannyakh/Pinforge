@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  dmg-builder@24.13.3:
+    hash: zs6yvdxx64kwexj4qecuy2dk5i
+    path: patches/dmg-builder@24.13.3.patch
+
 importers:
 
   .:
@@ -23,7 +28,7 @@ importers:
 
   apps/cli:
     dependencies:
-      '@pinterest-desktop/core':
+      '@pinforge/core':
         specifier: workspace:*
         version: link:../../packages/core
       commander:
@@ -66,7 +71,7 @@ importers:
       '@icon-park/react':
         specifier: ^1.4.2
         version: 1.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@pinterest-desktop/core':
+      '@pinforge/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@uiw/react-codemirror':
@@ -160,18 +165,27 @@ importers:
 
   packages/core:
     dependencies:
-      '@distube/ytdl-core':
-        specifier: ^4.16.12
-        version: 4.16.12
-      playwright:
-        specifier: ^1.62.1
-        version: 1.62.1
-      sharp:
-        specifier: ^0.33.5
-        version: 0.33.5
-      youtubei.js:
-        specifier: 17.2.0
-        version: 17.2.0
+      '@pinforge/download':
+        specifier: workspace:*
+        version: link:../download
+      '@pinforge/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@pinforge/enhance':
+        specifier: workspace:*
+        version: link:../enhance
+      '@pinforge/providers':
+        specifier: workspace:*
+        version: link:../providers
+      '@pinforge/tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+      '@pinforge/worker':
+        specifier: workspace:*
+        version: link:../worker
     devDependencies:
       '@types/node':
         specifier: ^22.10.0
@@ -179,6 +193,132 @@ importers:
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/download:
+    dependencies:
+      '@pinforge/tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+      '@pinforge/worker':
+        specifier: workspace:*
+        version: link:../worker
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsx:
+        specifier: ^4.23.11
+        version: 4.23.11
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/engine:
+    dependencies:
+      '@pinforge/download':
+        specifier: workspace:*
+        version: link:../download
+      '@pinforge/tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsx:
+        specifier: ^4.23.11
+        version: 4.23.11
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/enhance:
+    dependencies:
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+      '@pinforge/worker':
+        specifier: workspace:*
+        version: link:../worker
+      sharp:
+        specifier: ^0.33.5
+        version: 0.33.5
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/providers:
+    dependencies:
+      '@distube/ytdl-core':
+        specifier: ^4.16.12
+        version: 4.16.12
+      '@pinforge/download':
+        specifier: workspace:*
+        version: link:../download
+      '@pinforge/tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
+      youtubei.js:
+        specifier: 17.2.0
+        version: 17.2.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/tools:
+    dependencies:
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/types:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/worker:
+    dependencies:
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -4481,7 +4621,7 @@ snapshots:
       builder-util-runtime: 9.2.4
       chromium-pickle-js: 0.2.0
       debug: 4.4.3
-      dmg-builder: 24.13.3(electron-builder-squirrel-windows@24.13.3)
+      dmg-builder: 24.13.3(patch_hash=zs6yvdxx64kwexj4qecuy2dk5i)(electron-builder-squirrel-windows@24.13.3)
       ejs: 3.1.10
       electron-builder-squirrel-windows: 24.13.3(dmg-builder@24.13.3)
       electron-publish: 24.13.1
@@ -4912,7 +5052,7 @@ snapshots:
       buffer-equal: 1.0.1
       minimatch: 3.1.5
 
-  dmg-builder@24.13.3(electron-builder-squirrel-windows@24.13.3):
+  dmg-builder@24.13.3(patch_hash=zs6yvdxx64kwexj4qecuy2dk5i)(electron-builder-squirrel-windows@24.13.3):
     dependencies:
       app-builder-lib: 24.13.3(dmg-builder@24.13.3)(electron-builder-squirrel-windows@24.13.3)
       builder-util: 24.13.1
@@ -4981,7 +5121,7 @@ snapshots:
       builder-util: 24.13.1
       builder-util-runtime: 9.2.4
       chalk: 4.1.2
-      dmg-builder: 24.13.3(electron-builder-squirrel-windows@24.13.3)
+      dmg-builder: 24.13.3(patch_hash=zs6yvdxx64kwexj4qecuy2dk5i)(electron-builder-squirrel-windows@24.13.3)
       fs-extra: 10.1.0
       is-ci: 3.0.1
       lazy-val: 1.0.5

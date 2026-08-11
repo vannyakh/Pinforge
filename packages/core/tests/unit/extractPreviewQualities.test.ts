@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildYoutubeSingleExtract } from "../../src/extractPreview.ts";
+import { buildYoutubeSingleExtract } from "../../src/preview/index.ts";
 
 describe("buildYoutubeSingleExtract", () => {
   it("exposes preview heights on ExtractPreview.qualities", () => {

@@ -1,0 +1,31 @@
+/** Façade re-export. */
+export {
+  JobManager,
+  FileJobStore,
+  createJobId,
+  progressPercent,
+  isActiveStatus,
+  isUnfinishedStatus,
+  isTerminalStatus,
+  isRecoverableCrashStatus,
+  canPause,
+  canResume,
+  canCancel,
+  jobStatusToPackStatus,
+} from "@pinforge/engine";
+export type {
+  JobStatus,
+  JobProgress,
+  JobFiles,
+  JobFormat,
+  DownloadJob,
+  CreateJobInput,
+  ListJobsFilter,
+  CancelJobOptions,
+  DownloadCheckpoint,
+  SegmentCheckpoint,
+  CheckpointType,
+  JobStore,
+  JobEvent,
+  JobEventListener,
+} from "@pinforge/engine";

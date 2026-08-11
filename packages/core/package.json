@@ -1,31 +1,46 @@
 {
-  "name": "@pinterest-desktop/core",
+  "name": "@pinforge/core",
   "version": "0.1.3",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./providers": "./src/providers.ts",
+    "./download": "./src/download.ts",
+    "./process": "./src/process.ts",
+    "./preview": "./src/preview/index.ts",
+    "./pipeline": "./src/pipeline.ts",
+    "./engine": "./src/engine.ts",
+    "./jobs": "./src/jobs.ts",
+    "./hls": "./src/hls.ts",
+    "./http": "./src/http.ts",
+    "./storage": "./src/storage.ts",
+    "./tools": "./src/tools.ts",
+    "./worker": "./src/worker.ts",
+    "./zip": "./src/zip/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "test": "tsx --test tests/unit/**/*.test.ts",
-    "smoke": "tsx scripts/smoke.mts",
-    "playwright:install": "playwright install chromium",
-    "worker:build": "cargo build -p pinforge-worker --release --manifest-path ../../rust/Cargo.toml",
-    "worker:ping": "cargo run -p pinforge-worker --manifest-path ../../rust/Cargo.toml -- ping"
+    "smoke": "tsx scripts/smoke.mts"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.12",
-    "playwright": "^1.62.1",
-    "sharp": "^0.33.5",
-    "youtubei.js": "17.2.0"
+    "@pinforge/download": "workspace:*",
+    "@pinforge/enhance": "workspace:*",
+    "@pinforge/engine": "workspace:*",
+    "@pinforge/providers": "workspace:*",
+    "@pinforge/tools": "workspace:*",
+    "@pinforge/types": "workspace:*",
+    "@pinforge/worker": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.23.11",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "sharp": "^0.33.5"
   }
 }

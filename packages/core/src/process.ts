@@ -1,15 +1,20 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { runPipeline } from "./pipeline/runPipeline";
+import { runPipeline } from "@pinforge/enhance";
 import type {
   DownloadResult,
   PresetName,
+  ProcessBoardOptions,
   ProcessOptions,
   ProcessResult,
   ProviderId,
   ResolvedMedia,
-} from "./types";
-import { DEFAULT_ENHANCE_FEATURES } from "./types";
+} from "@pinforge/types";
+import {
+  DEFAULT_ENHANCE_FEATURES,
+  DEFAULT_PINTEREST_OPTIONS,
+  DEFAULT_YOUTUBE_OPTIONS,
+} from "@pinforge/types";
 import {
   detectProvider,
   isPinterestCollectionUrl,
@@ -23,28 +28,13 @@ import {
   resolveTikTokProfile,
   extractTikTok,
   type MediaProvider,
-} from "./providers";
-import { resolveYouTubeVideo } from "./providers/youtube/service";
-import { sanitizeFilename, sleep } from "./utils";
-import { mapPool } from "./download/pool";
-import { DEFAULT_PINTEREST_OPTIONS, DEFAULT_YOUTUBE_OPTIONS } from "./types";
+} from "@pinforge/providers";
+import { resolveYouTubeVideo } from "@pinforge/providers/youtube/service";
+import { sanitizeFilename, sleep } from "@pinforge/types";
+import { mapPool } from "@pinforge/download";
 import { zipFolder } from "./zip/folderZip";
 
-export interface ProcessBoardOptions extends ProcessOptions {
-  onProgress?: (info: {
-    current: number;
-    total: number;
-    url: string;
-    result?: ProcessResult;
-    error?: string;
-    /** 0–100 when byte progress is known */
-    percent?: number;
-    downloaded?: number;
-    totalBytes?: number | null;
-    phase?: string;
-    title?: string;
-  }) => void;
-}
+export type { ProcessBoardOptions };
 
 async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promise<ProcessResult> {
   await fs.mkdir(opts.outDir, { recursive: true });
