@@ -614,7 +614,8 @@ const api = {
     id: string;
     status: "approved" | "denied";
   }): Promise<RemoteUser[]> => ipcRenderer.invoke("remote:setUserStatus", payload),
-  removeRemoteUser: (id: string): Promise<RemoteUser[]> => ipcRenderer.invoke("remote:removeUser", id),
+  removeRemoteUser: (id: string): Promise<RemoteUser[]> =>
+    ipcRenderer.invoke("remote:removeUser", id),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),
   openPath: (filePath: string): Promise<string> => ipcRenderer.invoke("shell:openPath", filePath),

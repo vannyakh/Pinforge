@@ -94,8 +94,7 @@ describe("classifyPinterestCollection", () => {
       {
         shareId: "6518739802359149495",
         inviteCode: "abc",
-        sourceUrl:
-          "/multi-pin-share/6518739802359149495/?invite_code=abc&sender=1",
+        sourceUrl: "/multi-pin-share/6518739802359149495/?invite_code=abc&sender=1",
       }
     );
   });

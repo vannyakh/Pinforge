@@ -221,9 +221,7 @@ export async function extractMediaPreview(
 
   if (provider.id === "pinterest") {
     try {
-      const host = new URL(
-        sourceUrl.includes("://") ? sourceUrl : `https://${sourceUrl}`
-      ).hostname;
+      const host = new URL(sourceUrl.includes("://") ? sourceUrl : `https://${sourceUrl}`).hostname;
       if (isPinItHost(host)) {
         sourceUrl = await expandPinterestUrl(sourceUrl);
       }

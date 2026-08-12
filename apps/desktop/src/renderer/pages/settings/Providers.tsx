@@ -15,6 +15,7 @@ import classNames from "classnames";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import { api, type InstalledProviderView, type RegistryListItem } from "@renderer/api";
+import { SettingsPage } from "./components/SettingsLayout";
 import { PROVIDER_LOGOS } from "./providerLogos";
 
 type TabKey = "builtin" | "installed" | "registry";
@@ -243,11 +244,17 @@ const ProvidersSettings: React.FC = () => {
   );
 
   return (
-    <div className="providers-page">
+    <SettingsPage width="full" className="providers-page">
       <div className="providers-page__chrome">
-        <div className="providers-page__header">
-          <h1 className="providers-page__title">Providers</h1>
-          <div className="providers-page__actions">
+        <header className="settings-header providers-page__header">
+          <div className="settings-header__main min-w-0">
+            <h1 className="settings-header__title">Providers</h1>
+            <p className="settings-header__desc">
+              Manage built-in and installed download providers. Enable the ones you use, install
+              more from the registry, or add a local package.
+            </p>
+          </div>
+          <div className="settings-header__actions providers-page__actions">
             {tab === "registry" && (
               <Input
                 allowClear
@@ -265,11 +272,7 @@ const ProvidersSettings: React.FC = () => {
               </Button>
             </Dropdown>
           </div>
-        </div>
-        <p className="providers-page__desc">
-          Manage built-in and installed download providers. Enable the ones you use, install more
-          from the registry, or add a local package.
-        </p>
+        </header>
 
         <div className="providers-page__tabs" role="tablist">
           {tabs.map((item) => {
@@ -385,7 +388,7 @@ const ProvidersSettings: React.FC = () => {
             ))}
         </div>
       </div>
-    </div>
+    </SettingsPage>
   );
 };
 

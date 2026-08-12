@@ -473,7 +473,7 @@ async function processYouTubeChannel(
         extractorUrl: opts.extractorUrl,
         fragmentConcurrency: resolveFragmentConcurrency(opts),
         packFolders: opts.packFolders,
-    naming: opts.naming,
+        naming: opts.naming,
         signal: opts.signal,
         onByteProgress: (p) => {
           const percent =
@@ -570,7 +570,7 @@ async function processYouTubePlaylist(
         extractorUrl: opts.extractorUrl,
         fragmentConcurrency: resolveFragmentConcurrency(opts),
         packFolders: opts.packFolders,
-    naming: opts.naming,
+        naming: opts.naming,
         signal: opts.signal,
         onByteProgress: (p) => {
           const percent =

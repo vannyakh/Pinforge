@@ -31,20 +31,14 @@ describe("renderNamingTemplate", () => {
   });
 
   it("strips unsafe path characters", () => {
-    assert.equal(
-      renderNamingTemplate("{title}", { title: 'a/b:c*d?' }),
-      "abcd"
-    );
+    assert.equal(renderNamingTemplate("{title}", { title: "a/b:c*d?" }), "abcd");
   });
 });
 
 describe("resolveMediaFileBase", () => {
   it("uses the default template when none is set", () => {
     assert.equal(
-      resolveMediaFileBase(
-        { title: "Sunset", id: "99", provider: "youtube", ext: "mp4" },
-        {}
-      ),
+      resolveMediaFileBase({ title: "Sunset", id: "99", provider: "youtube", ext: "mp4" }, {}),
       "Sunset-99"
     );
   });
@@ -73,10 +67,7 @@ describe("resolveMediaFileBase", () => {
 
 describe("packFolderName with template", () => {
   it("defaults to title-id", () => {
-    assert.equal(
-      packFolderName({ title: "Trip", id: "abc", provider: "youtube" }),
-      "Trip-abc"
-    );
+    assert.equal(packFolderName({ title: "Trip", id: "abc", provider: "youtube" }), "Trip-abc");
   });
 
   it("uses a custom folder template", () => {

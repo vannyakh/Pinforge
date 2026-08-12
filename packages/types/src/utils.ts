@@ -73,9 +73,7 @@ export function resolveMediaFileBase(
   const idPart = media.id ?? "";
   const stamp = opts.stamp ?? "";
   const fallbackTitle = idPart ? media.provider : `${media.provider}${stamp}`;
-  const date =
-    media.date?.trim() ||
-    new Date().toISOString().slice(0, 10);
+  const date = media.date?.trim() || new Date().toISOString().slice(0, 10);
   return renderNamingTemplate(template, {
     title: media.title?.trim() || fallbackTitle,
     id: idPart,

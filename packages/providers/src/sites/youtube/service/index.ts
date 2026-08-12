@@ -12,11 +12,7 @@ import { resolveMediaFileBase, sanitizeFilename } from "@pinforge/types";
 import { resolveYoutubePackDir } from "../packDir";
 import { fetchBinary, toResolved } from "@pinforge/download";
 import { extractYouTubeId } from "../extract";
-import {
-  audioOutputExt,
-  qualityFromFormat,
-  fragmentConcurrencyForQuality,
-} from "../formats";
+import { audioOutputExt, qualityFromFormat, fragmentConcurrencyForQuality } from "../formats";
 import {
   convertAudio,
   embedMetadata,

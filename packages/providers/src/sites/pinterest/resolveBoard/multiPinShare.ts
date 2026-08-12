@@ -143,9 +143,7 @@ export async function resolveMultiPinShare(
     if (!/^\d{6,}$/.test(id)) continue;
     const titleRaw = pin.grid_title ?? pin.title ?? pin.description;
     const title =
-      typeof titleRaw === "string" && titleRaw.trim()
-        ? titleRaw.trim().slice(0, 200)
-        : undefined;
+      typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim().slice(0, 200) : undefined;
     const coverUrl = coverFromPinObject(pin);
     const pinUrl = pinUrlFromId(id);
     pinUrls.push(pinUrl);
@@ -156,8 +154,7 @@ export async function resolveMultiPinShare(
     throw new Error("No pins found in this shared collection.");
   }
 
-  const ownerName =
-    payload.owner?.full_name || payload.owner?.username || undefined;
+  const ownerName = payload.owner?.full_name || payload.owner?.username || undefined;
 
   return {
     pinUrls,

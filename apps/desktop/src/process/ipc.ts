@@ -65,11 +65,7 @@ import {
   notifyTelegramAccessDecision,
   syncRemoteRuntime,
 } from "./services/remoteRuntime";
-import {
-  listRemoteUsers,
-  removeRemoteUser,
-  setRemoteUserStatus,
-} from "./services/remoteAccess";
+import { listRemoteUsers, removeRemoteUser, setRemoteUserStatus } from "./services/remoteAccess";
 import { testTelegramToken, normalizeTelegramToken } from "./channels/telegram";
 
 type ActiveRun = { abort: AbortController; jobId: string; packId: string };
@@ -743,7 +739,9 @@ async function runProcessResume(e: IpcMainInvokeEvent, jobId: string) {
       errorCount: res.errors.length,
       format: existingPack?.format ?? runningPack.format ?? res.results[0]?.format,
       youtubeQuality:
-        existingPack?.youtubeQuality ?? runningPack.youtubeQuality ?? res.results[0]?.youtubeQuality,
+        existingPack?.youtubeQuality ??
+        runningPack.youtubeQuality ??
+        res.results[0]?.youtubeQuality,
       height: maxHeightFromResults(res.results) ?? existingPack?.height ?? runningPack.height,
       updatedAt: Date.now(),
     };
@@ -1238,35 +1236,44 @@ export function registerIpc(): void {
     return store.get("remote");
   });
 
-  ipcMain.handle("remote:upsertChannel", async (_e, channel: Partial<import("../common/remote/types").RemoteChannelConfig> & { id: string; botToken?: string }) => {
-    const store = getStore();
-    const remote = store.get("remote");
-    const idx = remote.channels.findIndex((c) => c.id === channel.id);
-    const channels = [...remote.channels];
-    if (idx >= 0) {
-      const prev = channels[idx]!;
-      const merged = { ...prev, ...channel } as (typeof channels)[number];
-      const incomingToken = channel.botToken?.trim() ?? "";
-      const prevToken = prev.botToken?.trim() ?? "";
-      if (!incomingToken && prevToken) merged.botToken = prev.botToken;
-      else if (incomingToken) merged.botToken = normalizeTelegramToken(incomingToken);
-      if (channel.botOptions) {
-        merged.botOptions = { ...prev.botOptions, ...channel.botOptions };
-      } else if (prev.botOptions) {
-        merged.botOptions = prev.botOptions;
+  ipcMain.handle(
+    "remote:upsertChannel",
+    async (
+      _e,
+      channel: Partial<import("../common/remote/types").RemoteChannelConfig> & {
+        id: string;
+        botToken?: string;
       }
-      channels[idx] = merged;
-    } else {
-      channels.push({
-        ...(channel as (typeof channels)[number]),
-        botToken: channel.botToken ? normalizeTelegramToken(channel.botToken) : channel.botToken,
-      });
+    ) => {
+      const store = getStore();
+      const remote = store.get("remote");
+      const idx = remote.channels.findIndex((c) => c.id === channel.id);
+      const channels = [...remote.channels];
+      if (idx >= 0) {
+        const prev = channels[idx]!;
+        const merged = { ...prev, ...channel } as (typeof channels)[number];
+        const incomingToken = channel.botToken?.trim() ?? "";
+        const prevToken = prev.botToken?.trim() ?? "";
+        if (!incomingToken && prevToken) merged.botToken = prev.botToken;
+        else if (incomingToken) merged.botToken = normalizeTelegramToken(incomingToken);
+        if (channel.botOptions) {
+          merged.botOptions = { ...prev.botOptions, ...channel.botOptions };
+        } else if (prev.botOptions) {
+          merged.botOptions = prev.botOptions;
+        }
+        channels[idx] = merged;
+      } else {
+        channels.push({
+          ...(channel as (typeof channels)[number]),
+          botToken: channel.botToken ? normalizeTelegramToken(channel.botToken) : channel.botToken,
+        });
+      }
+      const next = { ...remote, channels };
+      store.set("remote", next);
+      await syncRemoteRuntime();
+      return store.get("remote");
     }
-    const next = { ...remote, channels };
-    store.set("remote", next);
-    await syncRemoteRuntime();
-    return store.get("remote");
-  });
+  );
 
   ipcMain.handle("remote:getRuntimeStatus", async () => getRemoteRuntimeStatus());
 

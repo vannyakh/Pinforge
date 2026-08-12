@@ -40,7 +40,9 @@ export type AdaptiveDownloadOpts = {
 };
 
 /** Download highest adaptive (separate video + audio) or progressive stream to disk. */
-export async function downloadYouTubeStreams(opts: AdaptiveDownloadOpts): Promise<AdaptiveDownloadResult> {
+export async function downloadYouTubeStreams(
+  opts: AdaptiveDownloadOpts
+): Promise<AdaptiveDownloadResult> {
   const {
     formats,
     quality,
@@ -91,7 +93,8 @@ export async function downloadYouTubeStreams(opts: AdaptiveDownloadOpts): Promis
     const aExt = extFromMime(dash.audio.mime_type) || "m4a";
     const vPath = path.join(tmpDir, `video.${vExt}`);
     const aPath = path.join(tmpDir, `audio.${aExt}`);
-    const selectedHeight = heightFromLabel(dash.video.quality_label, dash.video.height) || undefined;
+    const selectedHeight =
+      heightFromLabel(dash.video.quality_label, dash.video.height) || undefined;
 
     onProgress?.({ downloaded: 0, total: null, phase: "download" });
     let vTotal: number | null = null;
@@ -100,11 +103,7 @@ export async function downloadYouTubeStreams(opts: AdaptiveDownloadOpts): Promis
     let aDone = 0;
     const emitDash = () => {
       const total =
-        vTotal != null && aTotal != null
-          ? vTotal + aTotal
-          : vTotal != null
-            ? vTotal * 1.25
-            : null;
+        vTotal != null && aTotal != null ? vTotal + aTotal : vTotal != null ? vTotal * 1.25 : null;
       onProgress?.({ downloaded: vDone + aDone, total, phase: "download" });
     };
 
@@ -172,7 +171,8 @@ export async function downloadYouTubeStreams(opts: AdaptiveDownloadOpts): Promis
 
   const progressive = pickProgressive(formats, quality, preferMp4);
   if (!progressive?.url) throw new Error("No matching video stream");
-  const selectedHeight = heightFromLabel(progressive.quality_label, progressive.height) || undefined;
+  const selectedHeight =
+    heightFromLabel(progressive.quality_label, progressive.height) || undefined;
   const outExt = extFromMime(progressive.mime_type) || "mp4";
   const mediaPath = path.join(tmpDir, `progressive.${outExt}`);
   onProgress?.({ downloaded: 0, total: null, phase: "download" });

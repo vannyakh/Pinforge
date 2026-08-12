@@ -359,73 +359,95 @@ const DownloadPage: React.FC = () => {
       })
     );
 
-    for (let i = 0; i < urls.length; i++) {
-      const targetUrl = urls[i];
-      progressTargetRef.current = { assistantId: opts.assistantId, activeUrl: targetUrl };
+    try {
+      for (let i = 0; i < urls.length; i++) {
+        const targetUrl = urls[i];
+        progressTargetRef.current = { assistantId: opts.assistantId, activeUrl: targetUrl };
 
-      if (isBatch) {
-        patchBatchJob(opts.assistantId, { current: i + 1 });
-      } else {
-        patchDownloadCard(opts.assistantId, targetUrl, {
-          status: "downloading",
-          percent: 0,
-          etaSec: null,
-          message: "Starting…",
-        });
-      }
-
-      const res = await processUrl(targetUrl, {
-        enhance: opts.enhance,
-        format: opts.format,
-        youtube: opts.youtube,
-        notify: !isBatch,
-      });
-
-      if (!res || res.results.length === 0) {
-        failCount += 1;
         if (isBatch) {
-          patchBatchJob(opts.assistantId, {
-            current: i + 1,
-            failed: failCount,
-            done: okCount,
-          });
+          patchBatchJob(opts.assistantId, { current: i + 1 });
         } else {
           patchDownloadCard(opts.assistantId, targetUrl, {
-            status: "failed",
-            percent: undefined,
+            status: "downloading",
+            percent: 0,
             etaSec: null,
-            message: "Download failed",
-            error: "Download failed",
+            message: "Starting…",
           });
         }
-        continue;
-      }
 
-      const primary = res.results[0];
-      okCount += res.results.length;
-      if (isBatch) {
-        patchBatchJob(opts.assistantId, {
-          current: i + 1,
-          done: okCount,
-          failed: failCount,
-        });
-      } else {
-        patchDownloadCard(opts.assistantId, targetUrl, {
-          status: "done",
-          percent: 100,
-          etaSec: 0,
-          title: primary.title,
-          outPath: primary.outPath,
-          originalPath: primary.originalPath,
-          provider: primary.provider ?? res.provider,
-          kind: primary.kind,
-          packId: res.packId,
-          message: res.results.length > 1 ? `${res.results.length} files saved` : "Saved",
-        });
+        try {
+          const res = await processUrl(targetUrl, {
+            enhance: opts.enhance,
+            format: opts.format,
+            youtube: opts.youtube,
+            notify: !isBatch,
+          });
+
+          if (!res || res.results.length === 0) {
+            failCount += 1;
+            if (isBatch) {
+              patchBatchJob(opts.assistantId, {
+                current: i + 1,
+                failed: failCount,
+                done: okCount,
+              });
+            } else {
+              patchDownloadCard(opts.assistantId, targetUrl, {
+                status: "failed",
+                percent: undefined,
+                etaSec: null,
+                message: "Download failed",
+                error: "Download failed",
+              });
+            }
+            continue;
+          }
+
+          const primary = res.results[0];
+          okCount += res.results.length;
+          if (isBatch) {
+            patchBatchJob(opts.assistantId, {
+              current: i + 1,
+              done: okCount,
+              failed: failCount,
+            });
+          } else {
+            patchDownloadCard(opts.assistantId, targetUrl, {
+              status: "done",
+              percent: 100,
+              etaSec: 0,
+              title: primary.title,
+              outPath: primary.outPath,
+              originalPath: primary.originalPath,
+              provider: primary.provider ?? res.provider,
+              kind: primary.kind,
+              packId: res.packId,
+              message: res.results.length > 1 ? `${res.results.length} files saved` : "Saved",
+            });
+          }
+        } catch (err) {
+          failCount += 1;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          if (isBatch) {
+            patchBatchJob(opts.assistantId, {
+              current: i + 1,
+              failed: failCount,
+              done: okCount,
+            });
+          } else {
+            patchDownloadCard(opts.assistantId, targetUrl, {
+              status: "failed",
+              percent: undefined,
+              etaSec: null,
+              message: "Download failed",
+              error: errMsg,
+            });
+          }
+        }
       }
+    } finally {
+      progressTargetRef.current = null;
     }
-
-    progressTargetRef.current = null;
 
     if (isBatch && settings.system?.notifications && settings.system.notifyOnDownloadComplete) {
       try {
@@ -508,182 +530,202 @@ const DownloadPage: React.FC = () => {
     };
     appendMessages([userMsg, detectingMsg]);
 
-    // Batch: probe first URL for formats/provider defaults, download all live singles
-    const extracts: ExtractPreview[] = [];
-    for (const u of urls) {
-      try {
-        extracts.push(
-          await api.extractPreview(u, {
-            preferPlaylist,
+    try {
+      // Batch: probe first URL for formats/provider defaults, download all live singles
+      const extracts: ExtractPreview[] = [];
+      for (const u of urls) {
+        try {
+          extracts.push(
+            await api.extractPreview(u, {
+              preferPlaylist,
+            })
+          );
+        } catch (err) {
+          extracts.push({
+            sourceUrl: u,
+            provider: { id: "unknown", label: "Unknown", live: false },
+            mode: "single",
+            modeSupported: false,
+            formats: [],
+            supportedModes: [],
+            items: [],
+            itemCount: 0,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      const downloadable = extracts.filter(
+        (e) => e.modeSupported && e.provider.live && e.itemCount > 0
+      );
+      const primary = downloadable[0] ?? extracts[0];
+      const detected = toDetected(primary);
+      const isBatch = urls.length > 1;
+
+      const formats = primary.formats?.length
+        ? primary.formats
+        : (["best", "mp4", "audio-only"] as FormatPreset[]);
+      const nextFormat = (
+        formats.includes(settings.format) ? settings.format : formats[0]
+      ) as FormatPreset;
+      setConfirmFormat(nextFormat);
+      setConfirmEnhance(settings.enhance);
+      setConfirmYtQuality(settings.youtube?.quality ?? "best");
+      setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
+      setConfirmSubs(settings.youtube?.subtitles ?? "separate");
+      setConfirmSaveVideo(settings.youtube?.saveVideo !== false);
+      setConfirmSaveAudio(settings.youtube?.saveAudio !== false);
+      setConfirmSaveThumbnail(settings.youtube?.saveThumbnail !== false);
+
+      if (downloadable.length === 0) {
+        mapMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  text: isBatch
+                    ? `None of the ${urls.length} links can be downloaded yet.`
+                    : describeExtract(primary),
+                  detected,
+                  extract: primary,
+                  status: "error",
+                  pendingConfirm: false,
+                  results: (m.results ?? seedCards).map((c) => ({
+                    ...c,
+                    status: "failed" as const,
+                    message: "Not supported",
+                  })),
+                }
+              : m
+          )
+        );
+        return;
+      }
+
+      const replyText = isBatch
+        ? `Ready to download ${downloadable.length} of ${urls.length} links.`
+        : describeExtract(primary);
+      // Prefer first extract as message extract meta (mode chip)
+      const extractForMsg: ExtractPreview = isBatch
+        ? {
+            ...primary,
+            mode: "single",
+            itemCount: downloadable.length,
+            items: downloadable.map((e, i) => ({
+              index: i + 1,
+              url: e.sourceUrl,
+              title: e.title ?? e.items[0]?.title,
+              coverUrl:
+                e.items.find((it) => it.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl),
+            })),
+            message: replyText,
+          }
+        : primary;
+
+      const selectable = isSelectableExtract(extractForMsg);
+      const selectedItemUrls = selectable ? extractForMsg.items.map((i) => i.url) : undefined;
+      // Profile / bulk: always pick from the list (skip auto-start of whole channel).
+      // Single YouTube: always confirm so the user can pick height quality.
+      const shouldAuto =
+        autoDownload &&
+        !selectable &&
+        !(detected.id === "youtube" && extractForMsg.mode === "single");
+
+      const downloadUrls = selectable
+        ? extractForMsg.items.map((i) => i.url)
+        : downloadable.map((e) => e.sourceUrl);
+
+      const infoCards = selectable
+        ? []
+        : makeDownloadCards(
+            downloadUrls,
+            "ready",
+            downloadable.map((e) => e.title ?? e.items[0]?.title),
+            downloadable.map(
+              (e) => e.items.find((i) => i.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl)
+            )
+          );
+
+      if (shouldAuto) {
+        mapMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  text: `${replyText}\nStarting download…`,
+                  detected,
+                  extract: extractForMsg,
+                  status: "started",
+                  pendingConfirm: false,
+                  selectedItemUrls,
+                  results: infoCards,
+                }
+              : m
+          )
+        );
+        enqueueDownload(() =>
+          startDownload(downloadUrls, {
+            format: nextFormat,
+            enhance: settings.enhance,
+            assistantId,
+            asBatch: downloadUrls.length > 1 || selectable,
+            batchLabel: selectable ? `${detected.label} · ${extractForMsg.mode}` : detected.label,
+            youtube:
+              detected.id === "youtube"
+                ? {
+                    quality: settings.youtube?.quality ?? "best",
+                    audioContainer: settings.youtube?.audioContainer ?? "m4a",
+                    subtitles: settings.youtube?.subtitles ?? "separate",
+                    saveVideo: settings.youtube?.saveVideo !== false,
+                    saveAudio: settings.youtube?.saveAudio !== false,
+                    saveThumbnail: settings.youtube?.saveThumbnail !== false,
+                  }
+                : undefined,
           })
         );
-      } catch (err) {
-        extracts.push({
-          sourceUrl: u,
-          provider: { id: "unknown", label: "Unknown", live: false },
-          mode: "single",
-          modeSupported: false,
-          formats: [],
-          supportedModes: [],
-          items: [],
-          itemCount: 0,
-          message: err instanceof Error ? err.message : String(err),
-        });
+        return;
       }
-    }
 
-    const downloadable = extracts.filter(
-      (e) => e.modeSupported && e.provider.live && e.itemCount > 0
-    );
-    const primary = downloadable[0] ?? extracts[0];
-    const detected = toDetected(primary);
-    const isBatch = urls.length > 1;
-
-    const formats = primary.formats?.length
-      ? primary.formats
-      : (["best", "mp4", "audio-only"] as FormatPreset[]);
-    const nextFormat = (
-      formats.includes(settings.format) ? settings.format : formats[0]
-    ) as FormatPreset;
-    setConfirmFormat(nextFormat);
-    setConfirmEnhance(settings.enhance);
-    setConfirmYtQuality(settings.youtube?.quality ?? "best");
-    setConfirmAudio(settings.youtube?.audioContainer ?? "m4a");
-    setConfirmSubs(settings.youtube?.subtitles ?? "separate");
-    setConfirmSaveVideo(settings.youtube?.saveVideo !== false);
-    setConfirmSaveAudio(settings.youtube?.saveAudio !== false);
-    setConfirmSaveThumbnail(settings.youtube?.saveThumbnail !== false);
-
-    if (downloadable.length === 0) {
       mapMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
             ? {
                 ...m,
-                text: isBatch
-                  ? `None of the ${urls.length} links can be downloaded yet.`
-                  : describeExtract(primary),
+                text: selectable
+                  ? `${replyText}\nSelect items below, then download.`
+                  : `${replyText}\nConfirm options below to start the download.`,
                 detected,
-                extract: primary,
+                extract: extractForMsg,
+                status: "ready",
+                pendingConfirm: true,
+                selectedItemUrls,
+                results: infoCards,
+              }
+            : { ...m, pendingConfirm: false }
+        )
+      );
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      mapMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                text: errMsg,
                 status: "error",
                 pendingConfirm: false,
                 results: (m.results ?? seedCards).map((c) => ({
                   ...c,
                   status: "failed" as const,
-                  message: "Not supported",
+                  message: errMsg,
                 })),
               }
             : m
         )
       );
+    } finally {
       setExtracting(false);
-      return;
     }
-
-    const replyText = isBatch
-      ? `Ready to download ${downloadable.length} of ${urls.length} links.`
-      : describeExtract(primary);
-    // Prefer first extract as message extract meta (mode chip)
-    const extractForMsg: ExtractPreview = isBatch
-      ? {
-          ...primary,
-          mode: "single",
-          itemCount: downloadable.length,
-          items: downloadable.map((e, i) => ({
-            index: i + 1,
-            url: e.sourceUrl,
-            title: e.title ?? e.items[0]?.title,
-            coverUrl:
-              e.items.find((it) => it.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl),
-          })),
-          message: replyText,
-        }
-      : primary;
-
-    const selectable = isSelectableExtract(extractForMsg);
-    const selectedItemUrls = selectable ? extractForMsg.items.map((i) => i.url) : undefined;
-    // Profile / bulk: always pick from the list (skip auto-start of whole channel).
-    // Single YouTube: always confirm so the user can pick height quality.
-    const shouldAuto =
-      autoDownload &&
-      !selectable &&
-      !(detected.id === "youtube" && extractForMsg.mode === "single");
-
-    const downloadUrls = selectable
-      ? extractForMsg.items.map((i) => i.url)
-      : downloadable.map((e) => e.sourceUrl);
-
-    const infoCards = selectable
-      ? []
-      : makeDownloadCards(
-          downloadUrls,
-          "ready",
-          downloadable.map((e) => e.title ?? e.items[0]?.title),
-          downloadable.map(
-            (e) => e.items.find((i) => i.coverUrl)?.coverUrl || coverUrlFromMediaUrl(e.sourceUrl)
-          )
-        );
-
-    if (shouldAuto) {
-      mapMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? {
-                ...m,
-                text: `${replyText}\nStarting download…`,
-                detected,
-                extract: extractForMsg,
-                status: "started",
-                pendingConfirm: false,
-                selectedItemUrls,
-                results: infoCards,
-              }
-            : m
-        )
-      );
-      setExtracting(false);
-      enqueueDownload(() =>
-        startDownload(downloadUrls, {
-          format: nextFormat,
-          enhance: settings.enhance,
-          assistantId,
-          asBatch: downloadUrls.length > 1 || selectable,
-          batchLabel: selectable ? `${detected.label} · ${extractForMsg.mode}` : detected.label,
-          youtube:
-            detected.id === "youtube"
-              ? {
-                  quality: settings.youtube?.quality ?? "best",
-                  audioContainer: settings.youtube?.audioContainer ?? "m4a",
-                  subtitles: settings.youtube?.subtitles ?? "separate",
-                  saveVideo: settings.youtube?.saveVideo !== false,
-                  saveAudio: settings.youtube?.saveAudio !== false,
-                  saveThumbnail: settings.youtube?.saveThumbnail !== false,
-                }
-              : undefined,
-        })
-      );
-      return;
-    }
-
-    mapMessages((prev) =>
-      prev.map((m) =>
-        m.id === assistantId
-          ? {
-              ...m,
-              text: selectable
-                ? `${replyText}\nSelect items below, then download.`
-                : `${replyText}\nConfirm options below to start the download.`,
-              detected,
-              extract: extractForMsg,
-              status: "ready",
-              pendingConfirm: true,
-              selectedItemUrls,
-              results: infoCards,
-            }
-          : { ...m, pendingConfirm: false }
-      )
-    );
-    setExtracting(false);
   };
 
   const confirmDownload = () => {
@@ -801,7 +843,7 @@ const DownloadPage: React.FC = () => {
               ...m,
               pendingConfirm: false,
               text: `${m.extract ? describeExtract(m.extract) : m.text.split("\n")[0]}\nCancelled. Paste another link when you're ready.`,
-              status: "ready",
+              status: "cancelled",
             }
           : m
       )
@@ -812,9 +854,7 @@ const DownloadPage: React.FC = () => {
     mapMessages((prev) =>
       prev.map((m) => {
         if (m.id !== messageId) return m;
-        const head = m.extract
-          ? describeExtract(m.extract).split("\n")[0]
-          : m.text.split("\n")[0];
+        const head = m.extract ? describeExtract(m.extract).split("\n")[0] : m.text.split("\n")[0];
         return {
           ...m,
           status: "cancelled",
@@ -873,7 +913,7 @@ const DownloadPage: React.FC = () => {
                   ? extract.message
                     ? `${extract.message}\nSelect items below, then download.`
                     : m.text
-                  : extract.message ?? "No items found on this page.",
+                  : (extract.message ?? "No items found on this page."),
                 status: extract.itemCount > 0 ? "ready" : "error",
                 pendingConfirm: extract.itemCount > 0,
                 ...(extract.itemCount <= 0
@@ -1012,7 +1052,6 @@ const DownloadPage: React.FC = () => {
         setConfirmEnhance(v);
         void updateSettings({ enhance: v });
       }}
-      onOpenSettings={() => void navigate("/settings/download")}
       onSend={() => void handleExtract(url)}
     />
   );
@@ -1162,44 +1201,44 @@ const DownloadPage: React.FC = () => {
                             })()}
 
                             {shouldShowExtractPick(msg, extract) && extract && (
-                                <ExtractPickTable
-                                  messageId={msg.id}
-                                  extract={extract}
-                                  selectedUrls={msg.selectedItemUrls ?? []}
-                                  onSelectionChange={(urls) => setMessageSelection(msg.id, urls)}
-                                  onToggleUrl={(u) => toggleMessageItem(msg.id, u)}
-                                  format={confirmFormat}
-                                  formats={
-                                    extract.formats?.length
-                                      ? extract.formats
-                                      : ["best", "mp4", "audio-only"]
-                                  }
-                                  onFormatChange={setConfirmFormat}
-                                  showYoutube={msg.detected?.id === "youtube"}
-                                  ytQuality={confirmYtQuality}
-                                  onYtQualityChange={setConfirmYtQuality}
-                                  audio={confirmAudio}
-                                  onAudioChange={setConfirmAudio}
-                                  subs={confirmSubs}
-                                  onSubsChange={setConfirmSubs}
-                                  listMax={
-                                    extract.mode === "playlist"
-                                      ? (settings.youtube?.playlistMaxVideos ?? listMax)
-                                      : extract.provider.id === "pinterest"
-                                        ? (settings.pinterest?.boardMaxPins ?? listMax)
-                                        : extract.mode === "profile"
-                                          ? (settings.youtube?.channelMaxVideos ?? listMax)
-                                          : listMax
-                                  }
-                                  onListMaxChange={setListMax}
-                                  onReloadList={(max) => reloadExtractList(msg, max)}
-                                  listLoading={listReloadingId === msg.id}
-                                  busy={false}
-                                  onDownloadSelected={() => beginSelectedDownload(msg)}
-                                  onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}
-                                  onCancel={() => cancelExtractPick(msg.id)}
-                                />
-                              )}
+                              <ExtractPickTable
+                                messageId={msg.id}
+                                extract={extract}
+                                selectedUrls={msg.selectedItemUrls ?? []}
+                                onSelectionChange={(urls) => setMessageSelection(msg.id, urls)}
+                                onToggleUrl={(u) => toggleMessageItem(msg.id, u)}
+                                format={confirmFormat}
+                                formats={
+                                  extract.formats?.length
+                                    ? extract.formats
+                                    : ["best", "mp4", "audio-only"]
+                                }
+                                onFormatChange={setConfirmFormat}
+                                showYoutube={msg.detected?.id === "youtube"}
+                                ytQuality={confirmYtQuality}
+                                onYtQualityChange={setConfirmYtQuality}
+                                audio={confirmAudio}
+                                onAudioChange={setConfirmAudio}
+                                subs={confirmSubs}
+                                onSubsChange={setConfirmSubs}
+                                listMax={
+                                  extract.mode === "playlist"
+                                    ? (settings.youtube?.playlistMaxVideos ?? listMax)
+                                    : extract.provider.id === "pinterest"
+                                      ? (settings.pinterest?.boardMaxPins ?? listMax)
+                                      : extract.mode === "profile"
+                                        ? (settings.youtube?.channelMaxVideos ?? listMax)
+                                        : listMax
+                                }
+                                onListMaxChange={setListMax}
+                                onReloadList={(max) => reloadExtractList(msg, max)}
+                                listLoading={listReloadingId === msg.id}
+                                busy={false}
+                                onDownloadSelected={() => beginSelectedDownload(msg)}
+                                onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}
+                                onCancel={() => cancelExtractPick(msg.id)}
+                              />
+                            )}
 
                             {msg.pendingConfirm &&
                               msg.detected?.live &&

@@ -385,7 +385,9 @@ export class TelegramBot {
     });
     const data = (await res.json()) as TelegramApiResponse<T>;
     if (!data.ok) {
-      throw new Error(formatTelegramError(data.description, `Telegram ${method} failed (${res.status})`));
+      throw new Error(
+        formatTelegramError(data.description, `Telegram ${method} failed (${res.status})`)
+      );
     }
     return data.result as T;
   }
@@ -542,10 +544,7 @@ export class TelegramBot {
     return "Your access to this bot was denied.";
   }
 
-  private async requireApproved(
-    chatId: number,
-    access: TelegramAccessResult
-  ): Promise<boolean> {
+  private async requireApproved(chatId: number, access: TelegramAccessResult): Promise<boolean> {
     if (access === "approved") return true;
     await this.sendMessage(
       chatId,
@@ -862,7 +861,8 @@ export async function testTelegramToken(token: string): Promise<{ ok: boolean; m
   if (!/^\d+:[A-Za-z0-9_-]+$/.test(trimmed)) {
     return {
       ok: false,
-      message: 'Token format looks wrong. Paste only the token from @BotFather (e.g. 123456789:ABC…).',
+      message:
+        "Token format looks wrong. Paste only the token from @BotFather (e.g. 123456789:ABC…).",
     };
   }
 

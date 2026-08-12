@@ -25,40 +25,27 @@ import {
 } from "@renderer/api";
 import telegramLogo from "@renderer/assets/channel-logos/telegram.svg";
 import discordLogo from "@renderer/assets/channel-logos/discord.svg";
-import slackLogo from "@renderer/assets/channel-logos/slack.svg";
-import larkLogo from "@renderer/assets/channel-logos/lark.svg";
-import weixinLogo from "@renderer/assets/channel-logos/weixin.svg";
-import wecomLogo from "@renderer/assets/channel-logos/wecom.svg";
-import dingtalkLogo from "@renderer/assets/channel-logos/dingtalk.svg";
-import lineLogo from "@renderer/assets/channel-logos/line.svg";
-import webhookLogo from "@renderer/assets/channel-logos/webhook.svg";
 import cloudflareLogo from "@renderer/assets/channel-logos/cloudflare.svg";
+import {
+  SettingsHeader,
+  SettingsLoading,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from "./components/SettingsLayout";
 
 const CHANNEL_LOGOS: Record<string, { src: string; alt: string }> = {
   telegram: { src: telegramLogo, alt: "Telegram" },
   discord: { src: discordLogo, alt: "Discord" },
-  slack: { src: slackLogo, alt: "Slack" },
-  lark: { src: larkLogo, alt: "Lark" },
-  wechat: { src: weixinLogo, alt: "WeChat" },
-  weixin: { src: weixinLogo, alt: "WeChat" },
-  wecom: { src: wecomLogo, alt: "WeCom" },
-  dingtalk: { src: dingtalkLogo, alt: "DingTalk" },
-  line: { src: lineLogo, alt: "LINE" },
-  webhook: { src: webhookLogo, alt: "Webhook" },
 };
 
 const CHANNEL_TAB_LOGOS = [
   { src: telegramLogo, alt: "Telegram" },
   { src: discordLogo, alt: "Discord" },
-  { src: slackLogo, alt: "Slack" },
-  { src: larkLogo, alt: "Lark" },
-  { src: weixinLogo, alt: "WeChat" },
-  { src: lineLogo, alt: "LINE" },
-  { src: webhookLogo, alt: "Webhook" },
 ] as const;
 
 function channelKey(id: string): string {
-  return id.startsWith("webhook") ? "webhook" : id;
+  return id;
 }
 
 function userLabel(user: RemoteUser): string {
@@ -85,20 +72,19 @@ const ChannelIcon: React.FC<{ id: string; label?: string }> = ({ id, label }) =>
   );
 };
 
-const PreferenceRow: React.FC<{
-  label: React.ReactNode;
-  description?: React.ReactNode;
-  children: React.ReactNode;
-}> = ({ label, description, children }) => (
-  <div className="remote-pref-row">
-    <div className="remote-pref-row__meta">
-      <div className="text-14px text-t-primary">{label}</div>
-      {description && (
-        <div className="text-12px text-t-tertiary mt-4px leading-relaxed">{description}</div>
-      )}
-    </div>
-    <div className="remote-pref-row__control">{children}</div>
-  </div>
+const LabelWithHelp: React.FC<{
+  label: string;
+  hint: React.ReactNode;
+  ariaLabel?: string;
+}> = ({ label, hint, ariaLabel = "Help" }) => (
+  <span className="inline-flex items-center gap-6px">
+    {label}
+    <Tooltip content={hint}>
+      <span className="remote-label-help" tabIndex={0} aria-label={ariaLabel}>
+        <Info theme="outline" size="14" fill="currentColor" />
+      </span>
+    </Tooltip>
+  </span>
 );
 
 const ChannelUserAccess: React.FC<{
@@ -210,9 +196,8 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
   const key = channelKey(String(channel.id));
   const isTelegram = key === "telegram";
   const isDiscord = key === "discord";
-  const isWebhook = key === "webhook";
-  const canTest = isTelegram || isDiscord || isWebhook;
-  const supportsUserAccess = isTelegram || isDiscord;
+  const canTest = isTelegram || isDiscord;
+  const supportsUserAccess = isTelegram;
 
   const botOptions = channel.botOptions ?? {};
 
@@ -260,23 +245,18 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
   return (
     <div className="remote-channel-form flex flex-col gap-4px">
       {isTelegram && (
-        <PreferenceRow
-          label={
-            <span className="inline-flex items-center gap-6px">
-              Bot Token
-              <Tooltip
-                content={
-                  <>
-                    Open Telegram, find <code>@BotFather</code> and send <code>/newbot</code> to get
-                    your Bot Token.
-                  </>
-                }
-              >
-                <span className="remote-label-help" tabIndex={0} aria-label="How to get a bot token">
-                  <Info theme="outline" size="14" fill="currentColor" />
-                </span>
-              </Tooltip>
-            </span>
+        <SettingsRow
+          title={
+            <LabelWithHelp
+              label="Bot Token"
+              ariaLabel="How to get a bot token"
+              hint={
+                <>
+                  Open Telegram, find <code>@BotFather</code> and send <code>/newbot</code> to get
+                  your Bot Token.
+                </>
+              }
+            />
           }
         >
           <div className="flex items-center gap-8px">
@@ -296,12 +276,12 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
               Test
             </Button>
           </div>
-        </PreferenceRow>
+        </SettingsRow>
       )}
 
       {isDiscord && (
         <>
-          <PreferenceRow label="Bot Token">
+          <SettingsRow title="Bot Token">
             <div className="flex items-center gap-8px">
               <Input.Password
                 style={{ width: 260 }}
@@ -319,8 +299,8 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
                 Test
               </Button>
             </div>
-          </PreferenceRow>
-          <PreferenceRow label="Webhook URL">
+          </SettingsRow>
+          <SettingsRow title="Webhook URL">
             <Input
               style={{ width: 320 }}
               placeholder="https://discord.com/api/webhooks/…"
@@ -328,61 +308,34 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
               onChange={(v) => onLocalChange({ webhookUrl: v })}
               onBlur={() => void onSave(channel)}
             />
-          </PreferenceRow>
-        </>
-      )}
-
-      {isWebhook && (
-        <>
-          <PreferenceRow label="Display name">
-            <Input
-              style={{ width: 260 }}
-              placeholder="Custom agent"
-              value={channel.label}
-              onChange={(v) => onLocalChange({ label: v })}
-              onBlur={() => void onSave({ ...channel })}
-            />
-          </PreferenceRow>
-          <PreferenceRow label="Webhook URL">
-            <div className="flex items-center gap-8px">
-              <Input
-                style={{ width: 280 }}
-                placeholder="https://…"
-                value={channel.webhookUrl ?? ""}
-                onChange={(v) => onLocalChange({ webhookUrl: v })}
-                onBlur={() => void onSave(channel)}
-              />
-              {canTest && (
-                <Button
-                  type="outline"
-                  loading={testing}
-                  disabled={saving}
-                  onClick={() => void handleTest()}
-                >
-                  Test
-                </Button>
-              )}
-            </div>
-          </PreferenceRow>
+          </SettingsRow>
         </>
       )}
 
       {isTelegram && (
         <>
-          <PreferenceRow
-            label="Require approval"
-            description="New users must be approved before they can download."
+          <SettingsRow
+            title={
+              <LabelWithHelp
+                label="Require approval"
+                hint="New users must be approved before they can download."
+              />
+            }
           >
             <Switch
               checked={channel.requireApproval !== false}
               disabled={saving}
               onChange={(v) => void persist({ requireApproval: v })}
             />
-          </PreferenceRow>
+          </SettingsRow>
 
-          <PreferenceRow
-            label="Admin chat ID"
-            description="Telegram group/channel ID where access requests are posted."
+          <SettingsRow
+            title={
+              <LabelWithHelp
+                label="Admin chat ID"
+                hint="Telegram group/channel ID where access requests are posted."
+              />
+            }
           >
             <Input
               style={{ width: 220 }}
@@ -391,11 +344,15 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
               onChange={(v) => patchBotLocal({ adminChatId: v })}
               onBlur={() => void onSave(channel)}
             />
-          </PreferenceRow>
+          </SettingsRow>
 
-          <PreferenceRow
-            label="Welcome message"
-            description="Sent on /start to approved users. Leave empty for the default."
+          <SettingsRow
+            title={
+              <LabelWithHelp
+                label="Welcome message"
+                hint="Sent on /start to approved users. Leave empty for the default."
+              />
+            }
           >
             <Input.TextArea
               style={{ width: 320 }}
@@ -405,17 +362,23 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
               onChange={(v) => patchBotLocal({ welcomeMessage: v })}
               onBlur={() => void onSave(channel)}
             />
-          </PreferenceRow>
+          </SettingsRow>
 
           <div className="remote-bot-section mt-6px pt-10px border-t border-b-base">
-            <div className="text-14px text-t-primary mb-2px">Download reply options</div>
-            <div className="text-12px text-t-tertiary mb-8px leading-relaxed">
-              How the bot handles pasted links and what it replies when a download finishes.
+            <div className="text-14px text-t-primary mb-8px">
+              <LabelWithHelp
+                label="Download reply options"
+                hint="How the bot handles pasted links and what it replies when a download finishes."
+              />
             </div>
 
-            <PreferenceRow
-              label="When a link is sent"
-              description="Immediate starts now; queue adds to Tasks for later."
+            <SettingsRow
+              title={
+                <LabelWithHelp
+                  label="When a link is sent"
+                  hint="Immediate starts now; queue adds to Tasks for later."
+                />
+              }
             >
               <Select
                 style={{ width: 180 }}
@@ -428,44 +391,60 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
                 <Select.Option value="immediate">Download now</Select.Option>
                 <Select.Option value="queue">Add to queue</Select.Option>
               </Select>
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow
-              label="Confirm before download"
-              description="Show Download / Queue / Cancel buttons when a link is pasted."
+            <SettingsRow
+              title={
+                <LabelWithHelp
+                  label="Confirm before download"
+                  hint="Show Download / Queue / Cancel buttons when a link is pasted."
+                />
+              }
             >
               <Switch
                 checked={botOptions.confirmBeforeDownload !== false}
                 disabled={saving}
                 onChange={(v) => void persistBot({ confirmBeforeDownload: v })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow
-              label="Quality & format menu"
-              description="Let users pick YouTube quality and Best/MP4/Audio before starting."
+            <SettingsRow
+              title={
+                <LabelWithHelp
+                  label="Quality & format menu"
+                  hint="Let users pick YouTube quality and Best/MP4/Audio before starting."
+                />
+              }
             >
               <Switch
                 checked={botOptions.allowQualitySelect !== false}
                 disabled={saving}
                 onChange={(v) => void persistBot({ allowQualitySelect: v })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow
-              label="Detect before download"
-              description="Reply with the matched provider before starting."
+            <SettingsRow
+              title={
+                <LabelWithHelp
+                  label="Detect before download"
+                  hint="Reply with the matched provider before starting."
+                />
+              }
             >
               <Switch
                 checked={botOptions.detectBeforeDownload !== false}
                 disabled={saving}
                 onChange={(v) => void persistBot({ detectBeforeDownload: v })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow
-              label="Max URLs per message"
-              description="How many links to process from one chat message (1–10)."
+            <SettingsRow
+              title={
+                <LabelWithHelp
+                  label="Max URLs per message"
+                  hint="How many links to process from one chat message (1–10)."
+                />
+              }
             >
               <InputNumber
                 style={{ width: 100 }}
@@ -479,41 +458,49 @@ const ChannelConfigForm: React.FC<ChannelFormProps> = ({
                 }}
                 onBlur={() => void onSave(channel)}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow
-              label="Notify when done"
-              description="Send a text message when the download finishes or fails."
+            <SettingsRow
+              title={
+                <LabelWithHelp
+                  label="Notify when done"
+                  hint="Send a text message when the download finishes or fails."
+                />
+              }
             >
               <Switch
                 checked={botOptions.notifyOnComplete !== false}
                 disabled={saving}
                 onChange={(v) => void persistBot({ notifyOnComplete: v })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow
-              label="Send file when done"
-              description="Upload the downloaded file back to the chat (Telegram size limits apply)."
+            <SettingsRow
+              title={
+                <LabelWithHelp
+                  label="Send file when done"
+                  hint="Upload the downloaded file back to the chat (Telegram size limits apply)."
+                />
+              }
             >
               <Switch
                 checked={channel.sendFilesBack}
                 disabled={saving}
                 onChange={(v) => void persist({ sendFilesBack: v })}
               />
-            </PreferenceRow>
+            </SettingsRow>
           </div>
         </>
       )}
 
       {!isTelegram && (
-        <PreferenceRow label="Send files back to bot">
+        <SettingsRow title="Send files back to bot">
           <Switch
             checked={channel.sendFilesBack}
             disabled={saving}
             onChange={(v) => void persist({ sendFilesBack: v })}
           />
-        </PreferenceRow>
+        </SettingsRow>
       )}
 
       {supportsUserAccess && (
@@ -718,20 +705,19 @@ const RemoteSettings: React.FC = () => {
   };
 
   if (!remote) {
-    return <div className="text-t-secondary">Loading…</div>;
+    return <SettingsLoading />;
   }
 
   const tunnel = remote.tunnel;
 
   return (
-    <div className="remote-page max-w-760px w-full">
-      <div className="text-22px font-600 text-t-primary mb-6px">Remote</div>
-      <div className="text-t-secondary text-14px mb-20px">
-        Connect chatbot agents online. Use a Cloudflare tunnel so bots can reach this app and
-        receive downloaded files.
-      </div>
+    <SettingsPage width="wide" className="remote-page">
+      <SettingsHeader
+        title="Remote"
+        description="Connect chatbot agents online. Use a Cloudflare tunnel so bots can reach this app and receive downloaded files."
+      />
 
-      <Tabs activeTab={tab} onChange={setTab} type="line" className="mb-12px settings-remote-tabs">
+      <Tabs activeTab={tab} onChange={setTab} type="line" className="settings-remote-tabs">
         <Tabs.TabPane
           key="tunnel"
           title={
@@ -752,16 +738,16 @@ const RemoteSettings: React.FC = () => {
             </span>
           }
         >
-          <div className="bg-2 rd-12px border border-b-base px-18px py-4px mb-16px">
-            <PreferenceRow label="Enable tunnel">
+          <SettingsSection>
+            <SettingsRow title="Enable tunnel">
               <Switch
                 checked={tunnel.enabled}
                 disabled={saving}
                 onChange={(v) => void saveTunnel({ enabled: v })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow label="Tunnel token">
+            <SettingsRow title="Tunnel token">
               <Input.Password
                 style={{ width: 320 }}
                 placeholder="eyJhIjoi…"
@@ -769,9 +755,9 @@ const RemoteSettings: React.FC = () => {
                 onChange={(v) => setRemote({ ...remote, tunnel: { ...tunnel, token: v } })}
                 onBlur={() => void saveTunnel({ token: tunnel.token })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow label="Hostname">
+            <SettingsRow title="Hostname">
               <Input
                 style={{ width: 260 }}
                 placeholder="pinforge.example.com"
@@ -779,9 +765,9 @@ const RemoteSettings: React.FC = () => {
                 onChange={(v) => setRemote({ ...remote, tunnel: { ...tunnel, hostname: v } })}
                 onBlur={() => void saveTunnel({ hostname: tunnel.hostname })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow label="Local port">
+            <SettingsRow title="Local port">
               <InputNumber
                 style={{ width: 120 }}
                 min={1}
@@ -793,9 +779,9 @@ const RemoteSettings: React.FC = () => {
                 }}
                 onBlur={() => void saveTunnel({ localPort: tunnel.localPort })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow label="cloudflared path">
+            <SettingsRow title="cloudflared path">
               <Input
                 style={{ width: 320 }}
                 placeholder="Leave empty to use PATH"
@@ -803,15 +789,15 @@ const RemoteSettings: React.FC = () => {
                 onChange={(v) => setRemote({ ...remote, tunnel: { ...tunnel, binaryPath: v } })}
                 onBlur={() => void saveTunnel({ binaryPath: tunnel.binaryPath })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
-            <PreferenceRow label="Allow file send-back over tunnel">
+            <SettingsRow title="Allow file send-back over tunnel">
               <Switch
                 checked={tunnel.allowFileSendBack}
                 disabled={saving}
                 onChange={(v) => void saveTunnel({ allowFileSendBack: v })}
               />
-            </PreferenceRow>
+            </SettingsRow>
 
             {tunnel.publicUrl && (
               <div className="text-12px text-t-secondary break-all pt-8px">
@@ -824,11 +810,13 @@ const RemoteSettings: React.FC = () => {
               </div>
             )}
             {tunnel.lastError && (
-              <Typography.Text type="warning" style={{ fontSize: 12 }}>
-                {tunnel.lastError}
-              </Typography.Text>
+              <div className="settings-field">
+                <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                  {tunnel.lastError}
+                </Typography.Text>
+              </div>
             )}
-          </div>
+          </SettingsSection>
         </Tabs.TabPane>
 
         <Tabs.TabPane
@@ -872,7 +860,7 @@ const RemoteSettings: React.FC = () => {
           </div>
         </Tabs.TabPane>
       </Tabs>
-    </div>
+    </SettingsPage>
   );
 };
 

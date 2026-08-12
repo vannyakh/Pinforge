@@ -264,14 +264,14 @@ function ensureRemoteDefaults(s: Store<AppStoreSchema>): void {
     s.set("remote", DEFAULT_REMOTE);
     return;
   }
-  // Merge any newly added built-in channels
-  const byId = new Map(remote.channels.map((c) => [c.id, c]));
-  for (const def of DEFAULT_REMOTE.channels) {
-    if (!byId.has(def.id)) byId.set(def.id, def);
-  }
+  const allowedIds = new Set<string>(DEFAULT_REMOTE.channels.map((c) => c.id));
+  const saved = new Map(
+    remote.channels.filter((c) => allowedIds.has(String(c.id))).map((c) => [c.id, c])
+  );
   s.set("remote", {
-    channels: Array.from(byId.values()).map((c) =>
-      c.id === "telegram"
+    channels: DEFAULT_REMOTE.channels.map((def) => {
+      const c = saved.get(def.id) ?? def;
+      return c.id === "telegram"
         ? {
             ...c,
             requireApproval: c.requireApproval ?? true,
@@ -286,10 +286,10 @@ function ensureRemoteDefaults(s: Store<AppStoreSchema>): void {
               ...c.botOptions,
             },
           }
-        : c
-    ),
+        : c;
+    }),
     tunnel: { ...DEFAULT_TUNNEL, ...remote.tunnel },
-    users: remote.users ?? [],
+    users: (remote.users ?? []).filter((u) => allowedIds.has(String(u.channel))),
   });
 }
 

@@ -21,8 +21,8 @@ import { useApp } from "@renderer/hooks/context/AppContext";
 import SettingsSider from "@renderer/pages/settings/components/SettingsSider";
 import {
   selectRecentChats,
+  chatSessionIsBusy,
   useHomeChatStore,
-  type ChatSession,
 } from "@renderer/pages/download/homeChatStore";
 import siderStyles from "./Sider.module.css";
 
@@ -39,12 +39,6 @@ const NAV = [
 
 const LAST_PATH_KEY = "pinforge:last-non-settings-path";
 
-function chatHasActiveProcess(chat: ChatSession): boolean {
-  return chat.messages.some(
-    (m) => m.role === "assistant" && (m.status === "started" || m.status === "detecting")
-  );
-}
-
 const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const navigate = useNavigate();
   const { pathname, search, hash } = useLocation();
@@ -54,6 +48,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const sessions = useHomeChatStore((s) => s.sessions);
   const activeId = useHomeChatStore((s) => s.activeId);
   const liveMessages = useHomeChatStore((s) => s.messages);
+  const extracting = useHomeChatStore((s) => s.extracting);
   const openChat = useHomeChatStore((s) => s.openChat);
   const newChat = useHomeChatStore((s) => s.newChat);
   const removeChat = useHomeChatStore((s) => s.removeChat);
@@ -63,14 +58,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const lastNonSettingsPathRef = useRef("/");
 
   const recent = useMemo(() => selectRecentChats(sessions, 14), [sessions]);
-
-  const activeLiveBusy = useMemo(
-    () =>
-      liveMessages.some(
-        (m) => m.role === "assistant" && (m.status === "started" || m.status === "detecting")
-      ),
-    [liveMessages]
-  );
 
   useEffect(() => {
     if (!pathname.startsWith("/settings")) {
@@ -220,8 +207,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                   )
                 : recent.map((chat) => {
                     const active = pathname === "/" && activeId === chat.id;
-                    const processing =
-                      (activeId === chat.id && activeLiveBusy) || chatHasActiveProcess(chat);
+                    const isActiveChat = activeId === chat.id;
+                    const appBusy = busy || runningCount > 0;
+                    const processing = chatSessionIsBusy(chat, {
+                      extracting: isActiveChat && extracting,
+                      liveMessages: isActiveChat ? liveMessages : undefined,
+                      appBusy,
+                    });
                     return (
                       <div
                         key={chat.id}

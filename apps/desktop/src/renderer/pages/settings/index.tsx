@@ -11,19 +11,21 @@ import DownloadSettings from "./Download";
 const SettingsPage: React.FC = () => {
   return (
     <div className="settings-shell flex h-full min-h-0">
-      <div className="settings-pane flex-1 min-w-0 overflow-auto p-28px bg-1">
-        <Routes>
-          <Route index element={<Navigate to="system" replace />} />
-          <Route path="system" element={<SystemSettings />} />
-          <Route path="appearance" element={<AppearanceSettings />} />
-          <Route path="remote" element={<RemoteSettings />} />
-          <Route path="download" element={<DownloadSettings />} />
-          <Route path="providers" element={<ProvidersSettings />} />
-          <Route path="providers/:providerId" element={<ProviderDetailPage />} />
-          <Route path="about" element={<AboutSettings />} />
-          <Route path="general" element={<Navigate to="../system" replace />} />
-          <Route path="*" element={<Navigate to="system" replace />} />
-        </Routes>
+      <div className="settings-pane">
+        <div className="settings-pane__inner">
+          <Routes>
+            <Route index element={<Navigate to="system" replace />} />
+            <Route path="system" element={<SystemSettings />} />
+            <Route path="appearance" element={<AppearanceSettings />} />
+            <Route path="remote" element={<RemoteSettings />} />
+            <Route path="download" element={<DownloadSettings />} />
+            <Route path="providers" element={<ProvidersSettings />} />
+            <Route path="providers/:providerId" element={<ProviderDetailPage />} />
+            <Route path="about" element={<AboutSettings />} />
+            <Route path="general" element={<Navigate to="../system" replace />} />
+            <Route path="*" element={<Navigate to="system" replace />} />
+          </Routes>
+        </div>
       </div>
     </div>
   );

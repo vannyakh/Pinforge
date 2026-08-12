@@ -16,6 +16,12 @@ import {
   type FontSizeKey,
 } from "@/common/config/fontSizes";
 import type { Theme } from "@/common/theme/types";
+import {
+  SettingsHeader,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from "./components/SettingsLayout";
 import AddThemeModal from "./AddThemeModal";
 
 interface ThemePreviewPalette {
@@ -192,16 +198,11 @@ const AppearanceSettings: React.FC = () => {
   }, [themes]);
 
   return (
-    <div className="appearance-page max-w-820px w-full space-y-16px">
-      <div className="px-16px py-16px bg-2 rd-16px">
-        <div className="flex items-start justify-between gap-16px mb-12px">
-          <div>
-            <div className="text-14px text-t-primary leading-22px mb-4px">Theme</div>
-            <div className="text-14px text-t-secondary leading-22px">
-              Default follows your system light/dark preference. Pick Light, Dark, or a custom theme
-              anytime.
-            </div>
-          </div>
+    <SettingsPage width="appearance" className="appearance-page">
+      <SettingsHeader
+        title="Appearance"
+        description="Theme, typography, and interface scale."
+        actions={
           <Button
             type="primary"
             size="small"
@@ -210,9 +211,11 @@ const AppearanceSettings: React.FC = () => {
           >
             Add Theme
           </Button>
-        </div>
+        }
+      />
 
-        <div className="appearance-grid">
+      <SettingsSection title="Theme">
+        <div className="appearance-grid py-4px">
           {displayThemes.map((item) => {
             const active = activeId === item.id;
             const palette = fallbackPalette[item.appearance];
@@ -272,13 +275,12 @@ const AppearanceSettings: React.FC = () => {
             );
           })}
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="px-16px py-14px bg-2 rd-16px">
-        <div className="flex flex-col divide-y divide-[var(--border-base)]">
+      <SettingsSection title="Typography">
+        <div className="flex flex-col">
           {FONT_SIZE_KEYS.map((key) => (
-            <div key={key} className="flex items-center justify-between gap-24px py-12px">
-              <div className="text-14px text-t-primary leading-22px">{FONT_SIZE_LABEL[key]}</div>
+            <SettingsRow key={key} title={FONT_SIZE_LABEL[key]}>
               <FontSizeStepper
                 value={fontSizes[key]}
                 min={FONT_SIZE_SPECS[key].min}
@@ -286,15 +288,14 @@ const AppearanceSettings: React.FC = () => {
                 defaultValue={FONT_SIZE_SPECS[key].default}
                 onChange={(px) => void setFontSize(key, px)}
               />
-            </div>
+            </SettingsRow>
           ))}
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="px-16px py-14px bg-2 rd-16px">
-        <div className="flex items-center justify-between gap-24px flex-wrap">
-          <div className="text-14px text-t-primary leading-22px">Scale</div>
-          <div className="flex items-center gap-x-12px gap-y-10px flex-1 min-w-240px justify-end">
+      <SettingsSection title="Interface scale">
+        <SettingsRow title="UI scale">
+          <div className="flex items-center gap-x-12px gap-y-10px flex-wrap justify-end max-w-full">
             <Button
               size="mini"
               type="secondary"
@@ -343,8 +344,8 @@ const AppearanceSettings: React.FC = () => {
               Reset zoom
             </Button>
           </div>
-        </div>
-      </div>
+        </SettingsRow>
+      </SettingsSection>
 
       <AddThemeModal
         visible={addOpen}
@@ -353,7 +354,7 @@ const AppearanceSettings: React.FC = () => {
           await addTheme(payload);
         }}
       />
-    </div>
+    </SettingsPage>
   );
 };
 

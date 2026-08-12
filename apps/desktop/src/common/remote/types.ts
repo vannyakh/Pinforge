@@ -1,7 +1,6 @@
 /** Remote chatbot channels + Cloudflare tunnel (send files back to bots). */
 
-export type RemoteChannelId =
-  "telegram" | "discord" | "slack" | "lark" | "wechat" | "line" | "webhook";
+export type RemoteChannelId = "telegram" | "discord";
 
 export type RemoteUserStatus = "pending" | "approved" | "denied";
 
@@ -108,43 +107,6 @@ export const DEFAULT_REMOTE_CHANNELS: RemoteChannelConfig[] = [
     botToken: "",
     webhookUrl: "",
     sendFilesBack: true,
-  },
-  {
-    id: "slack",
-    label: "Slack",
-    enabled: false,
-    available: false,
-    sendFilesBack: true,
-  },
-  {
-    id: "lark",
-    label: "Lark",
-    enabled: false,
-    available: false,
-    sendFilesBack: true,
-  },
-  {
-    id: "wechat",
-    label: "WeChat",
-    enabled: false,
-    available: false,
-    sendFilesBack: false,
-  },
-  {
-    id: "line",
-    label: "LINE",
-    enabled: false,
-    available: false,
-    sendFilesBack: true,
-  },
-  {
-    id: "webhook",
-    label: "Custom webhook",
-    enabled: false,
-    available: true,
-    webhookUrl: "",
-    sendFilesBack: true,
-    notes: "Generic HTTP webhook for your own chatbot agent",
   },
 ];
 

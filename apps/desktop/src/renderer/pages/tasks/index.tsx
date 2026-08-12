@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from "@arco-design/web-react";
 import type { ColumnProps, SorterInfo } from "@arco-design/web-react/es/Table/interface";
+import { useResizableColumnWidths } from "@renderer/components/base/ResizableTableHeader";
 import {
   Clear,
   Close,
@@ -49,27 +50,44 @@ import {
 
 type TaskMediaKind = "image" | "video" | "audio";
 
-/**
- * Min table content width (column mins + sticky left/right).
- * Must stay ≥ sum of column widths or Arco crushes cols instead of scrolling.
- */
-const TASKS_TABLE_MIN_X =
-  44 + // No.
-  40 + // check
-  52 + // Media
-  240 + // Task min
-  100 + // Source
-  88 + // Quality
-  88 + // Resolution
-  112 + // Prog
-  96 + // Downloaded
-  96 + // Estimate
-  88 + // Status
-  72 + // Files
-  80 + // Preset
-  100 + // Updated
-  88; // Actions
-// = 1384
+/** Column widths — `scroll.x` must be ≥ sum (Arco Table scroll API). */
+const TASKS_COL = {
+  no: 48,
+  check: 44,
+  media: 56,
+  task: 280,
+  source: 112,
+  quality: 96,
+  resolution: 104,
+  progress: 120,
+  downloaded: 108,
+  estimate: 108,
+  status: 96,
+  files: 80,
+  preset: 96,
+  updated: 112,
+  actions: 96,
+} as const;
+
+type TaskColKey = keyof typeof TASKS_COL;
+
+const TASKS_COL_MIN: Record<TaskColKey, number> = {
+  no: 40,
+  check: 40,
+  media: 48,
+  task: 160,
+  source: 80,
+  quality: 72,
+  resolution: 80,
+  progress: 96,
+  downloaded: 88,
+  estimate: 88,
+  status: 72,
+  files: 64,
+  preset: 72,
+  updated: 88,
+  actions: 80,
+};
 
 function formatPresetLabel(format?: FormatPreset): string {
   const hit = FORMAT_OPTIONS.find((o) => o.value === format);
@@ -133,7 +151,8 @@ function previewCoverUrl(url?: string): string | undefined {
 function coverFromHistory(items: HistoryItem[]): string | undefined {
   for (const item of items) {
     if (item.outPath && isImagePath(item.outPath)) return toPinmediaUrl(item.outPath);
-    if (item.originalPath && isImagePath(item.originalPath)) return toPinmediaUrl(item.originalPath);
+    if (item.originalPath && isImagePath(item.originalPath))
+      return toPinmediaUrl(item.originalPath);
   }
   return undefined;
 }
@@ -499,7 +518,11 @@ const TasksPage: React.FC = () => {
   const cardRef = useRef<HTMLDivElement>(null);
   const queueHydratedRef = useRef(false);
   const [scrollY, setScrollY] = useState(360);
-  const [scrollX, setScrollX] = useState(TASKS_TABLE_MIN_X);
+  const {
+    scrollX: tableScrollX,
+    bindColumn: colResize,
+    components: tableComponents,
+  } = useResizableColumnWidths<TaskRow>(TASKS_COL, TASKS_COL_MIN);
   const [selectedKeys, setSelectedKeys] = useState<(string | number)[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<(string | number)[]>([]);
   const [addOpen, setAddOpen] = useState(false);
@@ -656,13 +679,7 @@ const TasksPage: React.FC = () => {
     const measure = () => {
       const batchBar = selectedKeys.length > 0 ? 44 : 0;
       const height = Math.max(180, el.clientHeight - 48 - batchBar);
-      // scroll.x must be the CONTENT width, never squeezed to the card width —
-      // otherwise fixed-layout columns collapse and Actions clips with no scrollbar.
-      const contentX = Math.max(TASKS_TABLE_MIN_X, Math.floor(el.clientWidth));
       setScrollY(height);
-      setScrollX(contentX);
-      el.style.setProperty("--tasks-table-min-width", `${TASKS_TABLE_MIN_X}px`);
-      el.style.setProperty("--tasks-table-scroll-x", `${contentX}px`);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -1421,7 +1438,7 @@ const TasksPage: React.FC = () => {
   const columns: ColumnProps<TaskRow>[] = [
     {
       title: "No.",
-      width: 44,
+      ...colResize("no"),
       align: "center",
       fixed: "left",
       className: "tasks-table__col-no",
@@ -1446,7 +1463,7 @@ const TasksPage: React.FC = () => {
           }}
         />
       ),
-      width: 40,
+      ...colResize("check"),
       align: "center",
       fixed: "left",
       className: "tasks-table__col-check",
@@ -1463,7 +1480,7 @@ const TasksPage: React.FC = () => {
     },
     {
       title: "",
-      width: 52,
+      ...colResize("media"),
       align: "center",
       className: "tasks-table__col-media",
       headerCellStyle: { padding: "10px 4px" },
@@ -1482,8 +1499,7 @@ const TasksPage: React.FC = () => {
     {
       title: "Task",
       dataIndex: "url",
-      // Flexible within scroll.x; CSS enforces min-width so content stays readable
-      width: 240,
+      ...colResize("task"),
       sorter: true,
       ellipsis: true,
       className: "tasks-table__col-task",
@@ -1559,9 +1575,10 @@ const TasksPage: React.FC = () => {
     {
       title: "Source",
       dataIndex: "provider",
-      width: 100,
+      ...colResize("source"),
       sorter: true,
       ellipsis: true,
+      className: "tasks-table__col-source",
       render: (_col, row) => {
         if (row.isChild) {
           return (
@@ -1581,9 +1598,10 @@ const TasksPage: React.FC = () => {
     {
       title: "Quality",
       dataIndex: "format",
-      width: 88,
+      ...colResize("quality"),
       sorter: true,
       ellipsis: true,
+      className: "tasks-table__col-quality",
       render: (_col, row) => (
         <span className="text-12px text-t-secondary tabular-nums">{taskQualityLabel(row)}</span>
       ),
@@ -1591,18 +1609,20 @@ const TasksPage: React.FC = () => {
     {
       title: "Resolution",
       dataIndex: "height",
-      width: 88,
+      ...colResize("resolution"),
       sorter: true,
       align: "right",
+      className: "tasks-table__col-resolution",
       render: (_col, row) => (
         <span className="text-12px text-t-secondary tabular-nums">{taskResolutionLabel(row)}</span>
       ),
     },
     {
-      title: "Prog.",
+      title: "Progress",
       dataIndex: "percent",
-      width: 112,
+      ...colResize("progress"),
       sorter: true,
+      className: "tasks-table__col-progress",
       render: (_col, row) => (
         <div className="tasks-table__prog">
           <Progress
@@ -1632,8 +1652,9 @@ const TasksPage: React.FC = () => {
     {
       title: "Downloaded",
       dataIndex: "downloadedBytes",
-      width: 96,
+      ...colResize("downloaded"),
       sorter: true,
+      className: "tasks-table__col-downloaded",
       render: (_col, row) => (
         <div className="tasks-table__size leading-tight">
           <div className="text-12px text-t-primary tabular-nums font-500">
@@ -1654,8 +1675,9 @@ const TasksPage: React.FC = () => {
     {
       title: "Estimate",
       dataIndex: "estimateBytes",
-      width: 96,
+      ...colResize("estimate"),
       sorter: true,
+      className: "tasks-table__col-estimate",
       render: (_col, row) => (
         <div className="tasks-table__size leading-tight">
           <div className="text-12px text-t-primary tabular-nums font-500">
@@ -1676,9 +1698,10 @@ const TasksPage: React.FC = () => {
     {
       title: "Status",
       dataIndex: "status",
-      width: 88,
+      ...colResize("status"),
       align: "center",
       sorter: true,
+      className: "tasks-table__col-status",
       render: (_col, row) => (
         <Tag color={statusColor(row.status)} size="small">
           {statusLabel(row.status)}
@@ -1688,9 +1711,10 @@ const TasksPage: React.FC = () => {
     {
       title: "Files",
       dataIndex: "files",
-      width: 72,
+      ...colResize("files"),
       align: "center",
       sorter: true,
+      className: "tasks-table__col-files",
       render: (_col, row) =>
         row.isChild ? (
           <span className="text-12px text-t-tertiary">—</span>
@@ -1706,8 +1730,9 @@ const TasksPage: React.FC = () => {
     {
       title: "Preset",
       dataIndex: "preset",
-      width: 80,
+      ...colResize("preset"),
       ellipsis: true,
+      className: "tasks-table__col-preset",
       render: (_col, row) =>
         row.isChild ? (
           <span className="text-12px text-t-tertiary">—</span>
@@ -1720,9 +1745,10 @@ const TasksPage: React.FC = () => {
     {
       title: "Updated",
       dataIndex: "updatedAt",
-      width: 100,
+      ...colResize("updated"),
       sorter: true,
       defaultSortOrder: "descend",
+      className: "tasks-table__col-updated",
       render: (_col, row) => {
         const dt = formatDateTime(row.updatedAt);
         return (
@@ -1737,7 +1763,7 @@ const TasksPage: React.FC = () => {
     },
     {
       title: "Actions",
-      width: 88,
+      ...colResize("actions"),
       align: "right",
       fixed: "right",
       className: "tasks-table__col-actions",
@@ -2057,15 +2083,15 @@ const TasksPage: React.FC = () => {
 
       <div className="tasks-table-card flex-1 min-h-0 w-full" ref={cardRef}>
         <Table
-          className="tasks-table"
+          className="tasks-table tasks-table--resizable"
           rowKey="id"
           columns={columns}
           data={visibleRows}
+          components={tableComponents}
           pagination={false}
           border={false}
           hover
-          tableLayoutFixed
-          scroll={{ x: scrollX, y: scrollY }}
+          scroll={{ x: tableScrollX, y: scrollY }}
           onRow={onRow}
           childrenColumnName="children"
           indentSize={0}

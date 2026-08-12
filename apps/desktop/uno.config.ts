@@ -11,7 +11,7 @@ import { presetExtra } from "unocss-preset-extra";
 const textColors = {
   "t-primary": "var(--text-primary)",
   "t-secondary": "var(--text-secondary)",
-  "t-tertiary": "var(--bg-6)",
+  "t-tertiary": "var(--text-tertiary)",
   "t-disabled": "var(--text-disabled)",
 };
 

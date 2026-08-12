@@ -2,7 +2,18 @@ import React, { useMemo } from "react";
 import { Button, Input, InputNumber, Select, Switch } from "@arco-design/web-react";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import type { FormatPreset, PresetName, YoutubeQuality } from "@renderer/api";
-import { DEFAULT_NAMING_TEMPLATES, NAMING_TEMPLATE_VARIABLES, renderNamingTemplate } from "@pinforge/core/types";
+import {
+  DEFAULT_NAMING_TEMPLATES,
+  NAMING_TEMPLATE_VARIABLES,
+  renderNamingTemplate,
+} from "@pinforge/core/types";
+import {
+  SettingsField,
+  SettingsHeader,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from "./components/SettingsLayout";
 
 const NAMING_PREVIEW_VARS = {
   title: "My Video Title",
@@ -15,22 +26,6 @@ const NAMING_PREVIEW_VARS = {
   height: "1080",
   index: 1,
 };
-
-const Row: React.FC<{
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}> = ({ title, description, children }) => (
-  <div className="flex items-start justify-between gap-24px py-14px border-b border-b-base last:border-b-0">
-    <div className="min-w-0 flex-1">
-      <div className="text-14px text-t-primary">{title}</div>
-      {description && (
-        <div className="text-12px text-t-tertiary mt-4px leading-relaxed">{description}</div>
-      )}
-    </div>
-    <div className="shrink-0 flex items-center">{children}</div>
-  </div>
-);
 
 const FEATURE_ITEMS = [
   ["autoLevels", "Auto levels", "Balance brightness and contrast"],
@@ -57,17 +52,13 @@ const DownloadSettings: React.FC = () => {
   );
 
   return (
-    <div className="max-w-640px w-full">
-      <div className="text-22px font-600 text-t-primary mb-6px">Download</div>
-      <div className="text-t-secondary text-14px mb-24px">
-        Defaults for downloads, enhance pipeline, and board processing.
-      </div>
-
-      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-        Enhance
-      </div>
-      <div className="bg-2 rd-12px border border-b-base px-18px mb-28px">
-        <Row
+    <SettingsPage width="narrow">
+      <SettingsHeader
+        title="Download"
+        description="Defaults for downloads, enhance pipeline, and board processing."
+      />
+      <SettingsSection title="Enhance">
+        <SettingsRow
           title="Enhance images"
           description="Apply image enhancement to Pinterest stills by default."
         >
@@ -75,13 +66,12 @@ const DownloadSettings: React.FC = () => {
             checked={settings.enhance}
             onChange={(v) => void updateSettings({ enhance: v })}
           />
-        </Row>
+        </SettingsRow>
         {settings.enhance && (
-          <div className="py-14px border-b border-b-base">
-            <div className="text-14px text-t-primary mb-4px">Enhance features</div>
-            <div className="text-12px text-t-tertiary mb-10px">
-              Steps applied when enhance is on. Intensity still follows the preset.
-            </div>
+          <SettingsField
+            title="Enhance features"
+            description="Steps applied when enhance is on. Intensity still follows the preset."
+          >
             <div className="flex flex-col gap-8px">
               {FEATURE_ITEMS.map(([key, title, desc]) => (
                 <label key={key} className="flex items-start gap-10px cursor-pointer py-4px">
@@ -97,13 +87,9 @@ const DownloadSettings: React.FC = () => {
                 </label>
               ))}
             </div>
-          </div>
+          </SettingsField>
         )}
-        <div className="py-14px">
-          <div className="text-14px text-t-primary mb-4px">Enhance preset</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Default quality pipeline for stills.
-          </div>
+        <SettingsField title="Enhance preset" description="Default quality pipeline for stills.">
           <Select
             className="w-full"
             value={settings.preset}
@@ -115,14 +101,11 @@ const DownloadSettings: React.FC = () => {
               </Select.Option>
             ))}
           </Select>
-        </div>
-      </div>
+        </SettingsField>
+      </SettingsSection>
 
-      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-        Download defaults
-      </div>
-      <div className="bg-2 rd-12px border border-b-base px-18px mb-16px">
-        <Row
+      <SettingsSection title="Download defaults">
+        <SettingsRow
           title="Auto download"
           description="Skip confirm and start processing after URL detection. Turn off to review options first."
         >
@@ -130,8 +113,8 @@ const DownloadSettings: React.FC = () => {
             checked={settings.autoDownload !== false}
             onChange={(v) => void updateSettings({ autoDownload: v })}
           />
-        </Row>
-        <Row
+        </SettingsRow>
+        <SettingsRow
           title="Clipboard link grabber"
           description="While Pinforge is focused, copy a media URL and it is added to the Tasks queue automatically (JDownloader-style)."
         >
@@ -139,8 +122,8 @@ const DownloadSettings: React.FC = () => {
             checked={Boolean(settings.clipboardMonitor)}
             onChange={(v) => void updateSettings({ clipboardMonitor: v })}
           />
-        </Row>
-        <Row
+        </SettingsRow>
+        <SettingsRow
           title="Grab links in background"
           description="When clipboard monitor is on, also capture URLs while Pinforge is unfocused and append them to the Tasks queue."
         >
@@ -149,13 +132,11 @@ const DownloadSettings: React.FC = () => {
             disabled={!settings.clipboardMonitor}
             onChange={(v) => void updateSettings({ clipboardMonitorBackground: v })}
           />
-        </Row>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Parallel downloads</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            How many pack-level downloads Tasks runs at once (1–3). Boards and playlists still
-            download items inside each pack with their own concurrency.
-          </div>
+        </SettingsRow>
+        <SettingsField
+          title="Parallel downloads"
+          description="How many pack-level downloads Tasks runs at once (1–3). Boards and playlists still download items inside each pack with their own concurrency."
+        >
           <Select
             className="w-full"
             value={String(settings.maxParallelDownloads ?? 2)}
@@ -165,8 +146,8 @@ const DownloadSettings: React.FC = () => {
             <Select.Option value="2">2 — recommended</Select.Option>
             <Select.Option value="3">3 — fastest</Select.Option>
           </Select>
-        </div>
-        <Row
+        </SettingsField>
+        <SettingsRow
           title="Folder per download"
           description="Each download gets its own folder — videos with separate audio or subtitles, carousels, and multi-file posts stay grouped instead of loose in the download directory."
         >
@@ -174,12 +155,13 @@ const DownloadSettings: React.FC = () => {
             checked={settings.packFolders !== false}
             onChange={(v) => void updateSettings({ packFolders: v })}
           />
-        </Row>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">File name template</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Output filename without extension. Use {"{key}"} placeholders — preview updates below.
-          </div>
+        </SettingsRow>
+        <SettingsField
+          title="File name template"
+          description={
+            "Output filename without extension. Use {key} placeholders — preview updates below."
+          }
+        >
           <Input
             className="w-full"
             value={fileTemplate}
@@ -189,25 +171,25 @@ const DownloadSettings: React.FC = () => {
           <div className="text-12px text-t-tertiary mt-6px font-mono">
             Preview: {filePreview}.mp4
           </div>
-        </div>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Folder name template</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Used when folder per download is on. Same {"{key}"} syntax as filenames.
-          </div>
+        </SettingsField>
+        <SettingsField
+          title="Folder name template"
+          description={"Used when folder per download is on. Same {key} syntax as filenames."}
+        >
           <Input
             className="w-full"
             value={folderTemplate}
             placeholder={DEFAULT_NAMING_TEMPLATES.folderName}
             onChange={(v) => void updateSettings({ naming: { folderName: v } })}
           />
-          <div className="text-12px text-t-tertiary mt-6px font-mono">Preview: {folderPreview}/</div>
-        </div>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Template variables</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Click to copy a placeholder into your template.
+          <div className="text-12px text-t-tertiary mt-6px font-mono">
+            Preview: {folderPreview}/
           </div>
+        </SettingsField>
+        <SettingsField
+          title="Template variables"
+          description="Click to copy a placeholder into your template."
+        >
           <div className="flex flex-wrap gap-6px">
             {NAMING_TEMPLATE_VARIABLES.map((v) => (
               <Button
@@ -239,12 +221,11 @@ const DownloadSettings: React.FC = () => {
               Reset naming to default
             </Button>
           </div>
-        </div>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Default video format</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            YouTube / Instagram / TikTok output preference.
-          </div>
+        </SettingsField>
+        <SettingsField
+          title="Default video format"
+          description="YouTube / Instagram / TikTok output preference."
+        >
           <Select
             className="w-full"
             value={settings.format}
@@ -254,12 +235,11 @@ const DownloadSettings: React.FC = () => {
             <Select.Option value="mp4">mp4</Select.Option>
             <Select.Option value="audio-only">audio-only</Select.Option>
           </Select>
-        </div>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">YouTube quality</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Default max height for YouTube downloads (Best = highest available).
-          </div>
+        </SettingsField>
+        <SettingsField
+          title="YouTube quality"
+          description="Default max height for YouTube downloads (Best = highest available)."
+        >
           <Select
             className="w-full"
             value={settings.youtube?.quality ?? "best"}
@@ -273,12 +253,11 @@ const DownloadSettings: React.FC = () => {
               )
             )}
           </Select>
-        </div>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">YouTube channel max videos</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            How many uploads to pull from a channel or @handle URL (1–500).
-          </div>
+        </SettingsField>
+        <SettingsField
+          title="YouTube channel max videos"
+          description="How many uploads to pull from a channel or @handle URL (1–500)."
+        >
           <InputNumber
             className="w-full"
             min={1}
@@ -291,12 +270,11 @@ const DownloadSettings: React.FC = () => {
               })
             }
           />
-        </div>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">YouTube playlist max videos</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            How many videos to pull from a playlist or mix URL (1–500).
-          </div>
+        </SettingsField>
+        <SettingsField
+          title="YouTube playlist max videos"
+          description="How many videos to pull from a playlist or mix URL (1–500)."
+        >
           <InputNumber
             className="w-full"
             min={1}
@@ -309,8 +287,8 @@ const DownloadSettings: React.FC = () => {
               })
             }
           />
-        </div>
-        <Row
+        </SettingsField>
+        <SettingsRow
           title="Organize by channel"
           description="Save YouTube downloads under outDir / channel name."
         >
@@ -318,12 +296,11 @@ const DownloadSettings: React.FC = () => {
             checked={settings.youtube?.organizeByChannel !== false}
             onChange={(v) => void updateSettings({ youtube: { organizeByChannel: v } })}
           />
-        </Row>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Pinterest board max pins</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            How many pins to list/download from a board, profile, or search (1–2000).
-          </div>
+        </SettingsRow>
+        <SettingsField
+          title="Pinterest board max pins"
+          description="How many pins to list/download from a board, profile, or search (1–2000)."
+        >
           <InputNumber
             className="w-full"
             min={1}
@@ -336,8 +313,8 @@ const DownloadSettings: React.FC = () => {
               })
             }
           />
-        </div>
-        <Row
+        </SettingsField>
+        <SettingsRow
           title="ZIP board downloads"
           description="After a board/profile batch finishes, create a .zip next to the folder."
         >
@@ -345,13 +322,11 @@ const DownloadSettings: React.FC = () => {
             checked={Boolean(settings.pinterest?.zipBoards)}
             onChange={(v) => void updateSettings({ pinterest: { zipBoards: v } })}
           />
-        </Row>
-        <div className="py-14px border-b border-b-base">
-          <div className="text-14px text-t-primary mb-4px">Pinterest cookies</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Paste a Cookie header from your browser (DevTools → Network) to access private boards.
-            Stored locally only.
-          </div>
+        </SettingsRow>
+        <SettingsField
+          title="Pinterest cookies"
+          description="Paste a Cookie header from your browser (DevTools → Network) to access private boards. Stored locally only."
+        >
           <Input.TextArea
             className="w-full"
             autoSize={{ minRows: 3, maxRows: 8 }}
@@ -359,12 +334,11 @@ const DownloadSettings: React.FC = () => {
             value={settings.pinterest?.cookies ?? ""}
             onChange={(v) => void updateSettings({ pinterest: { cookies: v } })}
           />
-        </div>
-        <div className="py-14px">
-          <div className="text-14px text-t-primary mb-4px">Board delay (ms)</div>
-          <div className="text-12px text-t-tertiary mb-8px">
-            Pause between board items to reduce rate limits.
-          </div>
+        </SettingsField>
+        <SettingsField
+          title="Board delay (ms)"
+          description="Pause between board items to reduce rate limits."
+        >
           <InputNumber
             className="w-full"
             min={500}
@@ -373,9 +347,9 @@ const DownloadSettings: React.FC = () => {
             value={settings.delayMs}
             onChange={(v) => void updateSettings({ delayMs: Number(v) || 1500 })}
           />
-        </div>
-      </div>
-    </div>
+        </SettingsField>
+      </SettingsSection>
+    </SettingsPage>
   );
 };
 

@@ -466,6 +466,61 @@ export function shouldShowExtractPick(
   return true;
 }
 
+const ACTIVE_CARD_STATUSES: ChatDownloadCardStatus[] = [
+  "queued",
+  "extracting",
+  "ready",
+  "downloading",
+];
+
+/** True when a chat message still represents in-flight extract/download work. */
+export function messageIsActivelyProcessing(
+  msg: ChatMessage,
+  opts?: { allowDetecting?: boolean }
+): boolean {
+  if (msg.role !== "assistant") return false;
+  if (
+    msg.status === "cancelled" ||
+    msg.status === "done" ||
+    msg.status === "failed" ||
+    msg.status === "error" ||
+    msg.status === "ready"
+  ) {
+    return false;
+  }
+  if (msg.status === "detecting") return opts?.allowDetecting === true;
+  if (msg.status !== "started") return false;
+
+  if (msg.batchJob) {
+    const { total, done, failed } = msg.batchJob;
+    return done + failed < total;
+  }
+
+  const cards = msg.results?.length ? msg.results : msg.result ? [msg.result] : [];
+  if (cards.length === 0) return false;
+  return cards.some((c) => ACTIVE_CARD_STATUSES.includes(c.status));
+}
+
+/** Sidebar / recents: only spin while this session is genuinely busy. */
+export function chatSessionIsBusy(
+  session: ChatSession,
+  opts?: { extracting?: boolean; liveMessages?: ChatMessage[]; appBusy?: boolean }
+): boolean {
+  if (opts?.extracting) return true;
+  const messages = opts?.liveMessages ?? session.messages;
+  const assistants = messages.filter((m) => m.role === "assistant");
+  if (!assistants.length) return false;
+
+  return assistants.some((m) => {
+    if (!messageIsActivelyProcessing(m, { allowDetecting: opts?.extracting === true })) {
+      return false;
+    }
+    // Stale "Downloading…" UI after work finished — hide spinner when nothing runs app-wide.
+    if (m.status === "started" && opts?.appBusy === false) return false;
+    return true;
+  });
+}
+
 export function formatBatchMessage(
   msg: Pick<ChatMessage, "extract" | "detected" | "status">,
   job: ChatBatchJob

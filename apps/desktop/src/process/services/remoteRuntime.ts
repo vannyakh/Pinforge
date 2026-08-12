@@ -18,7 +18,12 @@ import {
   startRemoteApiServer,
   type RemoteApiServer,
 } from "../webserver/remoteApi";
-import { downloadRemoteUrl, detectRemoteUrl, getRemoteToolStatus, queueRemoteUrls } from "./remoteTools";
+import {
+  downloadRemoteUrl,
+  detectRemoteUrl,
+  getRemoteToolStatus,
+  queueRemoteUrls,
+} from "./remoteTools";
 import { clampMaxUrls, resolveBotOptions } from "./remoteBotOptions";
 import {
   channelRequiresApproval,
@@ -52,8 +57,7 @@ import { sanitizeFilename } from "@pinforge/core/types";
 const TELEGRAM_DOC_MAX_BYTES = 49 * 1024 * 1024;
 
 type SendBackTarget =
-  | { kind: "telegram"; chatId: number }
-  | { kind: "webhook"; url: string; channelId: string };
+  { kind: "telegram"; chatId: number } | { kind: "webhook"; url: string; channelId: string };
 
 const DEFAULT_STATUS: RemoteRuntimeStatus = {
   api: { running: false, port: 8787, url: null },
@@ -98,7 +102,9 @@ async function postAccessRequestCard(user: RemoteUser): Promise<void> {
 }
 
 function getTelegramChannel() {
-  return getStore().get("remote").channels.find((c) => c.id === "telegram");
+  return getStore()
+    .get("remote")
+    .channels.find((c) => c.id === "telegram");
 }
 
 function telegramBotOptions() {
@@ -295,7 +301,8 @@ async function handleTelegramDownloadAction(
 
   const override = {
     format: item.format,
-    youtube: item.providerId === "youtube" ? { quality: item.quality } : { quality: "best" as const },
+    youtube:
+      item.providerId === "youtube" ? { quality: item.quality } : { quality: "best" as const },
   };
 
   if (action.kind === "queue") {
@@ -330,11 +337,7 @@ async function handleTelegramDownloadAction(
       : formatLabel(item.format);
   return {
     answer: "Started",
-    editText: [
-      `Downloading (${startedLabel})…`,
-      item.title ? item.title : undefined,
-      item.url,
-    ]
+    editText: [`Downloading (${startedLabel})…`, item.title ? item.title : undefined, item.url]
       .filter(Boolean)
       .join("\n"),
     keyboard: null,
@@ -445,7 +448,9 @@ async function applyRemoteRuntime(): Promise<void> {
   const port = remote.tunnel.localPort || 8787;
   const host = remote.tunnel.enabled ? "0.0.0.0" : "127.0.0.1";
 
-  const telegramChannel = remote.channels.find((c) => c.id === "telegram" && c.enabled && c.available);
+  const telegramChannel = remote.channels.find(
+    (c) => c.id === "telegram" && c.enabled && c.available
+  );
   const telegramToken = normalizeTelegramToken(telegramChannel?.botToken ?? "");
   const enabledChannels = remote.channels.filter((c) => c.enabled && c.available);
   const shouldRunApi = Boolean(remote.tunnel.enabled || enabledChannels.length > 0);
@@ -513,9 +518,7 @@ async function applyRemoteRuntime(): Promise<void> {
         onDetect: async (url) => {
           const hit = detectRemoteUrl(url);
           if (!hit.ok) return hit.error ?? "Could not detect provider.";
-          const formats = hit.provider?.formats?.length
-            ? hit.provider.formats.join(", ")
-            : "best";
+          const formats = hit.provider?.formats?.length ? hit.provider.formats.join(", ") : "best";
           return [
             `Provider: ${hit.provider?.label ?? "Unknown"} (${hit.provider?.live ? "live" : "offline"})`,
             `URL: ${hit.url}`,
@@ -557,7 +560,10 @@ async function applyRemoteRuntime(): Promise<void> {
             }
           }
           if (posted === 0) {
-            await telegramBot.sendMessage(adminChatId, `${pending.length} pending — cards already in channel.`);
+            await telegramBot.sendMessage(
+              adminChatId,
+              `${pending.length} pending — cards already in channel.`
+            );
           }
         },
       });
@@ -637,8 +643,7 @@ async function notifyTelegramSendBack(
   const remote = getStore().get("remote");
   const telegram = remote.channels.find((c) => c.id === "telegram");
   const options = resolveBotOptions(telegram);
-  const shouldNotify =
-    telegram?.enabled && (telegram.sendFilesBack || options.notifyOnComplete);
+  const shouldNotify = telegram?.enabled && (telegram.sendFilesBack || options.notifyOnComplete);
 
   if (!shouldNotify) return;
 
@@ -707,15 +712,11 @@ async function notifyTelegramSendBack(
 async function resolveBatchZipForSend(
   outPaths: string[],
   payload: { title?: string; url: string; zipPath?: string }
-): Promise<
-  | { kind: "zip"; path: string }
-  | { kind: "too_large"; sizeLabel: string }
-> {
+): Promise<{ kind: "zip"; path: string } | { kind: "too_large"; sizeLabel: string }> {
   let zipPath = payload.zipPath && existsSync(payload.zipPath) ? payload.zipPath : undefined;
 
   if (!zipPath) {
-    const base =
-      sanitizeFilename(payload.title || "download").slice(0, 80) || "download";
+    const base = sanitizeFilename(payload.title || "download").slice(0, 80) || "download";
     const dir = path.dirname(outPaths[0]!);
     zipPath = path.join(dir, `${base}-${Date.now()}.zip`);
     zipPath = await zipFiles(outPaths, zipPath);
@@ -774,7 +775,11 @@ async function notifyWebhookChannels(payload: {
               description:
                 payload.status === "done" ? payload.url : `${payload.status}: ${payload.url}`,
               color:
-                payload.status === "done" ? 0x00b42a : payload.status === "failed" ? 0xf53f3f : 0xff7d00,
+                payload.status === "done"
+                  ? 0x00b42a
+                  : payload.status === "failed"
+                    ? 0xf53f3f
+                    : 0xff7d00,
             },
           ],
         });
@@ -817,8 +822,7 @@ export async function notifyTelegramAccessDecision(
     const welcome = resolveBotOptions(getTelegramChannel()).welcomeMessage.trim();
     await telegramBot.sendMessage(
       chatId,
-      welcome ||
-        "You have been approved! Send a media URL or use /download <url>."
+      welcome || "You have been approved! Send a media URL or use /download <url>."
     );
     return;
   }

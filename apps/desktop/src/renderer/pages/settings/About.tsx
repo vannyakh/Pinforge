@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Button, Divider, Message, Progress, Switch, Typography } from "@arco-design/web-react";
 import { Github, Right } from "@icon-park/react";
 import { api, type AutoUpdateStatus } from "@renderer/api";
+import { SettingsPage } from "./components/SettingsLayout";
 
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.1.0";
 const GITHUB_URL = "https://github.com/vannyakh/Pinforge";
@@ -182,8 +183,8 @@ const AboutSettings: React.FC = () => {
   ];
 
   return (
-    <div className="about-page flex flex-col w-full">
-      <div className="flex flex-col max-w-500px mx-auto w-full">
+    <SettingsPage width="about" className="about-page flex flex-col">
+      <div className="flex flex-col w-full">
         <div className="flex flex-col items-center pb-24px">
           <Typography.Title
             heading={3}
@@ -271,7 +272,7 @@ const AboutSettings: React.FC = () => {
           ))}
         </div>
       </div>
-    </div>
+    </SettingsPage>
   );
 };
 

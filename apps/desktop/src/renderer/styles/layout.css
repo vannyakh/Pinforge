@@ -15,13 +15,10 @@
   background-color: var(--bg-6);
 }
 
-/* Section title text — light mode uses text-t-tertiary (#86909c).
-   In dark mode, the tertiary token (#5a5a5a) is too dim on #0e0e0e,
-   while --text-secondary (#ced3da) is too bright; pick a mid-gray
-   shared by sidebar section titles and settings group headers. */
+/* Section title text — tertiary token is tuned per theme in default-color-scheme.css */
 [data-theme="dark"] .sider-section-title,
 [data-theme="dark"] .settings-sider__group-header {
-  color: #9098a1;
+  color: var(--text-tertiary);
 }
 
 .settings-sider__group-header--toggle {
@@ -2176,7 +2173,286 @@
   min-height: 0;
 }
 
-/* Center settings pages that declare a max-width utility */
+.settings-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-1);
+}
+
+.settings-pane__inner {
+  padding: 28px 32px 40px;
+  min-height: 100%;
+}
+
+.settings-pane:has(.providers-page) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-pane:has(.providers-page) .settings-pane__inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 28px;
+}
+
+/* Shared settings page layout */
+.settings-page {
+  width: 100%;
+}
+
+.settings-page--narrow {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.settings-page--wide {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.settings-page--appearance {
+  max-width: 820px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.settings-page--full {
+  max-width: 1024px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.settings-page--about {
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.settings-header__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.settings-header__desc {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.settings-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section__label {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.settings-section__card {
+  background: var(--bg-2);
+  border: 1px solid var(--border-base);
+  border-radius: 12px;
+  padding: 0 18px;
+}
+
+.settings-row,
+.settings-field {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-base);
+}
+
+.settings-row:last-child,
+.settings-field:last-child,
+.settings-section__card > :last-child {
+  border-bottom: none;
+}
+
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.settings-row__meta,
+.settings-field__meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-row__title,
+.settings-field__title {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.settings-row__desc,
+.settings-field__desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.settings-row__control {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.settings-field__body {
+  margin-top: 8px;
+}
+
+.settings-path-field {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-path-field__input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.settings-loading {
+  padding: 24px 0;
+  font-size: 14px;
+}
+
+/* Settings — dark mode surface + control tuning */
+[data-theme="dark"] .settings-pane {
+  background: var(--bg-base);
+}
+
+[data-theme="dark"] .settings-section__card {
+  background: var(--bg-1);
+  border-color: color-mix(in srgb, var(--border-base) 85%, var(--border-special));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text-white) 4%, transparent);
+}
+
+[data-theme="dark"] .settings-row,
+[data-theme="dark"] .settings-field {
+  border-bottom-color: color-mix(in srgb, var(--border-base) 72%, transparent);
+}
+
+[data-theme="dark"] .settings-section__card .arco-btn-secondary,
+[data-theme="dark"] .settings-section__card .arco-btn-outline:not(.arco-btn-status-danger) {
+  background: var(--bg-2);
+  border-color: var(--border-base);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .settings-section__card .arco-btn-secondary:hover,
+[data-theme="dark"] .settings-section__card .arco-btn-outline:not(.arco-btn-status-danger):hover {
+  background: var(--bg-3);
+  border-color: color-mix(in srgb, var(--border-base) 80%, var(--text-secondary));
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .settings-section__card .arco-tag-green {
+  background: color-mix(in srgb, var(--success) 14%, transparent) !important;
+  color: color-mix(in srgb, var(--success) 88%, var(--text-white)) !important;
+  border: 1px solid color-mix(in srgb, var(--success) 28%, transparent);
+}
+
+[data-theme="dark"] .settings-section__card .arco-tag-gray {
+  background: color-mix(in srgb, var(--text-tertiary) 16%, transparent) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid color-mix(in srgb, var(--text-tertiary) 24%, transparent);
+}
+
+[data-theme="dark"] .settings-section__card .arco-select-view,
+[data-theme="dark"] .settings-section__card .arco-input,
+[data-theme="dark"] .settings-section__card .arco-input-inner-wrapper {
+  background: var(--bg-2);
+  border-color: var(--border-base);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .settings-section__card .arco-select-view:hover,
+[data-theme="dark"] .settings-section__card .arco-input:hover,
+[data-theme="dark"] .settings-section__card .arco-input-inner-wrapper:hover {
+  border-color: color-mix(in srgb, var(--border-base) 60%, var(--text-tertiary));
+}
+
+[data-theme="dark"] .settings-section__card .arco-switch-checked {
+  background-color: var(--primary);
+}
+
+/* Light mode — subtle card elevation */
+[data-theme="light"] .settings-pane {
+  background: var(--bg-1);
+}
+
+[data-theme="light"] .settings-section__card {
+  background: var(--bg-base);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+
+/* Legacy alias — remote page migrated to settings-row */
+.remote-pref-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-base);
+}
+
+.remote-pref-row:last-child {
+  border-bottom: none;
+}
+
+.remote-pref-row__meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.remote-pref-row__control {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Center settings pages that declare a max-width utility (legacy) */
 .settings-pane > [class*="max-w-"] {
   margin-left: auto;
   margin-right: auto;
@@ -2318,6 +2594,17 @@
 }
 
 /* Remote settings tabs (Cloudflare / Channels) */
+.settings-header.providers-page__header {
+  margin-bottom: 16px;
+}
+
+.settings-remote-tabs {
+  margin-bottom: 0;
+}
+
+.appearance-page .settings-section {
+  margin-bottom: 16px;
+}
 .settings-remote-tabs .arco-tabs-header-nav,
 .settings-remote-tabs .arco-tabs-nav {
   border-bottom: 1px solid var(--border-base);
@@ -2705,19 +2992,10 @@
 }
 
 /* Providers page — mirrored from AionUI Agents (LocalAgents + AgentCard) */
-.settings-pane:has(.providers-page) {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
 .providers-page {
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 1024px;
-  margin: 0 auto;
-  align-self: center;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -2725,7 +3003,7 @@
 
 .providers-page__chrome {
   flex-shrink: 0;
-  background: var(--bg-1);
+  background: transparent;
   z-index: 10;
 }
 
@@ -2740,10 +3018,6 @@
   margin: 0;
   min-width: 0;
   flex: 1;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--text-primary);
 }
 
 .providers-page__actions {
@@ -3319,8 +3593,6 @@
 }
 
 .tasks-table-card {
-  --tasks-table-min-width: 1156px;
-  --tasks-table-scroll-x: 1156px;
   width: 100%;
   max-width: 100%;
   border: 1px solid var(--border-base);
@@ -3339,29 +3611,7 @@
   min-width: 0;
 }
 
-/*
- * Outer shells stay at card width (scroll viewport).
- * Inner tables use scroll.x width — NEVER width:100% (that crushed columns / killed H-scroll).
- */
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-content,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-container,
-.tasks-table-card:not(.home-extract-pick__card) .arco-spin,
-.tasks-table-card:not(.home-extract-pick__card) .arco-spin-children {
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-}
-
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-content-inner,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-body table,
-.tasks-table-card:not(.home-extract-pick__card) .arco-table-header table {
-  width: var(--tasks-table-scroll-x) !important;
-  min-width: var(--tasks-table-min-width) !important;
-  max-width: none !important;
-  table-layout: fixed !important;
-}
-
-/* Chat extract pick: fit parent — do not inherit tasks min-width */
+/* Chat extract pick: fit parent — do not inherit tasks table sizing */
 .home-extract-pick__table.tasks-table .arco-table-content-inner,
 .home-extract-pick__table.tasks-table .arco-table-body table,
 .home-extract-pick__table.tasks-table .arco-table-header table {
@@ -3370,7 +3620,7 @@
   max-width: 100% !important;
 }
 
-/* Header x synced by Arco from body; hide header scrollbar gutter */
+/* Arco scroll sync: hide header scrollbar gutter (see @arco-design/web-react Table scroll API) */
 .tasks-table-card:not(.home-extract-pick__card) .arco-table-header {
   overflow-x: hidden !important;
   overflow-y: hidden !important;
@@ -3384,7 +3634,6 @@
 }
 
 .tasks-table-card:not(.home-extract-pick__card) .arco-table-body {
-  overflow: auto !important;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-secondary) 35%, transparent) transparent;
 }
@@ -3415,13 +3664,40 @@
   background: transparent;
 }
 
-/* Task column can grow when scroll.x > min; keep readable floor */
-.tasks-table-card:not(.home-extract-pick__card) .tasks-table__col-task {
-  min-width: 240px !important;
-}
-
 .tasks-table-card:not(.home-extract-pick__card) .tasks-table__col-task .arco-table-cell {
   overflow: hidden;
+}
+
+/* Resizable column drag handle (see ResizableTableHeader) — handle lives inside <th> */
+.tasks-table--resizable .arco-table-th {
+  overflow: visible;
+}
+
+.tasks-table--resizable
+  .arco-table-th:not(.arco-table-col-fixed-left):not(.arco-table-col-fixed-right) {
+  position: relative;
+}
+
+.tasks-table--resizable .tasks-table-col-resize-handle {
+  position: absolute;
+  width: 8px;
+  height: 100%;
+  top: 0;
+  right: -4px;
+  cursor: col-resize;
+  z-index: 1;
+  background: transparent;
+  padding: 0;
+  background-image: none;
+}
+
+.tasks-table--resizable .tasks-table-col-resize-handle:hover {
+  background: color-mix(in srgb, rgb(var(--primary-6)) 35%, transparent);
+}
+
+body.tasks-col-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .tasks-table .arco-spin {
@@ -3449,6 +3725,13 @@
   border-bottom: 1px solid var(--border-base);
   cursor: pointer;
   user-select: none;
+  overflow: visible;
+}
+
+.tasks-table .arco-table-th-item,
+.tasks-table .arco-table-th-item-title {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .tasks-table .arco-table-th.arco-table-operation,

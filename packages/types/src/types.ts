@@ -33,15 +33,7 @@ export type FormatPreset = "best" | "mp4" | "audio-only";
 
 /** Placeholder keys for file / folder name templates (Settings → Download). */
 export type NamingTemplateKey =
-  | "title"
-  | "id"
-  | "provider"
-  | "channel"
-  | "ext"
-  | "date"
-  | "quality"
-  | "height"
-  | "index";
+  "title" | "id" | "provider" | "channel" | "ext" | "date" | "quality" | "height" | "index";
 
 export interface NamingTemplates {
   /** Output filename without extension. Default `{title}-{id}`. */

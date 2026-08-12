@@ -104,10 +104,7 @@ export function setRemoteUserAdminMessage(userId: string, adminMessageId: number
   saveUsers(users);
 }
 
-export function setRemoteUserStatus(
-  userId: string,
-  status: RemoteUserStatus
-): RemoteUser | null {
+export function setRemoteUserStatus(userId: string, status: RemoteUserStatus): RemoteUser | null {
   const store = getStore();
   const remote = store.get("remote");
   const users = [...(remote.users ?? [])];

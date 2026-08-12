@@ -1,48 +1,16 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Button, Input, Message, Progress, Select, Switch, Tag } from "@arco-design/web-react";
-import { FolderOpen } from "@icon-park/react";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import { api, type SystemConfig } from "@renderer/api";
 import { ONBOARD_PREVIEW_KEY } from "@renderer/components/setup/EnvironmentSetup";
-
-const Row: React.FC<{
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}> = ({ title, description, children }) => (
-  <div className="flex items-start justify-between gap-24px py-14px border-b border-b-base last:border-b-0">
-    <div className="min-w-0 flex-1">
-      <div className="text-14px text-t-primary">{title}</div>
-      {description && (
-        <div className="text-12px text-t-tertiary mt-4px leading-relaxed">{description}</div>
-      )}
-    </div>
-    <div className="shrink-0 flex items-center">{children}</div>
-  </div>
-);
-
-const PathField: React.FC<{
-  label: string;
-  description?: string;
-  value: string;
-  onBrowse: () => void;
-  onOpen: () => void;
-}> = ({ label, description, value, onBrowse, onOpen }) => (
-  <div className="py-14px border-b border-b-base last:border-b-0">
-    <div className="text-14px text-t-primary mb-4px">{label}</div>
-    {description && <div className="text-12px text-t-tertiary mb-8px">{description}</div>}
-    <div className="flex gap-8px">
-      <Input value={value} readOnly className="flex-1" />
-      <Button
-        icon={<FolderOpen theme="outline" size="16" fill="currentColor" strokeWidth={3} />}
-        onClick={onBrowse}
-      >
-        Browse…
-      </Button>
-      <Button onClick={onOpen}>Open</Button>
-    </div>
-  </div>
-);
+import {
+  SettingsField,
+  SettingsHeader,
+  SettingsPage,
+  SettingsPathField,
+  SettingsRow,
+  SettingsSection,
+} from "./components/SettingsLayout";
 
 type FfmpegStatus = Awaited<ReturnType<typeof api.ffmpegStatus>>;
 type YtdlpStatus = Awaited<ReturnType<typeof api.ytdlpStatus>>;
@@ -176,13 +144,13 @@ const SystemSettings: React.FC = () => {
   };
 
   return (
-    <div className="max-w-640px w-full">
-      <div className="text-22px font-600 text-t-primary mb-6px">System</div>
-      <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-        Application
-      </div>
-      <div className="bg-2 rd-12px border border-b-base px-18px mb-28px">
-        <Row title="Language" description="Interface language.">
+    <SettingsPage width="narrow">
+      <SettingsHeader
+        title="System"
+        description="Language, startup behavior, notifications, and developer tools."
+      />
+      <SettingsSection title="Application">
+        <SettingsRow title="Language" description="Interface language.">
           <Select
             style={{ width: 160 }}
             value={system.language}
@@ -190,8 +158,8 @@ const SystemSettings: React.FC = () => {
           >
             <Select.Option value="en">English</Select.Option>
           </Select>
-        </Row>
-        <Row
+        </SettingsRow>
+        <SettingsRow
           title="Start on Boot"
           description="Launch Pinforge automatically when you sign in to Windows or macOS."
         >
@@ -199,8 +167,8 @@ const SystemSettings: React.FC = () => {
             checked={system.startOnBoot}
             onChange={(v) => void patchSystem({ startOnBoot: v })}
           />
-        </Row>
-        <Row
+        </SettingsRow>
+        <SettingsRow
           title="Close to Tray"
           description="Hide to the system tray instead of quitting when you close the window."
         >
@@ -208,8 +176,8 @@ const SystemSettings: React.FC = () => {
             checked={system.closeToTray}
             onChange={(v) => void patchSystem({ closeToTray: v })}
           />
-        </Row>
-        <Row
+        </SettingsRow>
+        <SettingsRow
           title="Hardware Acceleration"
           description="Use the GPU to render the UI. Disable if the app crashes on launch or graphics flicker. Restart required."
         >
@@ -217,15 +185,15 @@ const SystemSettings: React.FC = () => {
             checked={system.hardwareAcceleration}
             onChange={(v) => void patchSystem({ hardwareAcceleration: v })}
           />
-        </Row>
-        <Row title="Notifications" description="Allow desktop notifications from Pinforge.">
+        </SettingsRow>
+        <SettingsRow title="Notifications" description="Allow desktop notifications from Pinforge.">
           <Switch
             checked={system.notifications}
             onChange={(v) => void patchSystem({ notifications: v })}
           />
-        </Row>
+        </SettingsRow>
         {system.notifications && (
-          <Row
+          <SettingsRow
             title="Download complete"
             description="Notify when a download or board job finishes."
           >
@@ -233,26 +201,19 @@ const SystemSettings: React.FC = () => {
               checked={system.notifyOnDownloadComplete}
               onChange={(v) => void patchSystem({ notifyOnDownloadComplete: v })}
             />
-          </Row>
+          </SettingsRow>
         )}
-      </div>
+      </SettingsSection>
 
       {isDevBuild && (
         <>
-          <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-            Tools
-          </div>
-          <div className="bg-2 rd-12px border border-b-base px-18px mb-28px">
-            <div className="py-14px border-b border-b-base">
-              <div className="flex items-start justify-between gap-16px mb-10px">
-                <div className="min-w-0">
-                  <div className="text-14px text-t-primary">ffmpeg</div>
-                </div>
-                <Tag color={available ? "green" : "gray"} size="small" className="shrink-0">
+          <SettingsSection title="Tools">
+            <SettingsField title="ffmpeg">
+              <div className="flex items-center justify-end mb-10px -mt-4px">
+                <Tag color={available ? "green" : "gray"} size="small">
                   {installing ? "Installing…" : available ? "Installed" : "Not found"}
                 </Tag>
               </div>
-
               {ffStatus?.version && (
                 <div
                   className="text-12px text-t-secondary mb-10px truncate"
@@ -262,14 +223,12 @@ const SystemSettings: React.FC = () => {
                   {ffStatus.path ? ` · ${ffStatus.path}` : ""}
                 </div>
               )}
-
               {installing && ffProgress && (
                 <div className="mb-12px">
                   <div className="text-12px text-t-secondary mb-6px">{ffProgress.message}</div>
                   <Progress percent={ffProgress.percent} showText />
                 </div>
               )}
-
               <div className="flex flex-wrap items-center gap-8px">
                 {!available && (
                   <Button
@@ -298,9 +257,9 @@ const SystemSettings: React.FC = () => {
                   Refresh
                 </Button>
               </div>
-            </div>
+            </SettingsField>
 
-            <Row
+            <SettingsRow
               title="Enable ffmpeg tools"
               description={
                 canEnable
@@ -313,21 +272,17 @@ const SystemSettings: React.FC = () => {
                 disabled={!canEnable}
                 onChange={(v) => void patchSystem({ ffmpegEnabled: v })}
               />
-            </Row>
+            </SettingsRow>
 
-            <div className="py-14px border-b border-b-base">
-              <div className="flex items-start justify-between gap-16px mb-10px">
-                <div className="min-w-0">
-                  <div className="text-14px text-t-primary">yt-dlp</div>
-                  <div className="text-12px text-t-tertiary mt-4px leading-relaxed">
-                    Catch-all downloader for sites without a built-in provider.
-                  </div>
-                </div>
-                <Tag color={ytAvailable ? "green" : "gray"} size="small" className="shrink-0">
+            <SettingsField
+              title="yt-dlp"
+              description="Catch-all downloader for sites without a built-in provider."
+            >
+              <div className="flex items-center justify-end mb-10px -mt-4px">
+                <Tag color={ytAvailable ? "green" : "gray"} size="small">
                   {ytInstalling ? "Installing…" : ytAvailable ? "Installed" : "Not found"}
                 </Tag>
               </div>
-
               {ytStatus?.version && (
                 <div
                   className="text-12px text-t-secondary mb-10px truncate"
@@ -337,14 +292,12 @@ const SystemSettings: React.FC = () => {
                   {ytStatus.path ? ` · ${ytStatus.path}` : ""}
                 </div>
               )}
-
               {ytInstalling && ytProgress && (
                 <div className="mb-12px">
                   <div className="text-12px text-t-secondary mb-6px">{ytProgress.message}</div>
                   <Progress percent={ytProgress.percent} showText />
                 </div>
               )}
-
               <div className="flex flex-wrap items-center gap-8px">
                 {!ytAvailable && (
                   <Button
@@ -387,9 +340,9 @@ const SystemSettings: React.FC = () => {
                   Refresh
                 </Button>
               </div>
-            </div>
+            </SettingsField>
 
-            <Row
+            <SettingsRow
               title="Enable yt-dlp provider"
               description={
                 ytCanEnable
@@ -402,20 +355,14 @@ const SystemSettings: React.FC = () => {
                 disabled={!ytCanEnable}
                 onChange={(v) => void patchSystem({ ytdlpEnabled: v })}
               />
-            </Row>
-          </div>
+            </SettingsRow>
+          </SettingsSection>
 
-          <div className="text-12px font-500 text-t-tertiary tracking-wide uppercase mb-8px">
-            Environment
-          </div>
-          <div className="bg-2 rd-12px border border-b-base px-18px mb-16px">
-            <div className="py-14px border-b border-b-base">
-              <div className="text-14px text-t-primary mb-4px">First-launch setup</div>
-              <div className="text-12px text-t-tertiary leading-relaxed mb-12px">
-                On first launch, Pinforge automatically downloads ffmpeg, yt-dlp, and Playwright
-                Chromium. Use Show onboarding to preview setup, or Uninstall Pinforge to open the
-                goodbye page and optionally clear app data.
-              </div>
+          <SettingsSection title="Environment">
+            <SettingsField
+              title="First-launch setup"
+              description="On first launch, Pinforge automatically downloads ffmpeg, yt-dlp, and Playwright Chromium. Use Show onboarding to preview setup, or Uninstall Pinforge to open the goodbye page and optionally clear app data."
+            >
               <div className="flex flex-wrap items-center gap-8px">
                 <Button
                   onClick={async () => {
@@ -443,21 +390,17 @@ const SystemSettings: React.FC = () => {
                   Uninstall Pinforge
                 </Button>
               </div>
-            </div>
-            <div className="py-14px border-b border-b-base">
-              <div className="flex items-start justify-between gap-16px mb-10px">
-                <div className="min-w-0">
-                  <div className="text-14px text-t-primary">Playwright Chromium</div>
-                  <div className="text-12px text-t-tertiary mt-4px leading-relaxed">
-                    Browser used to scrape Instagram, TikTok, Facebook, and Pinterest when page meta
-                    is missing.
-                  </div>
-                </div>
-                <Tag color={pwAvailable ? "green" : "gray"} size="small" className="shrink-0">
+            </SettingsField>
+
+            <SettingsField
+              title="Playwright Chromium"
+              description="Browser used to scrape Instagram, TikTok, Facebook, and Pinterest when page meta is missing."
+            >
+              <div className="flex items-center justify-end mb-10px -mt-4px">
+                <Tag color={pwAvailable ? "green" : "gray"} size="small">
                   {pwInstalling ? "Installing…" : pwAvailable ? "Installed" : "Not found"}
                 </Tag>
               </div>
-
               {pwStatus?.version && (
                 <div
                   className="text-12px text-t-secondary mb-10px truncate"
@@ -466,14 +409,12 @@ const SystemSettings: React.FC = () => {
                   {`${pwStatus.version}${pwStatus.path ? ` · ${pwStatus.path}` : ""}`}
                 </div>
               )}
-
               {pwInstalling && pwProgress && (
                 <div className="mb-12px">
                   <div className="text-12px text-t-secondary mb-6px">{pwProgress.message}</div>
                   <Progress percent={pwProgress.percent} showText />
                 </div>
               )}
-
               <div className="flex flex-wrap items-center gap-8px">
                 {!pwAvailable && (
                   <Button
@@ -526,9 +467,9 @@ const SystemSettings: React.FC = () => {
                   Refresh
                 </Button>
               </div>
-            </div>
+            </SettingsField>
 
-            <PathField
+            <SettingsPathField
               label="Work directory"
               description="Default folder for saved media packs."
               value={settings.outDir}
@@ -538,7 +479,7 @@ const SystemSettings: React.FC = () => {
               }}
               onOpen={() => void api.openPath(settings.outDir)}
             />
-            <PathField
+            <SettingsPathField
               label="Temp directory"
               description="Scratch space for extractors and Playwright downloads."
               value={system.tempDir}
@@ -548,7 +489,7 @@ const SystemSettings: React.FC = () => {
               }}
               onOpen={() => void api.openPath(system.tempDir)}
             />
-            <PathField
+            <SettingsPathField
               label="Log directory"
               description="Where app logs are written."
               value={system.logDir}
@@ -558,22 +499,20 @@ const SystemSettings: React.FC = () => {
               }}
               onOpen={() => void api.openPath(system.logDir)}
             />
-            <div className="py-14px">
-              <div className="text-14px text-t-primary mb-4px">Extractor API (optional)</div>
-              <div className="text-12px text-t-tertiary mb-8px">
-                Optional Piped/Invidious API base for YouTube fallbacks. Leave empty to use the
-                built-in extractor first.
-              </div>
+            <SettingsField
+              title="Extractor API (optional)"
+              description="Optional Piped/Invidious API base for YouTube fallbacks. Leave empty to use the built-in extractor first."
+            >
               <Input
                 placeholder="https://api.piped.example.com"
                 value={settings.extractorUrl}
                 onChange={(v) => void updateSettings({ extractorUrl: v })}
               />
-            </div>
-          </div>
+            </SettingsField>
+          </SettingsSection>
         </>
       )}
-    </div>
+    </SettingsPage>
   );
 };
 
