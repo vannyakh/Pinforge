@@ -155,4 +155,4 @@ git push origin v0.1.2
 | Wrong arch dialog / crash                   | Use `x64` DMG on Intel, `arm64` on Apple Silicon             |
 | `afterSign` “Skipping notarization”         | Missing `APPLE_*` env/secrets                                |
 
-Related code: `scripts/afterSign.js`, `apps/desktop/electron-builder.yml`, `.github/workflows/release.yml`.
+Related code: `scripts/afterSign.js`, `apps/desktop/electron-builder.yml`, `apps/desktop/resources/entitlements.mac.plist`, `.github/workflows/release.yml`.

@@ -3,6 +3,7 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import Sider from "./components/layout/Sider";
 import EnvironmentSetup from "./components/setup/EnvironmentSetup";
+import UninstallGoodbye from "./components/setup/UninstallGoodbye";
 import DownloadPage from "./pages/download";
 import TasksPage from "./pages/tasks";
 import SchedulePage from "./pages/schedule";
@@ -11,6 +12,14 @@ import { AppProvider, useApp } from "./hooks/context/AppContext";
 import { ThemeProvider } from "./hooks/context/ThemeContext";
 import { NavigationHistoryProvider } from "./hooks/context/NavigationHistoryContext";
 import logoUrl from "@renderer/assets/logo.png";
+
+function isUninstallWindowBoot(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get("mode") === "uninstall";
+  } catch {
+    return false;
+  }
+}
 
 const AppRoutes: React.FC = () => (
   <HashRouter>
@@ -28,9 +37,30 @@ const AppRoutes: React.FC = () => (
   </HashRouter>
 );
 
+type AppGate = "loading" | "setup" | "ready";
+
+const UninstallWindowApp: React.FC = () => {
+  useEffect(() => {
+    document.documentElement.classList.add("installer-shell");
+    document.body.classList.add("installer-shell");
+    return () => {
+      document.documentElement.classList.remove("installer-shell");
+      document.body.classList.remove("installer-shell");
+    };
+  }, []);
+
+  return (
+    <UninstallGoodbye
+      onCancel={() => {
+        void window.api.windowClose();
+      }}
+    />
+  );
+};
+
 const AppShell: React.FC = () => {
   const { settings, refresh } = useApp();
-  const [gate, setGate] = useState<"loading" | "setup" | "ready">("loading");
+  const [gate, setGate] = useState<AppGate>("loading");
 
   // Resolve boot gate from settings (avoids hanging on a separate IPC).
   useEffect(() => {
@@ -76,12 +106,20 @@ const AppShell: React.FC = () => {
   return <AppRoutes />;
 };
 
-const App: React.FC = () => (
-  <ThemeProvider>
-    <AppProvider>
-      <AppShell />
-    </AppProvider>
-  </ThemeProvider>
-);
+const App: React.FC = () => {
+  const uninstallWindow = isUninstallWindowBoot();
+
+  return (
+    <ThemeProvider>
+      {uninstallWindow ? (
+        <UninstallWindowApp />
+      ) : (
+        <AppProvider>
+          <AppShell />
+        </AppProvider>
+      )}
+    </ThemeProvider>
+  );
+};
 
 export default App;

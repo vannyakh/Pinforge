@@ -4,42 +4,42 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 
 ## Layout
 
-| Path | Role |
-| ---- | ---- |
-| `apps/desktop/` | Electron app (main / preload / renderer) |
-| `apps/cli/` | CLI |
-| `packages/core/` | Thin `@pinforge/core` façade (`process`, `preview`, `zip`) |
-| `packages/api/` | App-level helpers shared by CLI + desktop (provider prefs/resolve, download options) |
-| `packages/common/` | Cross-package shared helpers (`@pinforge/common` — URL scrape utils, etc.) |
-| `packages/providers/` | Site providers + registry |
-| `packages/download/` | HTTP/range/segment/HLS download |
-| `packages/engine/` | MediaCore, jobs, storage |
-| `packages/enhance/` | Image enhance pipeline |
-| `packages/types/` | Shared domain types + utils |
-| `packages/tools/` | ffmpeg / yt-dlp binary resolve |
-| `packages/worker/` | Rust worker bridge |
-| `rust/` | Optional native worker |
+| Path                  | Role                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| `apps/desktop/`       | Electron app (main / preload / renderer)                                             |
+| `apps/cli/`           | CLI                                                                                  |
+| `packages/core/`      | Thin `@pinforge/core` façade (`process`, `preview`, `zip`)                           |
+| `packages/api/`       | App-level helpers shared by CLI + desktop (provider prefs/resolve, download options) |
+| `packages/common/`    | Cross-package shared helpers (`@pinforge/common` — URL scrape utils, etc.)           |
+| `packages/providers/` | Site providers + registry                                                            |
+| `packages/download/`  | HTTP/range/segment/HLS download                                                      |
+| `packages/engine/`    | MediaCore, jobs, storage                                                             |
+| `packages/enhance/`   | Image enhance pipeline                                                               |
+| `packages/types/`     | Shared domain types + utils                                                          |
+| `packages/tools/`     | ffmpeg / yt-dlp binary resolve                                                       |
+| `packages/worker/`    | Rust worker bridge                                                                   |
+| `rust/`               | Optional native worker                                                               |
 
 ## Shared library (`@pinforge/*`)
 
 Apps prefer façade subpaths; API can also be imported directly:
 
-| Import | Package |
-| ------ | ------- |
-| `@pinforge/core/types` | `@pinforge/types` |
-| `@pinforge/core/providers` | `@pinforge/providers` |
-| `@pinforge/core/process` | local orchestration |
-| `@pinforge/core/preview` | local preview |
-| `@pinforge/core/download` | `@pinforge/download` |
-| `@pinforge/core/engine` | `@pinforge/engine` (+ wired `processMedia`) |
-| `@pinforge/core/jobs` | `@pinforge/engine` |
-| `@pinforge/core/pipeline` | `@pinforge/enhance` |
-| `@pinforge/core/tools` | `@pinforge/tools` |
-| `@pinforge/core/worker` | `@pinforge/worker` |
-| `@pinforge/core/api` | `@pinforge/api` (alias) |
-| `@pinforge/core/common` | `@pinforge/common` |
-| `@pinforge/api/providers` | provider prefs / resolve |
-| `@pinforge/api/download` | `normalizeDownloadOptions` |
+| Import                     | Package                                     |
+| -------------------------- | ------------------------------------------- |
+| `@pinforge/core/types`     | `@pinforge/types`                           |
+| `@pinforge/core/providers` | `@pinforge/providers`                       |
+| `@pinforge/core/process`   | local orchestration                         |
+| `@pinforge/core/preview`   | local preview                               |
+| `@pinforge/core/download`  | `@pinforge/download`                        |
+| `@pinforge/core/engine`    | `@pinforge/engine` (+ wired `processMedia`) |
+| `@pinforge/core/jobs`      | `@pinforge/engine`                          |
+| `@pinforge/core/pipeline`  | `@pinforge/enhance`                         |
+| `@pinforge/core/tools`     | `@pinforge/tools`                           |
+| `@pinforge/core/worker`    | `@pinforge/worker`                          |
+| `@pinforge/core/api`       | `@pinforge/api` (alias)                     |
+| `@pinforge/core/common`    | `@pinforge/common`                          |
+| `@pinforge/api/providers`  | provider prefs / resolve                    |
+| `@pinforge/api/download`   | `normalizeDownloadOptions`                  |
 
 No shared `@pinforge/ui` — React UI stays in `apps/desktop`. Electron IPC/store stay in desktop.
 

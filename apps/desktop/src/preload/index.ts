@@ -720,6 +720,10 @@ const api = {
   windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke("window:isMaximized"),
   setInstallerMode: (active: boolean): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke("window:setInstallerMode", active),
+  uninstallApp: (opts: { clearData: boolean }): Promise<{ ok: boolean; message?: string }> =>
+    ipcRenderer.invoke("app:uninstall", opts),
+  openUninstallWindow: (): Promise<{ ok: boolean; message?: string }> =>
+    ipcRenderer.invoke("app:openUninstallWindow"),
   onWindowMaximizedChanged: (cb: (maximized: boolean) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, maximized: boolean) => cb(maximized);
     ipcRenderer.on("window:maximizedChanged", listener);

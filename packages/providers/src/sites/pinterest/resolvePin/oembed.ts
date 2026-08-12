@@ -1,7 +1,9 @@
 import { toOriginalsUrl } from "../shared/pinimg";
 import { pinterestRequestHeaders } from "../shared/session";
 
-export async function fetchOembed(pinId: string): Promise<{ imageUrl: string | null; title?: string }> {
+export async function fetchOembed(
+  pinId: string
+): Promise<{ imageUrl: string | null; title?: string }> {
   try {
     const pinPage = `https://www.pinterest.com/pin/${pinId}/`;
     const oembedUrl = `https://www.pinterest.com/oembed.json?url=${encodeURIComponent(pinPage)}`;

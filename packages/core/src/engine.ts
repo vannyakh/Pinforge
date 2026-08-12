@@ -16,13 +16,7 @@ import {
 } from "@pinforge/engine";
 import { processMedia } from "./process";
 
-export {
-  getMediaCore,
-  MediaCore,
-  jobStatusToPackStatus,
-  JobScheduler,
-  runJobWorker,
-};
+export { getMediaCore, MediaCore, jobStatusToPackStatus, JobScheduler, runJobWorker };
 export type {
   MediaCoreOptions,
   MediaCoreDownloadOptions,

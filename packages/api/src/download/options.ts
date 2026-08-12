@@ -37,8 +37,7 @@ function asPresetName(value?: string): PresetName {
 export function normalizeDownloadOptions(
   input: NormalizeDownloadOptionsInput
 ): NormalizedDownloadOptions {
-  const enhanceOff =
-    input.enhance === false || input.preset === "off" || input.preset === "false";
+  const enhanceOff = input.enhance === false || input.preset === "off" || input.preset === "false";
   const preset = enhanceOff ? "auto" : asPresetName(input.preset);
 
   return {

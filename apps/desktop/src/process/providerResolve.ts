@@ -32,11 +32,7 @@ export function isBuiltinId(id: string): boolean {
 }
 
 export function isProviderEnabled(id: string): boolean {
-  return isProviderEnabledPure(
-    id,
-    getProviderPrefs(),
-    getStore().get("customProviders") ?? []
-  );
+  return isProviderEnabledPure(id, getProviderPrefs(), getStore().get("customProviders") ?? []);
 }
 
 /**

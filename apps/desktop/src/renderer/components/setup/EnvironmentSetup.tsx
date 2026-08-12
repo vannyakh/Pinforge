@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@arco-design/web-react";
-import { Minus } from "@icon-park/react";
-import "@renderer/components/layout/Titlebar/titlebar.css";
 import bannerEase from "@resources/onboard/banner-ease.png";
 import bannerAny from "@resources/onboard/banner-any.png";
 import bannerOnline from "@resources/onboard/banner-online.png";
 import bannerMastery from "@resources/onboard/banner-mastery.png";
+import logoUrl from "@renderer/assets/logo.png";
 import { api } from "@renderer/api";
 
 export const ONBOARD_PREVIEW_KEY = "pinforge:onboard-preview";
@@ -349,25 +348,21 @@ const EnvironmentSetup: React.FC<EnvironmentSetupProps> = ({ onFinished }) => {
   return (
     <div className="env-setup" data-theme="dark">
       <header className="env-setup__titlebar">
-        <div className="env-setup__titlebar-label">Pinforge desktop installer</div>
-        <div className="env-setup__titlebar-actions">
-          <button
-            type="button"
-            className="app-window-controls__button"
-            onClick={() => void window.api.windowMinimize()}
-            aria-label="Minimize"
-          >
-            <Minus theme="outline" size="14" fill="currentColor" strokeWidth={4} />
-          </button>
+        <div className="env-setup__brand">
+          <img className="env-setup__brand-logo" src={logoUrl} alt="" draggable={false} />
+          <span className="env-setup__brand-name">Pinforge</span>
+          <span className="env-setup__brand-tag">Setup</span>
         </div>
       </header>
 
       <main className="env-setup__stage">
+        <div className="env-setup__stage-glow" aria-hidden />
         <OnboardCarousel />
       </main>
 
       <footer className="env-setup__footer">
         <div className="env-setup__footer-meta">
+          <span className="env-setup__footer-kicker">Environment</span>
           <span className="env-setup__footer-status">{statusMessage}</span>
         </div>
         <div className="env-setup__footer-row">

@@ -39,13 +39,14 @@ export {
   kindFromExt,
   toResolved,
 } from "./http";
-export {
-  parseM3u8,
-  fetchAndParseHls,
-  downloadHlsResumable,
-  remuxSegmentFilesToMp4,
+export { parseM3u8, fetchAndParseHls, downloadHlsResumable, remuxSegmentFilesToMp4 } from "./hls";
+export type {
+  HlsExtractOptions,
+  ParsedHlsPlaylist,
+  Extractor,
+  ExtractorKind,
+  ExtractorContext,
 } from "./hls";
-export type { HlsExtractOptions, ParsedHlsPlaylist, Extractor, ExtractorKind, ExtractorContext } from "./hls";
 
 export async function downloadToFile(
   url: string,

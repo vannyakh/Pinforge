@@ -413,21 +413,36 @@ const SystemSettings: React.FC = () => {
               <div className="text-14px text-t-primary mb-4px">First-launch setup</div>
               <div className="text-12px text-t-tertiary leading-relaxed mb-12px">
                 On first launch, Pinforge automatically downloads ffmpeg, yt-dlp, and Playwright
-                Chromium. Use the controls below (and Tools above) to repair or reinstall later.
+                Chromium. Use Show onboarding to preview setup, or Uninstall Pinforge to open the
+                goodbye page and optionally clear app data.
               </div>
-              <Button
-                onClick={async () => {
-                  try {
-                    sessionStorage.setItem(ONBOARD_PREVIEW_KEY, "1");
-                  } catch {
-                    /* ignore */
-                  }
-                  await patchSystem({ environmentSetupDone: false });
-                  Message.success("Opening onboarding preview…");
-                }}
-              >
-                Show onboarding
-              </Button>
+              <div className="flex flex-wrap items-center gap-8px">
+                <Button
+                  onClick={async () => {
+                    try {
+                      sessionStorage.setItem(ONBOARD_PREVIEW_KEY, "1");
+                    } catch {
+                      /* ignore */
+                    }
+                    await patchSystem({ environmentSetupDone: false });
+                    Message.success("Opening onboarding preview…");
+                  }}
+                >
+                  Show onboarding
+                </Button>
+                <Button
+                  status="danger"
+                  onClick={() => {
+                    void api.openUninstallWindow().then((res) => {
+                      if (!res.ok) {
+                        Message.error(res.message || "Could not open uninstall window");
+                      }
+                    });
+                  }}
+                >
+                  Uninstall Pinforge
+                </Button>
+              </div>
             </div>
             <div className="py-14px border-b border-b-base">
               <div className="flex items-start justify-between gap-16px mb-10px">

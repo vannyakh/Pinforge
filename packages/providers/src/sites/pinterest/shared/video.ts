@@ -84,9 +84,7 @@ export function pickBestVideo(candidates: VideoCandidate[], allowHls: boolean): 
   if (allowHls) {
     const hls = candidates.filter((c) => c.hls).sort(byRes);
     const preferredHls =
-      hls.find((c) => /HLSV4/i.test(c.key)) ??
-      hls.find((c) => /HLSV3/i.test(c.key)) ??
-      hls[0];
+      hls.find((c) => /HLSV4/i.test(c.key)) ?? hls.find((c) => /HLSV3/i.test(c.key)) ?? hls[0];
     if (preferredHls) return preferredHls.url;
   }
   return null;

@@ -1,9 +1,4 @@
-export {
-  MediaCore,
-  getMediaCore,
-  configureMediaCore,
-  jobStatusToPackStatus,
-} from "./engine";
+export { MediaCore, getMediaCore, configureMediaCore, jobStatusToPackStatus } from "./engine";
 export type {
   MediaCoreOptions,
   MediaCoreDownloadOptions,

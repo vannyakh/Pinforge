@@ -1,4 +1,9 @@
-import { pickVideoId, playlistTitleOf, toPlaylistVideo, type YoutubePlaylistVideo } from "./parseNode";
+import {
+  pickVideoId,
+  playlistTitleOf,
+  toPlaylistVideo,
+  type YoutubePlaylistVideo,
+} from "./parseNode";
 import { seedVideoIdFromMixPlaylistId } from "./urls";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

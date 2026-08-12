@@ -2,7 +2,13 @@
  * Provider plugin contract — third-party extractors inherit MediaCore queue/resume/FFmpeg.
  */
 
-import type { DownloadMode, FormatPreset, MediaKind, ProviderId, ResolvedMedia } from "@pinforge/types";
+import type {
+  DownloadMode,
+  FormatPreset,
+  MediaKind,
+  ProviderId,
+  ResolvedMedia,
+} from "@pinforge/types";
 import type { MediaProvider, ResolveContext } from "./types";
 import { registerProvider } from "./index";
 import type { ProviderFeatureMatrix } from "./capabilities";

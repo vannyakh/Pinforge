@@ -12,6 +12,7 @@ import {
   INSTALLER_WIDTH,
   markInstallerWindowStarted,
 } from "./process/windowInstaller";
+import { isUninstallWindow } from "./process/uninstallWindow";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -71,7 +72,7 @@ function createWindow(): void {
   });
 
   if (needsInstaller) {
-    markInstallerWindowStarted();
+    markInstallerWindowStarted(win);
     win.center();
   }
 
@@ -80,6 +81,13 @@ function createWindow(): void {
   const showOnce = () => {
     if (shown || win.isDestroyed()) return;
     shown = true;
+    if (needsInstaller) {
+      try {
+        win.setWindowButtonVisibility(false);
+      } catch {
+        /* non-darwin */
+      }
+    }
     win.show();
   };
   const onRendererReady = (event: Electron.IpcMainEvent) => {
@@ -159,8 +167,13 @@ app.whenReady().then(() => {
   void recoverJobsOnStartup().catch(() => undefined);
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    else BrowserWindow.getAllWindows()[0]?.show();
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length === 0) {
+      createWindow();
+      return;
+    }
+    const main = windows.find((w) => !isUninstallWindow(w)) ?? windows[0];
+    main?.show();
   });
 });
 

@@ -21,7 +21,13 @@ import {
   fragmentConcurrencyForQuality,
   qualityCap,
 } from "../formats";
-import { convertAudio, embedMetadata, muxAv, requireFfmpegMessage, resolveFfmpeg } from "../../../media/mux";
+import {
+  convertAudio,
+  embedMetadata,
+  muxAv,
+  requireFfmpegMessage,
+  resolveFfmpeg,
+} from "../../../media/mux";
 import { downloadUrlToFile, pickCaption, writeCaptionFile } from "./download";
 import { resolveInnertubeMeta, type VideoMeta } from "./meta";
 

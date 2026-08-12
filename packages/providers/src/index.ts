@@ -26,11 +26,7 @@ export type {
   ProviderFeatureMatrix,
   CoreEngineFeature,
 } from "./registry/capabilities";
-export {
-  registerProviderPlugin,
-  listProviderPlugins,
-  getProviderPlugin,
-} from "./registry/plugin";
+export { registerProviderPlugin, listProviderPlugins, getProviderPlugin } from "./registry/plugin";
 export type { ProviderPlugin, MediaInfo, RegisteredPluginInfo } from "./registry/plugin";
 
 /** Pinterest */
@@ -91,11 +87,7 @@ export {
 } from "./sites/youtube";
 
 /** Playwright scrape */
-export {
-  scrapePageMeta,
-  fetchHtmlOrPlaywrightMeta,
-  closePlaywrightBrowser,
-} from "./extractors";
+export { scrapePageMeta, fetchHtmlOrPlaywrightMeta, closePlaywrightBrowser } from "./extractors";
 export type { PageMeta, ScrapeMetaOptions } from "./extractors";
 
 /** yt-dlp catch-all */

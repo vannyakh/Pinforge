@@ -9,10 +9,7 @@ import { tools, type ToolRegistry } from "@pinforge/tools";
 import { JobScheduler } from "./scheduler";
 
 /** Injected by `@pinforge/core` so engine never imports the façade. */
-export type ProcessMediaFn = (
-  url: string,
-  opts: ProcessBoardOptions
-) => Promise<DownloadResult>;
+export type ProcessMediaFn = (url: string, opts: ProcessBoardOptions) => Promise<DownloadResult>;
 
 export interface MediaCoreOptions {
   /** Root for jobs.db.json + job workdirs. */

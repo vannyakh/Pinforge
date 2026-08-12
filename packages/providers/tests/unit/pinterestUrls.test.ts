@@ -61,14 +61,8 @@ describe("pinterest urls", () => {
 
 describe("pinimg helpers", () => {
   it("upgrades sized urls to originals and grid covers", () => {
-    assert.match(
-      toOriginalsUrl("https://i.pinimg.com/736x/ab/cd/ef/abcd.jpg")!,
-      /\/originals\//
-    );
-    assert.match(
-      toGridCoverUrl("https://i.pinimg.com/originals/ab/cd/ef/abcd.jpg")!,
-      /\/474x\//
-    );
+    assert.match(toOriginalsUrl("https://i.pinimg.com/736x/ab/cd/ef/abcd.jpg")!, /\/originals\//);
+    assert.match(toGridCoverUrl("https://i.pinimg.com/originals/ab/cd/ef/abcd.jpg")!, /\/474x\//);
   });
 });
 

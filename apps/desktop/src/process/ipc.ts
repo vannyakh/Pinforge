@@ -1,9 +1,5 @@
 import { app, ipcMain, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from "electron";
-import {
-  listProviders,
-  configurePinterestCookies,
-  configureYtdlp,
-} from "@pinforge/core/providers";
+import { listProviders, configurePinterestCookies, configureYtdlp } from "@pinforge/core/providers";
 import { extractMediaPreview } from "@pinforge/core/preview";
 import {
   PRESETS,
@@ -58,6 +54,8 @@ import {
 import { enterInstallerWindow, exitInstallerWindow } from "./windowInstaller";
 import { checkForUpdates, downloadUpdate, getUpdateStatus, quitAndInstall } from "./autoUpdater";
 import { ensureMediaCore } from "./mediacore";
+import { uninstallApp } from "./appUninstall";
+import { isUninstallWindow, registerUninstallWindowIpc } from "./uninstallWindow";
 
 /** Active download abort — Tasks Stop / pause / cancel. */
 let activeAbort: AbortController | null = null;
@@ -1173,9 +1171,9 @@ export function registerIpc(): void {
   ipcMain.handle("window:close", (e) => {
     const win = BrowserWindow.fromWebContents(e.sender);
     if (!win) return;
-    const system = getStore().get("system");
-    if (system?.closeToTray) {
-      win.close(); // close handler hides when tray enabled
+    // Always destroy the dedicated uninstall window (ignore close-to-tray).
+    if (isUninstallWindow(win)) {
+      win.destroy();
       return;
     }
     win.close();
@@ -1191,6 +1189,10 @@ export function registerIpc(): void {
     if (active) enterInstallerWindow(win);
     else exitInstallerWindow(win);
     return { ok: true };
+  });
+
+  ipcMain.handle("app:uninstall", async (_e, opts?: { clearData?: boolean }) => {
+    return uninstallApp({ clearData: Boolean(opts?.clearData) });
   });
 
   ipcMain.handle("tools:ffmpegStatus", async () => getFfmpegStatus());
@@ -1278,4 +1280,6 @@ export function registerIpc(): void {
   );
   ipcMain.handle("update:download", async () => downloadUpdate());
   ipcMain.handle("update:quitAndInstall", () => quitAndInstall());
+
+  registerUninstallWindowIpc();
 }

@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit"
   },
-  "dependencies": { "@pinforge/types": "workspace:*" },
+  "dependencies": {
+    "@pinforge/types": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0"
