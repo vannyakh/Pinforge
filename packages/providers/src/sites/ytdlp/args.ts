@@ -21,9 +21,11 @@ export function ytdlpFormatSelector(opts: YtdlpFormatOpts = {}): string {
   if (format === "audio-only") {
     return "ba/b";
   }
-  // Prefer separate video+audio (DASH-like), then progressive.
+  // Prefer muxed video+audio. Do not require progressive [ext=mp4] first — sites like
+  // Bilibili only expose DASH streams (flv/m4s), so that filter falls through to audio.
+  // `--merge-output-format mp4` remuxes the result when ffmpeg is available.
   if (format === "mp4") {
-    return `bv*${h}[ext=mp4]+ba[ext=m4a]/b${h}[ext=mp4]/bv*${h}+ba/b${h}`;
+    return `bv*${h}[vcodec~='^(avc|h264)']+ba[ext=m4a]/bv*${h}+ba/b${h}[ext=mp4]/bv*${h}+ba/b${h}`;
   }
   return `bv*${h}+ba/b${h}`;
 }

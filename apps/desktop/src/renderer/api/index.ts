@@ -14,6 +14,9 @@ import type {
   RemoteChannelConfig,
   CloudflareTunnelConfig,
   RemoteRuntimeStatus,
+  RemoteBotOptions,
+  RemoteUser,
+  RemoteUserStatus,
   SystemConfig,
   CustomProviderConfig,
   FormatPluginConfig,
@@ -57,6 +60,9 @@ export type {
   RemoteChannelConfig,
   CloudflareTunnelConfig,
   RemoteRuntimeStatus,
+  RemoteBotOptions,
+  RemoteUser,
+  RemoteUserStatus,
   SystemConfig,
   CustomProviderConfig,
   FormatPluginConfig,
@@ -148,6 +154,12 @@ export const api = {
   getRemoteRuntimeStatus: () => window.api.getRemoteRuntimeStatus(),
   onRemoteRuntimeChanged: (cb: (status: RemoteRuntimeStatus) => void) =>
     window.api.onRemoteRuntimeChanged(cb),
+  listRemoteUsers: (filter?: { channel?: string; status?: RemoteUserStatus }) =>
+    window.api.listRemoteUsers(filter),
+  setRemoteUserStatus: (payload: { id: string; status: "approved" | "denied" }) =>
+    window.api.setRemoteUserStatus(payload),
+  removeRemoteUser: (id: string) => window.api.removeRemoteUser(id),
+  onRemoteUsersChanged: (cb: (users: RemoteUser[]) => void) => window.api.onRemoteUsersChanged(cb),
   showItemInFolder: (filePath: string) => window.api.showItemInFolder(filePath),
   openPath: (filePath: string) => window.api.openPath(filePath),
   openExternal: (url: string) => window.api.openExternal(url),

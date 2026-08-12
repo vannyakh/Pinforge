@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { FormatPreset, ResolvedMedia, YoutubeQuality } from "@pinforge/types";
 import { sanitizeFilename } from "@pinforge/types";
-import { resolveFfmpeg } from "../../media/mux";
+import { resolveFfmpeg, requireFfmpegMessage } from "../../media/mux";
 import { buildYtdlpDownloadArgs, buildYtdlpProbeArgs } from "./args";
 import { isHttpUrl } from "@pinforge/common";
 import { requireYtdlpMessage, resolveYtdlp } from "@pinforge/tools";
@@ -91,14 +91,20 @@ function pickOutputPath(stdout: string, workDir: string): string | null {
   return null;
 }
 
-async function findNewestMedia(dir: string): Promise<string | null> {
+async function findNewestMedia(
+  dir: string,
+  opts?: { preferVideo?: boolean }
+): Promise<string | null> {
   let entries;
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
     return null;
   }
-  let best: { path: string; mtime: number } | null = null;
+  const audioExt = /^(m4a|mp3|opus|flac|ogg)$/i;
+  const videoExt = /^(mp4|webm|mkv|mov|avi)$/i;
+  let bestVideo: { path: string; mtime: number } | null = null;
+  let bestAny: { path: string; mtime: number } | null = null;
   for (const e of entries) {
     if (!e.isFile()) continue;
     if (/\.(part|ytdl|temp)$/i.test(e.name)) continue;
@@ -106,9 +112,17 @@ async function findNewestMedia(dir: string): Promise<string | null> {
     const full = path.join(dir, e.name);
     const st = await fs.stat(full).catch(() => null);
     if (!st) continue;
-    if (!best || st.mtimeMs > best.mtime) best = { path: full, mtime: st.mtimeMs };
+    const candidate = { path: full, mtime: st.mtimeMs };
+    if (!bestAny || st.mtimeMs > bestAny.mtime) bestAny = candidate;
+    const ext = path.extname(e.name).slice(1);
+    if (videoExt.test(ext) && (!bestVideo || st.mtimeMs > bestVideo.mtime)) {
+      bestVideo = candidate;
+    } else if (audioExt.test(ext) && opts?.preferVideo) {
+      /* skip preferring audio when video was requested */
+    }
   }
-  return best?.path ?? null;
+  if (opts?.preferVideo && bestVideo) return bestVideo.path;
+  return bestAny?.path ?? null;
 }
 
 export async function previewYtdlp(url: string): Promise<YtdlpPreview> {
@@ -152,6 +166,12 @@ export async function resolveYtdlpMedia(
 
   const format = opts.format ?? "best";
   const ff = await resolveFfmpeg();
+  if (format !== "audio-only" && !ff) {
+    throw new Error(
+      `${requireFfmpegMessage()} Video sites like Bilibili need ffmpeg to merge video+audio into MP4.`
+    );
+  }
+
   const workRoot = opts.outDir ?? path.join(os.tmpdir(), "pinforge-ytdlp", String(Date.now()));
   await fs.mkdir(workRoot, { recursive: true });
 
@@ -190,7 +210,7 @@ export async function resolveYtdlpMedia(
       .then(() => true)
       .catch(() => false))
   ) {
-    filePath = await findNewestMedia(workRoot);
+    filePath = await findNewestMedia(workRoot, { preferVideo: format !== "audio-only" });
   }
   if (!filePath) {
     throw new Error("yt-dlp finished but no output file was found");
@@ -203,6 +223,11 @@ export async function resolveYtdlpMedia(
   const kind =
     format === "audio-only" || /^(m4a|mp3|opus|flac|ogg)$/i.test(ext) ? "audio" : "video";
 
+  if (format !== "audio-only" && kind === "audio") {
+    throw new Error(
+      "Download produced audio only instead of video. Install/enable ffmpeg in Settings → System, then retry (needed to merge Bilibili DASH streams into MP4)."
+    );
+  }
   opts.onByteProgress?.({
     downloaded: 1,
     total: 1,

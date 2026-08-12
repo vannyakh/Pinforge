@@ -4,6 +4,8 @@ import {
   isBoardUrl,
   isPinterestCollectionUrl,
   isProfileUrl,
+  isPinItHost,
+  expandPinterestUrl,
   resolveBoard,
   isYouTubeChannelUrl,
   resolveYouTubeChannel,
@@ -192,7 +194,7 @@ export async function extractMediaPreview(
   url: string,
   opts: ExtractPreviewOptions = {}
 ): Promise<ExtractPreview> {
-  const sourceUrl = url.trim();
+  let sourceUrl = url.trim();
   if (!sourceUrl) {
     throw new Error("URL is required");
   }
@@ -215,6 +217,19 @@ export async function extractMediaPreview(
       };
     }
     throw err;
+  }
+
+  if (provider.id === "pinterest") {
+    try {
+      const host = new URL(
+        sourceUrl.includes("://") ? sourceUrl : `https://${sourceUrl}`
+      ).hostname;
+      if (isPinItHost(host)) {
+        sourceUrl = await expandPinterestUrl(sourceUrl);
+      }
+    } catch {
+      /* keep original */
+    }
   }
 
   const mode = classifyMode(provider.id, sourceUrl);

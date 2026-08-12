@@ -38,7 +38,12 @@ export {
   isPinterestCollectionUrl,
   isPinUrl,
   isPinterestUrl,
+  isPinItHost,
+  expandPinterestUrl,
   classifyPinterestCollection,
+  isMultiPinShareUrl,
+  parseMultiPinShare,
+  resolveMultiPinShare,
   configurePinterestCookies,
   getPinterestCookieHeader,
 } from "./sites/pinterest";

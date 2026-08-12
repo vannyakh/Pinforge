@@ -62,9 +62,15 @@ import { isUninstallWindow, registerUninstallWindowIpc } from "./uninstallWindow
 import {
   getRemoteRuntimeStatus,
   notifyRemoteDownloadComplete,
+  notifyTelegramAccessDecision,
   syncRemoteRuntime,
 } from "./services/remoteRuntime";
-import { testTelegramToken } from "./channels/telegram";
+import {
+  listRemoteUsers,
+  removeRemoteUser,
+  setRemoteUserStatus,
+} from "./services/remoteAccess";
+import { testTelegramToken, normalizeTelegramToken } from "./channels/telegram";
 
 type ActiveRun = { abort: AbortController; jobId: string; packId: string };
 const activeRuns = new Map<string, ActiveRun>();
@@ -562,15 +568,26 @@ function progressWebContents(): Electron.WebContents {
 }
 
 /** Headless download entry for remote bots / local API (no renderer invoke). */
-export async function runProcessForRemote(payload: { url: string }) {
+export async function runProcessForRemote(payload: {
+  url: string;
+  format?: FormatPreset;
+  youtube?: Partial<YoutubeDownloadOptions>;
+}) {
   const store = getStore();
   const outDir = store.get("outDir")?.trim();
   if (!outDir) throw new Error("Download folder is not set");
   const fakeEvent = { sender: progressWebContents() } as IpcMainInvokeEvent;
+  const youtube = {
+    ...DEFAULT_YOUTUBE_OPTIONS,
+    ...store.get("youtube"),
+    ...payload.youtube,
+  };
   return runProcess(fakeEvent, {
     url: payload.url,
     preset: store.get("preset"),
     outDir,
+    format: payload.format,
+    youtube,
   });
 }
 
@@ -1213,19 +1230,37 @@ export function registerIpc(): void {
     const next = {
       channels: (partial.channels as typeof prev.channels) ?? prev.channels,
       tunnel: { ...prev.tunnel, ...(partial.tunnel ?? {}) },
+      users: prev.users ?? [],
     };
     store.set("remote", next);
     await syncRemoteRuntime();
     return store.get("remote");
   });
 
-  ipcMain.handle("remote:upsertChannel", async (_e, channel: { id: string }) => {
+  ipcMain.handle("remote:upsertChannel", async (_e, channel: Partial<import("../common/remote/types").RemoteChannelConfig> & { id: string; botToken?: string }) => {
     const store = getStore();
     const remote = store.get("remote");
     const idx = remote.channels.findIndex((c) => c.id === channel.id);
     const channels = [...remote.channels];
-    if (idx >= 0) channels[idx] = { ...channels[idx]!, ...channel } as (typeof channels)[number];
-    else channels.push(channel as (typeof channels)[number]);
+    if (idx >= 0) {
+      const prev = channels[idx]!;
+      const merged = { ...prev, ...channel } as (typeof channels)[number];
+      const incomingToken = channel.botToken?.trim() ?? "";
+      const prevToken = prev.botToken?.trim() ?? "";
+      if (!incomingToken && prevToken) merged.botToken = prev.botToken;
+      else if (incomingToken) merged.botToken = normalizeTelegramToken(incomingToken);
+      if (channel.botOptions) {
+        merged.botOptions = { ...prev.botOptions, ...channel.botOptions };
+      } else if (prev.botOptions) {
+        merged.botOptions = prev.botOptions;
+      }
+      channels[idx] = merged;
+    } else {
+      channels.push({
+        ...(channel as (typeof channels)[number]),
+        botToken: channel.botToken ? normalizeTelegramToken(channel.botToken) : channel.botToken,
+      });
+    }
     const next = { ...remote, channels };
     store.set("remote", next);
     await syncRemoteRuntime();
@@ -1234,6 +1269,28 @@ export function registerIpc(): void {
 
   ipcMain.handle("remote:getRuntimeStatus", async () => getRemoteRuntimeStatus());
 
+  ipcMain.handle("remote:listUsers", async (_e, filter?: { channel?: string; status?: string }) =>
+    listRemoteUsers(
+      filter as { channel?: string; status?: "pending" | "approved" | "denied" } | undefined
+    )
+  );
+
+  ipcMain.handle(
+    "remote:setUserStatus",
+    async (_e, payload: { id: string; status: "approved" | "denied" }) => {
+      const user = setRemoteUserStatus(payload.id, payload.status);
+      if (user?.channel === "telegram") {
+        await notifyTelegramAccessDecision(user.externalId, payload.status).catch(() => undefined);
+      }
+      return listRemoteUsers();
+    }
+  );
+
+  ipcMain.handle("remote:removeUser", async (_e, id: string) => {
+    removeRemoteUser(id);
+    return listRemoteUsers();
+  });
+
   ipcMain.handle(
     "remote:testChannel",
     async (
@@ -1241,11 +1298,17 @@ export function registerIpc(): void {
       payload: { id: string; botToken?: string; webhookUrl?: string }
     ): Promise<{ ok: boolean; message: string }> => {
       const id = String(payload.id);
-      const token = (payload.botToken ?? "").trim();
+      let token = normalizeTelegramToken(payload.botToken ?? "");
       const webhookUrl = (payload.webhookUrl ?? "").trim();
 
       try {
         if (id === "telegram" || id.startsWith("telegram")) {
+          if (!token) {
+            const saved = getStore()
+              .get("remote")
+              .channels.find((c) => c.id === "telegram" || String(c.id).startsWith("telegram"));
+            token = normalizeTelegramToken(saved?.botToken ?? "");
+          }
           const result = await testTelegramToken(token);
           if (result.ok) await syncRemoteRuntime();
           return result;

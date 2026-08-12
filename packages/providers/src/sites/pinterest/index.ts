@@ -45,6 +45,9 @@ export {
   isProfileUrl,
   isPinterestCollectionUrl,
   classifyPinterestCollection,
+  isMultiPinShareUrl,
+  parseMultiPinShare,
+  resolveMultiPinShare,
 } from "./resolveBoard";
 export type { ResolveBoardOptions } from "./resolveBoard";
 

@@ -270,8 +270,26 @@ function ensureRemoteDefaults(s: Store<AppStoreSchema>): void {
     if (!byId.has(def.id)) byId.set(def.id, def);
   }
   s.set("remote", {
-    channels: Array.from(byId.values()),
+    channels: Array.from(byId.values()).map((c) =>
+      c.id === "telegram"
+        ? {
+            ...c,
+            requireApproval: c.requireApproval ?? true,
+            botOptions: {
+              downloadMode: "immediate" as const,
+              notifyOnComplete: true,
+              maxUrlsPerMessage: 3,
+              detectBeforeDownload: true,
+              confirmBeforeDownload: true,
+              allowQualitySelect: true,
+              adminChatId: "",
+              ...c.botOptions,
+            },
+          }
+        : c
+    ),
     tunnel: { ...DEFAULT_TUNNEL, ...remote.tunnel },
+    users: remote.users ?? [],
   });
 }
 

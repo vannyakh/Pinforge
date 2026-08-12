@@ -1,5 +1,5 @@
-import type { FormatPreset, PresetName } from "@pinforge/core/types";
-import { DEFAULT_YOUTUBE_OPTIONS, DEFAULT_PINTEREST_OPTIONS } from "@pinforge/core/types";
+import type { FormatPreset, PresetName, YoutubeDownloadOptions } from "@pinforge/core/types";
+import { DEFAULT_YOUTUBE_OPTIONS } from "@pinforge/core/types";
 import { getStore, type PendingQueueJob } from "./store";
 
 const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
@@ -16,12 +16,15 @@ export function extractMediaUrls(text: string): string[] {
   return out;
 }
 
-function defaultQueueOpts(outDir: string): PendingQueueJob["opts"] {
+function defaultQueueOpts(
+  outDir: string,
+  override?: { format?: FormatPreset; youtube?: Partial<YoutubeDownloadOptions> }
+): PendingQueueJob["opts"] {
   const store = getStore();
-  const youtube = { ...DEFAULT_YOUTUBE_OPTIONS, ...store.get("youtube") };
+  const youtube = { ...DEFAULT_YOUTUBE_OPTIONS, ...store.get("youtube"), ...override?.youtube };
   return {
     enhance: store.get("enhance"),
-    format: store.get("format") as FormatPreset,
+    format: override?.format ?? (store.get("format") as FormatPreset),
     preset: store.get("preset") as PresetName,
     outDir,
     youtube: {
@@ -33,7 +36,10 @@ function defaultQueueOpts(outDir: string): PendingQueueJob["opts"] {
 }
 
 /** Append unique URLs to the persisted Tasks queue (main-process safe). */
-export function appendToPendingQueue(urls: string[]): number {
+export function appendToPendingQueue(
+  urls: string[],
+  override?: { format?: FormatPreset; youtube?: Partial<YoutubeDownloadOptions> }
+): number {
   const store = getStore();
   const outDir = store.get("outDir");
   if (!outDir?.trim()) return 0;
@@ -41,7 +47,7 @@ export function appendToPendingQueue(urls: string[]): number {
   const pending = store.get("pendingQueue") ?? [];
   const packUrls = new Set(store.get("packs").map((p) => p.url));
   const existing = new Set([...pending.map((q) => q.url), ...packUrls]);
-  const opts = defaultQueueOpts(outDir);
+  const opts = defaultQueueOpts(outDir, override);
   const next: PendingQueueJob[] = [...pending];
   let added = 0;
 

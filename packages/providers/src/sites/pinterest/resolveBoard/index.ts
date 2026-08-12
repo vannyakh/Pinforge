@@ -1,5 +1,5 @@
 import type { BoardResolveResult, PinListItem } from "@pinforge/types";
-import { isPinterestHost } from "../shared/urls";
+import { isPinItHost, isPinterestHost } from "../shared/urls";
 import {
   extractAppVersion,
   extractBoardId,
@@ -13,8 +13,10 @@ import {
 import { extractPinsFromHtml, enrichMissingMetaFromHtml, upsertPin } from "./htmlScrape";
 import { hydrateMissingPinMeta, paginatePins } from "./paginate";
 import { pinterestRequestHeaders } from "../shared/session";
+import { isMultiPinShareUrl, resolveMultiPinShare } from "./multiPinShare";
 
 export { isPinUrl, isPinterestUrl } from "../shared/urls";
+export { isMultiPinShareUrl, parseMultiPinShare, resolveMultiPinShare } from "./multiPinShare";
 
 const DEFAULT_MAX_PINS = 200;
 
@@ -28,7 +30,10 @@ export function classifyPinterestCollection(url: string): BoardResolveResult["ki
   try {
     const u = new URL(url.trim());
     if (!isPinterestHost(u.hostname)) return null;
+    // pin.it shorts expand to a single pin or multi-pin-share — never treat the short code as a profile.
+    if (isPinItHost(u.hostname)) return null;
     if (/\/pin\/\d+/i.test(u.pathname)) return null;
+    if (/\/multi-pin-share\/\d+/i.test(u.pathname)) return "board";
     if (/\/search\//i.test(u.pathname)) return "search";
     const parts = u.pathname.split("/").filter(Boolean);
     if (parts.length === 0) return null;
@@ -53,6 +58,10 @@ export async function resolveBoard(
   url: string,
   opts: ResolveBoardOptions = {}
 ): Promise<BoardResolveResult> {
+  if (isMultiPinShareUrl(url)) {
+    return resolveMultiPinShare(url, opts);
+  }
+
   const boardUrl = normalizeBoardUrl(url);
   const kind = classifyPinterestCollection(url) ?? "board";
   const maxPins = Math.max(1, Math.min(2000, opts.maxPins ?? DEFAULT_MAX_PINS));

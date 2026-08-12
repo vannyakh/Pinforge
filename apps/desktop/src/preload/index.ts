@@ -362,6 +362,19 @@ export interface AppSettings {
 
 export type RemoteChannelId = string;
 
+export type RemoteBotDownloadMode = "immediate" | "queue";
+
+export interface RemoteBotOptions {
+  welcomeMessage?: string;
+  downloadMode?: RemoteBotDownloadMode;
+  notifyOnComplete?: boolean;
+  maxUrlsPerMessage?: number;
+  detectBeforeDownload?: boolean;
+  confirmBeforeDownload?: boolean;
+  allowQualitySelect?: boolean;
+  adminChatId?: string;
+}
+
 export interface RemoteChannelConfig {
   id: RemoteChannelId;
   label: string;
@@ -370,7 +383,22 @@ export interface RemoteChannelConfig {
   botToken?: string;
   webhookUrl?: string;
   sendFilesBack: boolean;
+  requireApproval?: boolean;
+  botOptions?: RemoteBotOptions;
   notes?: string;
+}
+
+export type RemoteUserStatus = "pending" | "approved" | "denied";
+
+export interface RemoteUser {
+  id: string;
+  channel: RemoteChannelId | string;
+  externalId: string;
+  username?: string;
+  displayName?: string;
+  status: RemoteUserStatus;
+  requestedAt: number;
+  decidedAt?: number;
 }
 
 export interface CloudflareTunnelConfig {
@@ -388,6 +416,7 @@ export interface CloudflareTunnelConfig {
 export interface RemoteConfig {
   channels: RemoteChannelConfig[];
   tunnel: CloudflareTunnelConfig;
+  users: RemoteUser[];
 }
 
 export type RemoteRuntimeStatus = {
@@ -577,6 +606,15 @@ const api = {
     ipcRenderer.invoke("remote:testChannel", payload),
   getRemoteRuntimeStatus: (): Promise<RemoteRuntimeStatus> =>
     ipcRenderer.invoke("remote:getRuntimeStatus"),
+  listRemoteUsers: (filter?: {
+    channel?: string;
+    status?: RemoteUserStatus;
+  }): Promise<RemoteUser[]> => ipcRenderer.invoke("remote:listUsers", filter),
+  setRemoteUserStatus: (payload: {
+    id: string;
+    status: "approved" | "denied";
+  }): Promise<RemoteUser[]> => ipcRenderer.invoke("remote:setUserStatus", payload),
+  removeRemoteUser: (id: string): Promise<RemoteUser[]> => ipcRenderer.invoke("remote:removeUser", id),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),
   openPath: (filePath: string): Promise<string> => ipcRenderer.invoke("shell:openPath", filePath),
@@ -611,6 +649,12 @@ const api = {
     const listener = (_e: Electron.IpcRendererEvent, payload: RemoteRuntimeStatus) => cb(payload);
     ipcRenderer.on("remote:runtimeChanged", listener);
     return () => ipcRenderer.removeListener("remote:runtimeChanged", listener);
+  },
+
+  onRemoteUsersChanged: (cb: (users: RemoteUser[]) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: RemoteUser[]) => cb(payload);
+    ipcRenderer.on("remote:usersChanged", listener);
+    return () => ipcRenderer.removeListener("remote:usersChanged", listener);
   },
 
   ffmpegStatus: (): Promise<{

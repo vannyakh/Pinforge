@@ -20,7 +20,11 @@ describe("ytdlpFormatSelector", () => {
   it("builds audio-only and height-capped selectors", () => {
     assert.equal(ytdlpFormatSelector({ format: "audio-only" }), "ba/b");
     assert.match(ytdlpFormatSelector({ format: "best", quality: "1080" }), /height<=1080/);
-    assert.match(ytdlpFormatSelector({ format: "mp4" }), /ext=mp4/);
+    // mp4 prefers mergeable A/V — not progressive [ext=mp4] first (breaks Bilibili DASH)
+    const mp4 = ytdlpFormatSelector({ format: "mp4" });
+    assert.match(mp4, /bv\*/);
+    assert.match(mp4, /\+ba/);
+    assert.doesNotMatch(mp4, /^bv\*\[ext=mp4\]/);
   });
 });
 

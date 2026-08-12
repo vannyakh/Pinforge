@@ -9,6 +9,14 @@ import {
   parsePinInput,
   pinUrlFromId,
 } from "../../src/sites/pinterest/shared/urls.ts";
+import {
+  classifyPinterestCollection,
+  isPinterestCollectionUrl,
+} from "../../src/sites/pinterest/resolveBoard/index.ts";
+import {
+  isMultiPinShareUrl,
+  parseMultiPinShare,
+} from "../../src/sites/pinterest/resolveBoard/multiPinShare.ts";
 import { pickPinterestVideoUrl } from "../../src/sites/pinterest/shared/video.ts";
 import { toGridCoverUrl, toOriginalsUrl } from "../../src/sites/pinterest/shared/pinimg.ts";
 
@@ -56,6 +64,64 @@ describe("pinterest urls", () => {
     assert.equal(parsePinInput(""), null);
     assert.equal(parsePinInput("https://example.com/pin/1"), null);
     assert.equal(isPinterestUrl("https://example.com"), false);
+  });
+});
+
+describe("classifyPinterestCollection", () => {
+  it("does not treat pin.it shorts as profiles or boards", () => {
+    assert.equal(classifyPinterestCollection("https://pin.it/2nj3vkiOc"), null);
+    assert.equal(classifyPinterestCollection("https://pin.it/7nqAwRRUI"), null);
+    assert.equal(isPinterestCollectionUrl("https://pin.it/2nj3vkiOc"), false);
+  });
+
+  it("classifies multi-pin-share as a board collection", () => {
+    assert.equal(
+      classifyPinterestCollection(
+        "https://www.pinterest.com/multi-pin-share/6518739802359149495/?invite_code=abc"
+      ),
+      "board"
+    );
+    assert.equal(
+      isMultiPinShareUrl(
+        "https://www.pinterest.com/multi-pin-share/6518739802359149495/?invite_code=abc"
+      ),
+      true
+    );
+    assert.deepEqual(
+      parseMultiPinShare(
+        "https://www.pinterest.com/multi-pin-share/6518739802359149495/?invite_code=abc&sender=1"
+      ),
+      {
+        shareId: "6518739802359149495",
+        inviteCode: "abc",
+        sourceUrl:
+          "/multi-pin-share/6518739802359149495/?invite_code=abc&sender=1",
+      }
+    );
+  });
+
+  it("parses select-items share links (pin.it → multi-pin-share)", () => {
+    // https://pin.it/1475gJNom expands to a multi-pin-share of selected pins
+    const expanded =
+      "https://www.pinterest.com/multi-pin-share/1971770775170950372/?invite_code=e00fe35558d64a50b0fef1d6da41ba29&sender=891290719912830476";
+    assert.equal(isMultiPinShareUrl(expanded), true);
+    assert.equal(classifyPinterestCollection(expanded), "board");
+    assert.equal(isPinterestCollectionUrl(expanded), true);
+    assert.deepEqual(parseMultiPinShare(expanded), {
+      shareId: "1971770775170950372",
+      inviteCode: "e00fe35558d64a50b0fef1d6da41ba29",
+      sourceUrl:
+        "/multi-pin-share/1971770775170950372/?invite_code=e00fe35558d64a50b0fef1d6da41ba29&sender=891290719912830476",
+    });
+  });
+
+  it("still classifies profiles and boards", () => {
+    assert.equal(classifyPinterestCollection("https://www.pinterest.com/someuser/"), "profile");
+    assert.equal(
+      classifyPinterestCollection("https://www.pinterest.com/someuser/my-board/"),
+      "board"
+    );
+    assert.equal(classifyPinterestCollection("https://www.pinterest.com/pin/123456789012/"), null);
   });
 });
 

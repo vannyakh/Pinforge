@@ -18,6 +18,8 @@ import {
 import {
   detectProvider,
   isPinterestCollectionUrl,
+  isPinItHost,
+  expandPinterestUrl,
   isYouTubeChannelUrl,
   isYouTubePlaylistUrl,
   isTikTokProfileUrl,
@@ -224,8 +226,21 @@ export async function processMedia(
   const provider = detectProvider(url);
   const itemConcurrency = Math.max(1, opts.itemConcurrency ?? 3);
 
-  if (provider.id === "pinterest" && isPinterestCollectionUrl(url)) {
-    return processPinterestBoard(url, opts, provider.id);
+  let processUrl = url;
+  if (provider.id === "pinterest") {
+    try {
+      const host = new URL(url.trim().includes("://") ? url.trim() : `https://${url.trim()}`)
+        .hostname;
+      if (isPinItHost(host)) {
+        processUrl = await expandPinterestUrl(url);
+      }
+    } catch {
+      /* keep original url */
+    }
+  }
+
+  if (provider.id === "pinterest" && isPinterestCollectionUrl(processUrl)) {
+    return processPinterestBoard(processUrl, opts, provider.id);
   }
 
   if (provider.id === "youtube" && isYouTubeChannelUrl(url)) {
@@ -240,7 +255,7 @@ export async function processMedia(
     return processTikTokProfile(url, opts);
   }
 
-  const resolved = await provider.resolve(url, {
+  const resolved = await provider.resolve(processUrl, {
     format: opts.format,
     outDir: opts.outDir,
     extractorUrl: opts.extractorUrl,
