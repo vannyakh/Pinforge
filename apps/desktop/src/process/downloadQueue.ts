@@ -1,19 +1,69 @@
 import type { FormatPreset, PresetName, YoutubeDownloadOptions } from "@pinforge/core/types";
 import { DEFAULT_YOUTUBE_OPTIONS } from "@pinforge/core/types";
+import { cleanUrl, isHttpUrl } from "@pinforge/common";
 import { getStore, type PendingQueueJob } from "./store";
 
-const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
+/** Absolute http(s) URLs. */
+const ABS_URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
+/** Scheme-less hosts users often paste (pin.it/…, youtube.com/…, bilibili.com/…). */
+const BARE_HOST_RE =
+  /(?:^|[\s<(["'])((?:www\.)?(?:pin\.it|youtu\.be|(?:[\w-]+\.)?(?:youtube|youtu|tiktok|instagram|facebook|fb|pinterest|bilibili|vimeo|twitter|x|soundcloud|twitch|reddit)\.[\w.]+)\/[^\s<>"'`]*)/gi;
 
+/**
+ * Extract media URLs from free text — same surface the desktop Home/Tasks paste path expects.
+ * Accepts absolute http(s) and common scheme-less host paths.
+ */
 export function extractMediaUrls(text: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const raw of text.match(URL_RE) ?? []) {
-    const url = raw.replace(/[),.;!?]+$/g, "");
-    if (seen.has(url)) continue;
-    seen.add(url);
-    out.push(url);
+
+  const push = (raw: string) => {
+    const normalized = normalizeMediaUrl(raw);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    out.push(normalized);
+  };
+
+  for (const raw of text.match(ABS_URL_RE) ?? []) {
+    push(raw.replace(/[),.;!?\]>]+$/g, ""));
   }
+
+  for (const match of text.matchAll(BARE_HOST_RE)) {
+    const candidate = match[1];
+    if (candidate) push(candidate.replace(/[),.;!?\]>]+$/g, ""));
+  }
+
+  // Whole message is a single URL (with or without scheme).
+  const trimmed = text.trim();
+  if (out.length === 0 && trimmed && !/\s/.test(trimmed)) {
+    push(trimmed);
+  }
+
   return out;
+}
+
+/** Normalize a pasted URL so remote/desktop provider matching sees the same string. */
+export function normalizeMediaUrl(raw: string): string | null {
+  let value = cleanUrl(raw).replace(/[),.;!?\]>]+$/g, "");
+  if (!value) return null;
+
+  if (!/^https?:\/\//i.test(value)) {
+    if (/^\/\//.test(value)) value = `https:${value}`;
+    else if (/^[\w.-]+\.[a-z]{2,}([/:?]|$)/i.test(value) || /^pin\.it\//i.test(value)) {
+      value = `https://${value}`;
+    } else {
+      return null;
+    }
+  }
+
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    // Drop Telegram/tracking-only fragments that break some extractors.
+    return u.toString();
+  } catch {
+    return isHttpUrl(value) ? value : null;
+  }
 }
 
 function defaultQueueOpts(
@@ -51,8 +101,9 @@ export function appendToPendingQueue(
   const next: PendingQueueJob[] = [...pending];
   let added = 0;
 
-  for (const url of urls) {
-    if (existing.has(url)) continue;
+  for (const raw of urls) {
+    const url = normalizeMediaUrl(raw) ?? raw.trim();
+    if (!url || existing.has(url)) continue;
     existing.add(url);
     next.push({
       id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

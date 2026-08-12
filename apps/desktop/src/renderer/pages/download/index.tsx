@@ -19,6 +19,7 @@ import {
   makeDownloadCards,
   coverUrlFromMediaUrl,
   isSelectableExtract,
+  shouldShowExtractPick,
   formatBatchMessage,
   selectPendingConfirm,
   useHomeChatStore,
@@ -868,11 +869,23 @@ const DownloadPage: React.FC = () => {
                 ...m,
                 extract,
                 selectedItemUrls,
-                text: extract.message
-                  ? `${extract.message}\nSelect items below, then download.`
-                  : m.text,
-                status: "ready",
-                pendingConfirm: true,
+                text: extract.itemCount
+                  ? extract.message
+                    ? `${extract.message}\nSelect items below, then download.`
+                    : m.text
+                  : extract.message ?? "No items found on this page.",
+                status: extract.itemCount > 0 ? "ready" : "error",
+                pendingConfirm: extract.itemCount > 0,
+                ...(extract.itemCount <= 0
+                  ? {
+                      results: (m.results ?? []).map((c) => ({
+                        ...c,
+                        status: "failed" as const,
+                        message: "Download failed",
+                        error: extract.message ?? "No items found",
+                      })),
+                    }
+                  : {}),
               }
             : m
         )
@@ -1083,7 +1096,7 @@ const DownloadPage: React.FC = () => {
                                     <ShimmerText>Downloading</ShimmerText>
                                   ) : msg.status === "done" ? (
                                     "Done"
-                                  ) : msg.status === "failed" ? (
+                                  ) : msg.status === "failed" || msg.status === "error" ? (
                                     "Failed"
                                   ) : msg.status === "cancelled" ? (
                                     "Cancelled"
@@ -1148,15 +1161,7 @@ const DownloadPage: React.FC = () => {
                               );
                             })()}
 
-                            {msg.role === "assistant" &&
-                              extract &&
-                              isSelectableExtract(extract) &&
-                              msg.status !== "detecting" &&
-                              msg.status !== "started" &&
-                              msg.status !== "done" &&
-                              msg.status !== "failed" &&
-                              msg.status !== "cancelled" &&
-                              !msg.batchJob && (
+                            {shouldShowExtractPick(msg, extract) && extract && (
                                 <ExtractPickTable
                                   messageId={msg.id}
                                   extract={extract}
@@ -1199,7 +1204,10 @@ const DownloadPage: React.FC = () => {
                             {msg.pendingConfirm &&
                               msg.detected?.live &&
                               extract?.modeSupported &&
-                              !isSelectableExtract(extract) && (
+                              !isSelectableExtract(extract) &&
+                              msg.status !== "failed" &&
+                              msg.status !== "error" &&
+                              msg.status !== "cancelled" && (
                                 <div className="home-chat-confirm">
                                   <div className="home-chat-confirm__title">Download options</div>
                                   <div className="home-chat-confirm__row">

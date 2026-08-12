@@ -1,1 +1,1 @@
-export { zipFolder } from "./folderZip";
+export { zipFolder, zipFiles } from "./folderZip";

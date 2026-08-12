@@ -1,6 +1,8 @@
 import { BrowserWindow } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
+import { stat } from "node:fs/promises";
+import path from "node:path";
 import type { RemoteRuntimeStatus } from "../../common/remote/types";
 import {
   TelegramBot,
@@ -43,6 +45,11 @@ import { extractMediaPreview } from "@pinforge/core/preview";
 import { youtubeQualityChoices } from "@pinforge/core/providers";
 import type { YoutubeQuality } from "@pinforge/core/types";
 import { DEFAULT_YOUTUBE_OPTIONS } from "@pinforge/core/types";
+import { zipFiles } from "@pinforge/core/zip";
+import { sanitizeFilename } from "@pinforge/core/types";
+
+/** Telegram Bot API sendDocument limit (~50 MiB). Keep a small safety margin. */
+const TELEGRAM_DOC_MAX_BYTES = 49 * 1024 * 1024;
 
 type SendBackTarget =
   | { kind: "telegram"; chatId: number }
@@ -488,21 +495,37 @@ async function applyRemoteRuntime(): Promise<void> {
           return user.status;
         },
         onStatus: async () => {
-          const tool = getRemoteToolStatus();
+          const tool = await getRemoteToolStatus();
           const access = tool.enabledChannels.includes("telegram") ? "enabled" : "disabled";
+          const enabledProviders = tool.providers.filter((p) => p.enabled && p.live);
           return [
-            "Pinforge status",
+            "Pinforge status (same tools as desktop)",
             `Bot: ${access}`,
             `Download folder: ${tool.outDirReady ? "ready" : "not set"}`,
             `Queue: ${tool.queueCount} pending`,
             `Running: ${tool.runningPacks} active`,
             `Mode: ${telegramBotOptions().downloadMode}`,
+            `ffmpeg: ${tool.tools.ffmpeg.available ? "ready" : "missing"}`,
+            `yt-dlp: ${tool.tools.ytdlp.enabled ? "ready" : tool.tools.ytdlp.available ? "installed (enable in Settings → System)" : "missing"}`,
+            `Providers: ${enabledProviders.map((p) => p.label).join(", ") || "none"}`,
           ].join("\n");
         },
         onDetect: async (url) => {
           const hit = detectRemoteUrl(url);
           if (!hit.ok) return hit.error ?? "Could not detect provider.";
-          return `Provider: ${hit.provider?.label ?? "Unknown"} (${hit.provider?.live ? "live" : "offline"})`;
+          const formats = hit.provider?.formats?.length
+            ? hit.provider.formats.join(", ")
+            : "best";
+          return [
+            `Provider: ${hit.provider?.label ?? "Unknown"} (${hit.provider?.live ? "live" : "offline"})`,
+            `URL: ${hit.url}`,
+            `Formats: ${formats}`,
+            hit.provider?.id === "ytdlp"
+              ? "Uses yt-dlp catch-all (same as desktop for non-builtin sites)."
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join("\n");
         },
         onQueue: (req) => processTelegramUrls(req, "queue"),
         onDownload: (req) => processTelegramUrls(req, "download"),
@@ -607,6 +630,7 @@ async function notifyTelegramSendBack(
     status: "done" | "partial" | "failed";
     title?: string;
     outPaths: string[];
+    zipPath?: string;
   }
 ): Promise<void> {
   if (!telegramBot) return;
@@ -618,7 +642,9 @@ async function notifyTelegramSendBack(
 
   if (!shouldNotify) return;
 
-  if (payload.status !== "done" || payload.outPaths.length === 0) {
+  const existingPaths = payload.outPaths.filter((p) => p && existsSync(p));
+
+  if (payload.status !== "done" || existingPaths.length === 0) {
     if (options.notifyOnComplete) {
       await telegramBot.sendMessage(
         target.chatId,
@@ -630,29 +656,46 @@ async function notifyTelegramSendBack(
     return;
   }
 
-  const primary = payload.outPaths[0];
-  if (!primary || !existsSync(primary)) {
-    if (options.notifyOnComplete) {
-      await telegramBot.sendMessage(target.chatId, "Download finished but the output file was not found.");
-    }
-    return;
-  }
-
   const label = payload.title ?? payload.url;
+  const batch = existingPaths.length > 1;
   if (options.notifyOnComplete) {
-    const extra =
-      payload.outPaths.length > 1 ? ` (${payload.outPaths.length} files)` : "";
-    await telegramBot.sendMessage(target.chatId, `Done: ${label}${extra}`);
+    const extra = batch ? ` (${existingPaths.length} files)` : "";
+    await telegramBot.sendMessage(
+      target.chatId,
+      batch ? `Done: ${label}${extra} — packing ZIP…` : `Done: ${label}`
+    );
   }
 
   if (!telegram?.sendFilesBack) return;
 
   try {
-    await telegramBot.sendDocument(
-      target.chatId,
-      primary,
-      payload.title ? `${payload.title}` : undefined
-    );
+    let sendPath = existingPaths[0]!;
+    let caption = payload.title ? `${payload.title}` : undefined;
+
+    if (batch) {
+      const packed = await resolveBatchZipForSend(existingPaths, payload);
+      if (packed.kind === "zip") {
+        sendPath = packed.path;
+        caption = `${label} (${existingPaths.length} files)`;
+      } else if (packed.kind === "too_large") {
+        await telegramBot.sendMessage(
+          target.chatId,
+          `ZIP is too large for Telegram (${packed.sizeLabel}). Files are saved on this Mac — open Pinforge Tasks to browse them.`
+        );
+        return;
+      }
+    }
+
+    const st = await stat(sendPath);
+    if (st.size > TELEGRAM_DOC_MAX_BYTES) {
+      await telegramBot.sendMessage(
+        target.chatId,
+        `File is too large for Telegram (${formatBytes(st.size)}). Saved locally — open Pinforge Tasks to browse it.`
+      );
+      return;
+    }
+
+    await telegramBot.sendDocument(target.chatId, sendPath, caption);
   } catch (err) {
     await telegramBot.sendMessage(
       target.chatId,
@@ -661,11 +704,43 @@ async function notifyTelegramSendBack(
   }
 }
 
+async function resolveBatchZipForSend(
+  outPaths: string[],
+  payload: { title?: string; url: string; zipPath?: string }
+): Promise<
+  | { kind: "zip"; path: string }
+  | { kind: "too_large"; sizeLabel: string }
+> {
+  let zipPath = payload.zipPath && existsSync(payload.zipPath) ? payload.zipPath : undefined;
+
+  if (!zipPath) {
+    const base =
+      sanitizeFilename(payload.title || "download").slice(0, 80) || "download";
+    const dir = path.dirname(outPaths[0]!);
+    zipPath = path.join(dir, `${base}-${Date.now()}.zip`);
+    zipPath = await zipFiles(outPaths, zipPath);
+  }
+
+  const st = await stat(zipPath);
+  if (st.size > TELEGRAM_DOC_MAX_BYTES) {
+    return { kind: "too_large", sizeLabel: formatBytes(st.size) };
+  }
+  return { kind: "zip", path: zipPath };
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  return `${(n / 1024 ** 3).toFixed(2)} GB`;
+}
+
 async function notifyWebhookChannels(payload: {
   url: string;
   status: "done" | "partial" | "failed";
   title?: string;
   outPaths: string[];
+  zipPath?: string;
 }): Promise<void> {
   const remote = getStore().get("remote");
   const allowFiles = remote.tunnel.allowFileSendBack;
@@ -717,6 +792,7 @@ export async function notifyRemoteDownloadComplete(payload: {
   status: "done" | "partial" | "failed";
   title?: string;
   outPaths: string[];
+  zipPath?: string;
 }): Promise<void> {
   const pending = sendBackByUrl.get(payload.url);
   sendBackByUrl.delete(payload.url);

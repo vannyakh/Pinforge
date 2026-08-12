@@ -503,6 +503,7 @@ async function runProcess(
       status,
       title: pack.title,
       outPaths: res.results.map((r) => r.outPath).filter(Boolean),
+      zipPath: res.zipPath,
     }).catch(() => undefined);
 
     return {

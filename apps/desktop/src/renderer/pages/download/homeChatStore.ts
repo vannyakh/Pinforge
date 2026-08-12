@@ -445,6 +445,27 @@ export function isSelectableExtract(extract: ExtractPreview | null | undefined):
   return extract.itemCount > 1;
 }
 
+export function shouldShowExtractPick(
+  msg: Pick<ChatMessage, "role" | "status" | "batchJob" | "results" | "result">,
+  extract: ExtractPreview | null | undefined
+): boolean {
+  if (msg.role !== "assistant" || msg.batchJob || !extract) return false;
+  if (!isSelectableExtract(extract) || extract.itemCount <= 0) return false;
+  if (
+    msg.status === "detecting" ||
+    msg.status === "started" ||
+    msg.status === "done" ||
+    msg.status === "failed" ||
+    msg.status === "error" ||
+    msg.status === "cancelled"
+  ) {
+    return false;
+  }
+  const cards = msg.results?.length ? msg.results : msg.result ? [msg.result] : [];
+  if (cards.length > 0 && cards.every((c) => c.status === "failed")) return false;
+  return true;
+}
+
 export function formatBatchMessage(
   msg: Pick<ChatMessage, "extract" | "detected" | "status">,
   job: ChatBatchJob

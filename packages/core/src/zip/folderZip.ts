@@ -33,6 +33,46 @@ export async function zipFolder(folderPath: string, outZipPath?: string): Promis
   return dest;
 }
 
+/**
+ * Zip a list of files into `outZipPath` (basenames only — no folder tree).
+ * Windows: PowerShell Compress-Archive; Unix: `zip -j`.
+ */
+export async function zipFiles(filePaths: string[], outZipPath: string): Promise<string> {
+  const files: string[] = [];
+  for (const raw of filePaths) {
+    const abs = path.resolve(raw);
+    try {
+      const st = await fs.stat(abs);
+      if (st.isFile()) files.push(abs);
+    } catch {
+      /* skip missing */
+    }
+  }
+  if (files.length === 0) throw new Error("No files to zip");
+
+  const dest = path.resolve(outZipPath);
+  await fs.mkdir(path.dirname(dest), { recursive: true });
+  try {
+    await fs.unlink(dest);
+  } catch {
+    /* ok if missing */
+  }
+
+  if (process.platform === "win32") {
+    const list = files.map(psQuote).join(",");
+    await run("powershell.exe", [
+      "-NoProfile",
+      "-Command",
+      `Compress-Archive -Path @(${list}) -DestinationPath ${psQuote(dest)} -Force`,
+    ]);
+  } else {
+    await run("zip", ["-j", "-q", dest, ...files]);
+  }
+
+  await fs.access(dest);
+  return dest;
+}
+
 function psQuote(p: string): string {
   return `'${p.replace(/'/g, "''")}'`;
 }

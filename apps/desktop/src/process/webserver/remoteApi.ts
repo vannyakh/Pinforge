@@ -5,6 +5,7 @@ import {
   detectRemoteUrl,
   downloadRemoteUrl,
   getRemoteToolStatus,
+  listRemoteProviders,
   queueRemoteUrls,
 } from "../services/remoteTools";
 
@@ -99,12 +100,17 @@ async function handleRequest(
   }
 
   if (method === "GET" && path === "/api/status") {
-    sendJson(res, 200, getRemoteToolStatus());
+    sendJson(res, 200, await getRemoteToolStatus());
     return;
   }
 
   if (method === "GET" && path === "/api/tools") {
     sendJson(res, 200, { ok: true, tools: REMOTE_API_TOOLS });
+    return;
+  }
+
+  if (method === "GET" && path === "/api/providers") {
+    sendJson(res, 200, { ok: true, providers: listRemoteProviders() });
     return;
   }
 

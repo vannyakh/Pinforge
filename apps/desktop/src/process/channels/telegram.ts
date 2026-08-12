@@ -1,4 +1,4 @@
-import { extractMediaUrls } from "../downloadQueue";
+import { extractMediaUrls, normalizeMediaUrl } from "../downloadQueue";
 import type { RemoteBotOptions, RemoteUser } from "../../common/remote/types";
 import { DEFAULT_BOT_OPTIONS } from "../services/remoteBotOptions";
 import type { FormatPreset, YoutubeQuality } from "@pinforge/core/types";
@@ -20,6 +20,16 @@ type InlineKeyboard = {
   inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
 };
 
+type ReplyKeyboard = {
+  keyboard: Array<Array<{ text: string }>>;
+  resize_keyboard?: boolean;
+  is_persistent?: boolean;
+  one_time_keyboard?: boolean;
+  input_field_placeholder?: string;
+};
+
+type ReplyMarkup = InlineKeyboard | ReplyKeyboard | { remove_keyboard: true };
+
 export const ACCESS_APPROVE_PREFIX = "pf:approve:";
 export const ACCESS_DENY_PREFIX = "pf:deny:";
 export const DL_QUALITY_PREFIX = "pf:y:";
@@ -27,6 +37,17 @@ export const DL_FORMAT_PREFIX = "pf:f:";
 export const DL_GO_PREFIX = "pf:go:";
 export const DL_QUEUE_PREFIX = "pf:qu:";
 export const DL_CANCEL_PREFIX = "pf:x:";
+
+/** Persistent reply-keyboard labels (must match normalizeMenuText). */
+export const MENU_BTN = {
+  download: "⬇️ Download",
+  queue: "📥 Queue",
+  detect: "🔎 Detect",
+  status: "📊 Status",
+  help: "❓ Help",
+  menu: "☰ Menu",
+  users: "👥 Users",
+} as const;
 
 export type TelegramUserContext = {
   chatId: number;
@@ -152,16 +173,114 @@ export function downloadConfirmKeyboard(
   return { inline_keyboard: rows };
 }
 
-function parseCommand(text: string): { command?: string; args: string; urls: string[] } {
-  const trimmed = text.trim();
+/** Bottom reply keyboard for approved users. */
+export function mainReplyKeyboard(): ReplyKeyboard {
+  return {
+    keyboard: [
+      [{ text: MENU_BTN.download }, { text: MENU_BTN.queue }],
+      [{ text: MENU_BTN.detect }, { text: MENU_BTN.status }],
+      [{ text: MENU_BTN.help }, { text: MENU_BTN.menu }],
+    ],
+    resize_keyboard: true,
+    is_persistent: true,
+    input_field_placeholder: "Paste a media URL…",
+  };
+}
+
+/** Bottom reply keyboard for the admin chat. */
+export function adminReplyKeyboard(): ReplyKeyboard {
+  return {
+    keyboard: [[{ text: MENU_BTN.users }, { text: MENU_BTN.help }]],
+    resize_keyboard: true,
+    is_persistent: true,
+    input_field_placeholder: "Admin commands…",
+  };
+}
+
+/** Map reply-keyboard taps (and plain labels) onto slash commands. */
+function normalizeMenuText(text: string): string {
+  const t = text.trim();
+  const map: Record<string, string> = {
+    [MENU_BTN.download]: "/download",
+    [MENU_BTN.queue]: "/queue",
+    [MENU_BTN.detect]: "/detect",
+    [MENU_BTN.status]: "/status",
+    [MENU_BTN.help]: "/help",
+    [MENU_BTN.menu]: "/menu",
+    [MENU_BTN.users]: "/users",
+    Download: "/download",
+    Queue: "/queue",
+    Detect: "/detect",
+    Status: "/status",
+    Help: "/help",
+    Menu: "/menu",
+    Users: "/users",
+  };
+  return map[t] ?? t;
+}
+
+type TelegramMessageEntity = {
+  type: string;
+  offset: number;
+  length: number;
+  url?: string;
+};
+
+/** Telegram entity offsets are UTF-16 code units. */
+function utf16Slice(text: string, start: number, end: number): string {
+  return Buffer.from(text, "utf16le")
+    .subarray(start * 2, end * 2)
+    .toString("utf16le");
+}
+
+/** Collect URLs from Telegram text + message entities (text_link / url). */
+function extractUrlsFromTelegramMessage(
+  text: string,
+  entities?: TelegramMessageEntity[]
+): string[] {
+  const fromText = extractMediaUrls(text);
+  if (!entities?.length) return fromText;
+
+  const seen = new Set(fromText);
+  const out = [...fromText];
+  const push = (raw?: string) => {
+    if (!raw) return;
+    const n = normalizeMediaUrl(raw) ?? extractMediaUrls(raw)[0];
+    if (!n || seen.has(n)) return;
+    seen.add(n);
+    out.push(n);
+  };
+
+  for (const ent of entities) {
+    if (ent.type === "text_link" && ent.url) {
+      push(ent.url);
+      continue;
+    }
+    if (ent.type === "url") {
+      push(utf16Slice(text, ent.offset, ent.offset + ent.length));
+    }
+  }
+  return out;
+}
+
+function parseCommand(
+  text: string,
+  entities?: TelegramMessageEntity[]
+): { command?: string; args: string; urls: string[] } {
+  const trimmed = normalizeMenuText(text);
   if (!trimmed.startsWith("/")) {
-    return { args: trimmed, urls: extractMediaUrls(trimmed) };
+    return { args: trimmed, urls: extractUrlsFromTelegramMessage(trimmed, entities) };
   }
   const space = trimmed.indexOf(" ");
   const rawCmd = (space === -1 ? trimmed : trimmed.slice(0, space)).toLowerCase();
   const command = rawCmd.split("@")[0];
   const args = space === -1 ? "" : trimmed.slice(space + 1).trim();
-  return { command, args, urls: extractMediaUrls(args || trimmed) };
+  // Entity offsets apply to the full original message text.
+  const urls = extractUrlsFromTelegramMessage(text, entities);
+  if (urls.length === 0 && args) {
+    return { command, args, urls: extractMediaUrls(args) };
+  }
+  return { command, args, urls };
 }
 
 function helpText(options: Required<RemoteBotOptions>): string {
@@ -170,24 +289,34 @@ function helpText(options: Required<RemoteBotOptions>): string {
   return [
     "Pinforge download bot",
     "",
+    "Uses the same download tools as the desktop app (YouTube, Pinterest, TikTok, Instagram, Facebook, yt-dlp catch-all).",
+    "",
     confirm
-      ? "Send a media URL to open a download menu (quality + confirm)."
-      : "Send a media URL to " + mode + ".",
+      ? "Send any media URL to open a download menu (quality + confirm)."
+      : "Send any media URL to " + mode + ".",
+    "",
+    "Buttons:",
+    `${MENU_BTN.download} / ${MENU_BTN.queue} — then paste a URL`,
+    `${MENU_BTN.detect} — check which desktop provider matches`,
+    `${MENU_BTN.status} — app, tools & providers`,
+    `${MENU_BTN.help} — this message`,
     "",
     "Commands:",
     "/start — register or check access",
+    "/menu — show the button keyboard again",
     "/help — this message",
     "/status — app & queue status",
     "/detect <url> — check provider",
     "/queue <url> — add to Tasks queue",
     "/download <url> — start download now",
     "",
-    "Tip: use the Menu button next to the message field for commands.",
+    "Also use the Menu (☰) next to the message field for slash commands.",
   ].join("\n");
 }
 
 const BOT_COMMANDS = [
   { command: "start", description: "Register or check access" },
+  { command: "menu", description: "Show button keyboard" },
   { command: "help", description: "Show commands" },
   { command: "status", description: "App & queue status" },
   { command: "detect", description: "Detect provider for a URL" },
@@ -264,7 +393,7 @@ export class TelegramBot {
   async sendMessage(
     chatId: number,
     text: string,
-    keyboard?: InlineKeyboard
+    keyboard?: ReplyMarkup
   ): Promise<{ message_id: number }> {
     return this.call("sendMessage", {
       chat_id: chatId,
@@ -326,6 +455,12 @@ export class TelegramBot {
     } catch {
       /* menu is optional */
     }
+    try {
+      // Shows the ☰ Menu button beside the message composer with slash commands.
+      await this.call("setChatMenuButton", { menu_button: { type: "commands" } });
+    } catch {
+      /* optional on older API */
+    }
   }
 
   private schedulePoll(delayMs = 0): void {
@@ -356,6 +491,7 @@ export class TelegramBot {
               last_name?: string;
             };
             text?: string;
+            entities?: TelegramMessageEntity[];
           };
         }>
       >("getUpdates", {
@@ -398,7 +534,7 @@ export class TelegramBot {
       return options.welcomeMessage.trim();
     }
     if (access === "approved") {
-      return "Welcome! You are approved. Send a media URL or use /download <url>.";
+      return "Welcome! You are approved.\n\nPaste a media URL, or use the buttons below.";
     }
     if (access === "pending") {
       return "Access requested. An admin will approve you in the bot admin channel.";
@@ -574,11 +710,12 @@ export class TelegramBot {
     chat: { id: number };
     from?: { id: number; username?: string; first_name?: string; last_name?: string };
     text?: string;
+    entities?: TelegramMessageEntity[];
   }): Promise<void> {
     const chatId = msg.chat.id;
     const text = msg.text!.trim();
     const userId = String(msg.from?.id ?? chatId);
-    const parsed = parseCommand(text);
+    const parsed = parseCommand(text, msg.entities);
     const options = this.callbacks.getOptions();
     const ctx: TelegramUserContext = {
       chatId,
@@ -590,15 +727,24 @@ export class TelegramBot {
       isStart: parsed.command === "/start",
     };
 
-    if (parsed.command === "/help") {
+    if (parsed.command === "/help" || parsed.command === "/menu") {
       if (this.isAdminChat(chatId)) {
         await this.sendMessage(
           chatId,
-          "Admin commands:\n/users — list pending access requests\n/users all — list all users"
+          "Admin commands:\n/users — list pending access requests\nUse the buttons below.",
+          adminReplyKeyboard()
         );
         return;
       }
-      await this.sendMessage(chatId, helpText(options));
+      const access = await this.callbacks.onUserInteract({ ...ctx, isStart: false });
+      const markup = access === "approved" ? mainReplyKeyboard() : undefined;
+      await this.sendMessage(
+        chatId,
+        parsed.command === "/menu"
+          ? "Menu ready. Paste a media URL, or tap a button below."
+          : helpText(options),
+        markup
+      );
       return;
     }
 
@@ -608,21 +754,29 @@ export class TelegramBot {
     }
 
     if (this.isAdminChat(chatId)) {
-      await this.sendMessage(chatId, "Admin channel. Use /users to manage access requests.");
+      await this.sendMessage(
+        chatId,
+        "Admin channel. Use /users or the Users button to manage access requests.",
+        adminReplyKeyboard()
+      );
       return;
     }
 
     if (parsed.command === "/status") {
       const access = await this.callbacks.onUserInteract({ ...ctx, isStart: false });
       if (!(await this.requireApproved(chatId, access))) return;
-      await this.sendMessage(chatId, await this.callbacks.onStatus());
+      await this.sendMessage(chatId, await this.callbacks.onStatus(), mainReplyKeyboard());
       return;
     }
 
     const access = await this.callbacks.onUserInteract(ctx);
 
     if (ctx.isStart) {
-      await this.sendMessage(chatId, this.welcomeMessage(access));
+      await this.sendMessage(
+        chatId,
+        this.welcomeMessage(access),
+        access === "approved" ? mainReplyKeyboard() : undefined
+      );
       return;
     }
 
@@ -631,17 +785,25 @@ export class TelegramBot {
     if (parsed.command === "/detect") {
       const url = parsed.urls[0];
       if (!url) {
-        await this.sendMessage(chatId, "Usage: /detect <url>");
+        await this.sendMessage(
+          chatId,
+          "Send a media URL to detect, or:\n/detect <url>",
+          mainReplyKeyboard()
+        );
         return;
       }
-      await this.sendMessage(chatId, await this.callbacks.onDetect(url));
+      await this.sendMessage(chatId, await this.callbacks.onDetect(url), mainReplyKeyboard());
       return;
     }
 
     if (parsed.command === "/queue") {
       const urls = parsed.urls.slice(0, options.maxUrlsPerMessage);
       if (urls.length === 0) {
-        await this.sendMessage(chatId, "Usage: /queue <url> — or paste a link after /queue");
+        await this.sendMessage(
+          chatId,
+          "Paste a media URL to queue it, or:\n/queue <url>",
+          mainReplyKeyboard()
+        );
         return;
       }
       // Explicit /queue skips confirm and queues immediately.
@@ -652,7 +814,11 @@ export class TelegramBot {
     if (parsed.command === "/download") {
       const urls = parsed.urls.slice(0, options.maxUrlsPerMessage);
       if (urls.length === 0) {
-        await this.sendMessage(chatId, "Usage: /download <url>");
+        await this.sendMessage(
+          chatId,
+          "Paste a media URL to download, or:\n/download <url>",
+          mainReplyKeyboard()
+        );
         return;
       }
       await this.handleUrls(msg, userId, urls, this.usesConfirmMenu() ? undefined : "download");
@@ -661,7 +827,11 @@ export class TelegramBot {
 
     const urls = parsed.urls.slice(0, options.maxUrlsPerMessage);
     if (urls.length === 0) {
-      await this.sendMessage(chatId, "No supported URL found. Try /help for commands.");
+      await this.sendMessage(
+        chatId,
+        "No supported URL found. Tap a button below or try /help.",
+        mainReplyKeyboard()
+      );
       return;
     }
 

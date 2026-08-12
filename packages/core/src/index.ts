@@ -87,7 +87,7 @@ export {
   qualityFromFormat,
 } from "@pinforge/providers";
 export { muxAvCopyArgs, muxAvRemuxArgs } from "@pinforge/providers";
-export { zipFolder } from "./zip";
+export { zipFolder, zipFiles } from "./zip";
 export {
   PRESETS,
   DEFAULT_ENHANCE_FEATURES,
