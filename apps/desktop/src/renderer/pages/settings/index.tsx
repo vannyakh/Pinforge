@@ -5,6 +5,7 @@ import ProviderDetailPage from "./ProviderDetail";
 import AboutSettings from "./About";
 import AppearanceSettings from "./Appearance";
 import RemoteSettings from "./Remote";
+import PublishingSettings from "./Publishing";
 import SystemSettings from "./System";
 import DownloadSettings from "./Download";
 
@@ -18,6 +19,7 @@ const SettingsPage: React.FC = () => {
             <Route path="system" element={<SystemSettings />} />
             <Route path="appearance" element={<AppearanceSettings />} />
             <Route path="remote" element={<RemoteSettings />} />
+            <Route path="publishing" element={<PublishingSettings />} />
             <Route path="download" element={<DownloadSettings />} />
             <Route path="providers" element={<ProvidersSettings />} />
             <Route path="providers/:providerId" element={<ProviderDetailPage />} />

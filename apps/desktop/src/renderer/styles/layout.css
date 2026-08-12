@@ -116,6 +116,231 @@
   opacity: 0.9;
 }
 
+/* Arco sidebar menu (Workspace / Publish / Settings) */
+.app-sider-menu {
+  width: 100%;
+  border: none !important;
+  background: transparent !important;
+  padding: 4px 0;
+}
+
+.app-sider-menu .arco-menu-inner {
+  padding: 0;
+}
+
+.app-sider-menu .arco-menu-item,
+.app-sider-menu .arco-menu-inline-header {
+  height: auto;
+  min-height: 34px;
+  line-height: 1.35;
+  margin: 2px 0;
+  border-radius: 8px;
+  padding: 8px 10px !important;
+  color: var(--text-secondary);
+  background: transparent !important;
+}
+
+.app-sider-menu .arco-menu-inline-header {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.app-sider-menu .arco-menu-inline-header:hover,
+.app-sider-menu .arco-menu-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover) !important;
+}
+
+.app-sider-menu .arco-menu-selected {
+  color: rgb(var(--primary-6)) !important;
+  background: rgb(var(--primary-1)) !important;
+  font-weight: 600;
+}
+
+.app-sider-menu .arco-menu-selected .arco-icon,
+.app-sider-menu .arco-menu-selected svg {
+  color: rgb(var(--primary-6));
+}
+
+.app-sider-menu .arco-menu-inline-content {
+  padding-left: 8px;
+  background: transparent !important;
+}
+
+.app-sider-menu .arco-menu-inline,
+.app-sider-menu .arco-menu-group {
+  background: transparent !important;
+}
+
+.app-sider-section-label {
+  margin: 12px 0 4px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+  background: transparent;
+  user-select: none;
+  pointer-events: none;
+}
+
+.app-sider-section-label:first-child {
+  margin-top: 2px;
+}
+
+.app-sider-menu .app-sider-section-label-item {
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 12px 0 2px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary) !important;
+  background: transparent !important;
+  opacity: 1 !important;
+  cursor: default !important;
+  pointer-events: none;
+}
+
+.app-sider-menu .app-sider-section-label-item:hover {
+  background: transparent !important;
+  color: var(--text-tertiary) !important;
+}
+
+.app-sider-menu .app-sider-section-label-item:first-child {
+  margin-top: 2px !important;
+}
+
+.app-sider-menu .arco-menu-item.arco-menu-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.app-sider-menu .arco-menu-icon-suffix {
+  color: var(--text-tertiary);
+}
+
+.app-sider-menu__title-text {
+  font-size: 13px;
+}
+
+[data-theme="dark"] .app-sider-menu .arco-menu-selected {
+  background: rgba(var(--primary-6), 0.14) !important;
+}
+
+/* PE media carousel builder (Facebook-style cards) */
+.pe-carousel-strip {
+  scroll-snap-type: x mandatory;
+}
+
+.pe-carousel-card {
+  width: 132px;
+  scroll-snap-align: start;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pe-carousel-card--active .pe-carousel-card__media {
+  outline: 2px solid rgb(var(--primary-6));
+  outline-offset: 2px;
+}
+
+.pe-carousel-card__media {
+  width: 132px;
+  height: 132px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pe-carousel-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pe-carousel-card__footer {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  max-width: 132px;
+}
+
+.pe-carousel-empty {
+  background: var(--bg-2);
+}
+
+.publish-page {
+  padding: 24px;
+}
+
+.publish-type-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-content: start;
+}
+
+.publish-type-card {
+  border: 1px solid var(--border-base);
+  background: var(--bg-2);
+}
+
+.publish-type-card:hover {
+  border-color: rgb(var(--primary-6));
+}
+
+.publish-type-card__icon {
+  background: var(--bg-3);
+  color: rgb(var(--primary-6));
+}
+
+.posts-table-card {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--border-base);
+  border-radius: 12px;
+  background: var(--bg-2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.posts-table {
+  width: 100%;
+  height: 100%;
+}
+
+.posts-table__thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-3);
+}
+
+.posts-table__thumb--empty {
+  border: 1px dashed var(--border-base);
+}
+
+.posts-page__page-select {
+  width: 240px;
+}
+
+.posts-page {
+  padding: 24px;
+}
+
 .chat-history__item {
   position: relative;
 }

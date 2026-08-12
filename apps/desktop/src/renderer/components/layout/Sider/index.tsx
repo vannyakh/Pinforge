@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import classNames from "classnames";
+import { Menu, Tag, Modal, Notification } from "@arco-design/web-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
@@ -13,8 +14,9 @@ import {
   Message as MessageIcon,
   Delete,
   LoadingFour,
+  Share,
+  LinkCloud,
 } from "@icon-park/react";
-import { Tag, Tooltip, Modal, Notification } from "@arco-design/web-react";
 import { useThemeContext } from "@renderer/hooks/context/ThemeContext";
 import { useLayoutContext } from "@renderer/hooks/context/LayoutContext";
 import { useApp } from "@renderer/hooks/context/AppContext";
@@ -26,18 +28,45 @@ import {
 } from "@renderer/pages/download/homeChatStore";
 import siderStyles from "./Sider.module.css";
 
+const MenuItem = Menu.Item;
+const SubMenu = Menu.SubMenu;
+
+const OPEN_KEYS_STORAGE = "pinforge:sider-open-keys";
+
 interface SiderProps {
   onSessionClick?: () => void;
   collapsed?: boolean;
 }
 
-const NAV = [
-  { path: "/", label: "Home", Icon: Home, soon: false },
-  { path: "/tasks", label: "Tasks", Icon: Checklist, soon: false },
-  { path: "/schedule", label: "Schedule", Icon: AlarmClock, soon: true },
-] as const;
-
 const LAST_PATH_KEY = "pinforge:last-non-settings-path";
+
+function readOpenKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(OPEN_KEYS_STORAGE);
+    if (!raw) return ["publish"];
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? parsed.filter((k) => k === "publish") : ["publish"];
+  } catch {
+    return ["publish"];
+  }
+}
+
+function routeSelectedKey(pathname: string, activeId: string | null): string {
+  if (pathname === "/" && activeId) return `recent/${activeId}`;
+  if (pathname === "/" || pathname === "") return "workspace/home";
+  if (pathname.startsWith("/tasks")) return "workspace/tasks";
+  if (pathname.startsWith("/posts")) return "publish/posts";
+  if (pathname.startsWith("/publish")) return "publish/create";
+  if (pathname.startsWith("/schedule")) return "workspace/schedule";
+  return "workspace/home";
+}
+
+const SubMenuTitle: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
+  <span className="app-sider-menu__title inline-flex items-center gap-8px min-w-0">
+    <span className="app-sider-menu__title-icon shrink-0">{icon}</span>
+    <span className="app-sider-menu__title-text">{label}</span>
+  </span>
+);
 
 const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const navigate = useNavigate();
@@ -56,8 +85,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const runningCount = tasks.filter((t) => t.status === "running").length;
   const tasksBusy = busy || runningCount > 0;
   const lastNonSettingsPathRef = useRef("/");
+  const [openKeys, setOpenKeys] = useState<string[]>(readOpenKeys);
 
   const recent = useMemo(() => selectRecentChats(sessions, 14), [sessions]);
+  const selectedKeys = useMemo(
+    () => [routeSelectedKey(pathname, activeId)],
+    [pathname, activeId]
+  );
+
+  useEffect(() => {
+    if (pathname.startsWith("/posts") || pathname.startsWith("/publish")) {
+      setOpenKeys((prev) => (prev.includes("publish") ? prev : [...prev, "publish"]));
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (!pathname.startsWith("/settings")) {
@@ -70,6 +110,14 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
       }
     }
   }, [pathname, search, hash]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(OPEN_KEYS_STORAGE, JSON.stringify(openKeys));
+    } catch {
+      /* ignore */
+    }
+  }, [openKeys]);
 
   const go = (path: string) => {
     void navigate(path);
@@ -101,6 +149,28 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     go("/");
   };
 
+  const onMenuClick = (key: string) => {
+    if (key.startsWith("section-")) return;
+    if (key === "recent/new") {
+      startNewChat();
+      return;
+    }
+    if (key.startsWith("recent/")) {
+      openRecent(key.slice("recent/".length));
+      return;
+    }
+    if (key.startsWith("workspace/")) {
+      if (key === "workspace/schedule") return;
+      go(key === "workspace/home" ? "/" : `/${key.replace("workspace/", "")}`);
+      return;
+    }
+    if (key.startsWith("publish/")) {
+      const action = key.replace("publish/", "");
+      if (action === "posts") go("/posts");
+      else if (action === "create") go("/publish");
+    }
+  };
+
   return (
     <div className="size-full flex flex-col">
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2px">
@@ -109,152 +179,128 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
         ) : (
           <div
             className={classNames(
-              "flex-1 min-h-0 overflow-y-auto flex flex-col",
+              "flex-1 min-h-0 overflow-y-auto flex flex-col px-4px",
               siderStyles.scrollArea,
               collapsed && "chat-history--truncated"
             )}
           >
-            <div className="px-10px pt-4px pb-8px text-11px font-500 text-t-tertiary tracking-wide uppercase sider-section-title">
-              {!collapsed && "Workspace"}
-            </div>
-            {NAV.map(({ path, label, Icon, soon }) => {
-              const active = path === "/" ? pathname === "/" : pathname.startsWith(path);
-              const showTasksLoading = path === "/tasks" && tasksBusy;
-              return (
-                <button
-                  key={path}
-                  type="button"
-                  className={classNames(
-                    "w-full flex items-center gap-10px rd-8px border-none text-left font-inherit px-12px py-10px settings-sider__item",
-                    soon
-                      ? "cursor-not-allowed opacity-55 bg-transparent text-t-tertiary"
-                      : active
-                        ? "cursor-pointer bg-primary-light-1 text-t-primary font-600"
-                        : "cursor-pointer bg-transparent text-t-secondary hover:bg-hover"
-                  )}
-                  onClick={() => {
-                    if (soon) return;
-                    go(path);
-                  }}
-                  disabled={soon}
-                  aria-disabled={soon}
-                  title={soon ? `${label} — coming soon` : collapsed ? label : undefined}
-                >
-                  {showTasksLoading ? (
+            <Menu
+              className={classNames("app-sider-menu", collapsed && "app-sider-menu--collapsed")}
+              selectedKeys={selectedKeys}
+              openKeys={openKeys}
+              onClickMenuItem={onMenuClick}
+              onClickSubMenu={(_key, keys) => setOpenKeys(keys.filter((k) => k === "publish"))}
+            >
+              <MenuItem key="section-workspace" disabled className="app-sider-section-label-item">
+                Workspace
+              </MenuItem>
+              <MenuItem key="workspace/home">
+                <span className="inline-flex items-center gap-8px">
+                  <Home theme="outline" size="16" fill="currentColor" strokeWidth={3} />
+                  Home
+                </span>
+              </MenuItem>
+              <MenuItem key="workspace/tasks">
+                <span className="inline-flex items-center gap-8px w-full">
+                  {tasksBusy ? (
                     <LoadingFour
                       theme="outline"
-                      size="18"
+                      size="16"
                       fill="currentColor"
                       strokeWidth={3}
                       className="sider-nav-spin shrink-0"
                     />
                   ) : (
-                    <Icon theme="outline" size="18" fill="currentColor" strokeWidth={3} />
+                    <Checklist theme="outline" size="16" fill="currentColor" strokeWidth={3} />
                   )}
-                  {!collapsed && (
-                    <span className="settings-sider__item-label flex-1 flex items-center justify-between gap-8px">
-                      <span>{label}</span>
-                      <span className="flex items-center gap-4px">
-                        {path === "/tasks" && runningCount > 0 && (
-                          <Tag size="small" color="arcoblue">
-                            {runningCount}
-                          </Tag>
-                        )}
-                        {soon && (
-                          <Tag size="small" color="orangered">
-                            Soon
-                          </Tag>
-                        )}
-                      </span>
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                  <span className="flex-1">Tasks</span>
+                  {runningCount > 0 ? (
+                    <Tag size="small" color="arcoblue">
+                      {runningCount}
+                    </Tag>
+                  ) : null}
+                </span>
+              </MenuItem>
+              <MenuItem key="workspace/schedule" disabled>
+                <span className="inline-flex items-center gap-8px w-full">
+                  <AlarmClock theme="outline" size="16" fill="currentColor" strokeWidth={3} />
+                  <span className="flex-1">Schedule</span>
+                  <Tag size="small" color="orangered">
+                    Soon
+                  </Tag>
+                </span>
+              </MenuItem>
 
-            <div className="chat-history__divider mx-10px my-10px" role="separator" />
-
-            <div
-              className={classNames(
-                "chat-history flex-1 min-h-0 flex flex-col",
-                collapsed && "chat-history--truncated"
-              )}
-            >
-              <div className="chat-history__section px-10px pb-6px flex items-center justify-between gap-8px">
-                {!collapsed && (
-                  <span className="text-11px font-500 text-t-tertiary tracking-wide uppercase">
-                    Recent
+              <SubMenu
+                key="publish"
+                title={
+                  <SubMenuTitle
+                    icon={<Share theme="outline" size="16" fill="currentColor" strokeWidth={3} />}
+                    label="Publish"
+                  />
+                }
+              >
+                <MenuItem key="publish/create">
+                  <span className="inline-flex items-center gap-8px">
+                    <Share theme="outline" size="14" fill="currentColor" strokeWidth={3} />
+                    Create post
                   </span>
-                )}
-                <Tooltip content="New chat">
-                  <button
-                    type="button"
-                    className="chat-history__new shrink-0 flex items-center justify-center w-24px h-24px rd-6px border-none cursor-pointer bg-transparent text-t-secondary hover:bg-hover hover:text-t-primary"
-                    onClick={startNewChat}
-                    aria-label="New chat"
-                    title={collapsed ? "New chat" : undefined}
-                  >
-                    <Plus theme="outline" size="14" fill="currentColor" strokeWidth={3} />
-                  </button>
-                </Tooltip>
-              </div>
+                </MenuItem>
+                <MenuItem key="publish/posts">
+                  <span className="inline-flex items-center gap-8px">
+                    <LinkCloud theme="outline" size="14" fill="currentColor" strokeWidth={3} />
+                    Page posts
+                  </span>
+                </MenuItem>
+              </SubMenu>
 
-              {recent.length === 0
-                ? !collapsed && (
-                    <div className="chat-history__placeholder px-12px py-8px text-12px text-t-tertiary">
-                      Chats you start on Home show up here.
-                    </div>
-                  )
-                : recent.map((chat) => {
-                    const active = pathname === "/" && activeId === chat.id;
-                    const isActiveChat = activeId === chat.id;
-                    const appBusy = busy || runningCount > 0;
-                    const processing = chatSessionIsBusy(chat, {
-                      extracting: isActiveChat && extracting,
-                      liveMessages: isActiveChat ? liveMessages : undefined,
-                      appBusy,
-                    });
-                    return (
-                      <div
-                        key={chat.id}
-                        className={classNames(
-                          "chat-history__item group w-full flex items-center gap-8px rd-8px px-10px py-8px cursor-pointer",
-                          active
-                            ? "chat-history__item--active bg-primary-light-1 text-t-primary"
-                            : "text-t-secondary hover:bg-hover"
+              <MenuItem key="section-recent" disabled className="app-sider-section-label-item">
+                Recent
+              </MenuItem>
+              <MenuItem key="recent/new">
+                <span className="inline-flex items-center gap-8px text-t-secondary">
+                  <Plus theme="outline" size="14" fill="currentColor" strokeWidth={3} />
+                  New chat
+                </span>
+              </MenuItem>
+              {recent.length === 0 ? (
+                <MenuItem key="recent/empty" disabled>
+                  No chats yet
+                </MenuItem>
+              ) : (
+                recent.map((chat) => {
+                  const isActiveChat = activeId === chat.id;
+                  const appBusy = busy || runningCount > 0;
+                  const processing = chatSessionIsBusy(chat, {
+                    extracting: isActiveChat && extracting,
+                    liveMessages: isActiveChat ? liveMessages : undefined,
+                    appBusy,
+                  });
+                  return (
+                    <MenuItem key={`recent/${chat.id}`}>
+                      <span className="inline-flex items-center gap-8px min-w-0 w-full group">
+                        {processing ? (
+                          <LoadingFour
+                            theme="outline"
+                            size="14"
+                            fill="currentColor"
+                            strokeWidth={3}
+                            className="sider-nav-spin shrink-0"
+                          />
+                        ) : (
+                          <MessageIcon
+                            theme="outline"
+                            size="14"
+                            fill="currentColor"
+                            strokeWidth={3}
+                            className="shrink-0"
+                          />
                         )}
-                      >
-                        <button
-                          type="button"
-                          className="flex-1 min-w-0 flex items-center gap-8px border-none bg-transparent cursor-pointer text-left font-inherit text-inherit p-0"
-                          onClick={() => openRecent(chat.id)}
-                          title={collapsed ? chat.title : undefined}
-                        >
-                          {processing ? (
-                            <LoadingFour
-                              theme="outline"
-                              size="16"
-                              fill="currentColor"
-                              strokeWidth={3}
-                              className="sider-nav-spin shrink-0"
-                            />
-                          ) : (
-                            <MessageIcon
-                              theme="outline"
-                              size="16"
-                              fill="currentColor"
-                              strokeWidth={3}
-                              className="shrink-0"
-                            />
-                          )}
-                          {!collapsed && (
-                            <span className="chat-history__item-name text-13px">{chat.title}</span>
-                          )}
-                        </button>
-                        {!collapsed && (
+                        <span className="flex-1 truncate">{chat.title}</span>
+                        {!collapsed ? (
                           <button
                             type="button"
-                            className="chat-history__item-delete opacity-0 group-hover:opacity-100 shrink-0 flex items-center justify-center w-22px h-22px rd-4px border-none cursor-pointer bg-transparent text-t-tertiary hover:text-danger"
+                            className="chat-history__item-delete opacity-0 group-hover:opacity-100 shrink-0 flex items-center justify-center w-20px h-20px rd-4px border-none cursor-pointer bg-transparent text-t-tertiary hover:text-danger"
                             aria-label="Remove chat"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -275,11 +321,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                           >
                             <Delete theme="outline" size="12" fill="currentColor" strokeWidth={3} />
                           </button>
-                        )}
-                      </div>
-                    );
-                  })}
-            </div>
+                        ) : null}
+                      </span>
+                    </MenuItem>
+                  );
+                })
+              )}
+            </Menu>
           </div>
         )}
       </div>

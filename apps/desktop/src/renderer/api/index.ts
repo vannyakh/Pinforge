@@ -42,6 +42,14 @@ import type {
   JobStatus,
   JobProgress,
   PendingQueueJob,
+  MetaPostResult,
+  MetaPostType,
+  MetaCarouselSlide,
+  MetaPageVideoSummary,
+  MetaPagePostSummary,
+  MetaPagePostsPage,
+  MetaPublishPublic,
+  MetaPageSummary,
 } from "../../preload/index";
 
 export type {
@@ -88,7 +96,15 @@ export type {
   JobStatus,
   JobProgress,
   PendingQueueJob,
-};
+  MetaPostResult,
+  MetaPostType,
+  MetaCarouselSlide,
+  MetaPageVideoSummary,
+  MetaPagePostSummary,
+  MetaPagePostsPage,
+  MetaPublishPublic,
+  MetaPageSummary,
+} from "../../preload/index";
 
 export const api = {
   rendererReady: () => window.api.rendererReady(),
@@ -160,6 +176,28 @@ export const api = {
     window.api.setRemoteUserStatus(payload),
   removeRemoteUser: (id: string) => window.api.removeRemoteUser(id),
   onRemoteUsersChanged: (cb: (users: RemoteUser[]) => void) => window.api.onRemoteUsersChanged(cb),
+  getMetaPublish: () => window.api.getMetaPublish(),
+  setMetaApp: (partial: { appId?: string; appSecret?: string; redirectUri?: string }) =>
+    window.api.setMetaApp(partial),
+  startMetaConnect: () => window.api.startMetaConnect(),
+  disconnectMetaPublish: () => window.api.disconnectMetaPublish(),
+  listMetaPages: () => window.api.listMetaPages(),
+  listMetaPageVideos: (limit?: number) => window.api.listMetaPageVideos(limit),
+  listMetaPagePosts: (opts?: { limit?: number; after?: string }) =>
+    window.api.listMetaPagePosts(opts),
+  selectMetaPage: (payload: { pageId: string; pageName?: string }) =>
+    window.api.selectMetaPage(payload),
+  postToMetaPage: (payload: {
+    message: string;
+    filePath?: string;
+    filePaths?: string[];
+    postType?: MetaPostType;
+    link?: string;
+    videoIds?: string[];
+    carouselSlides?: MetaCarouselSlide[];
+  }) => window.api.postToMetaPage(payload),
+  pickMediaFile: () => window.api.pickMediaFile(),
+  pickMediaFiles: () => window.api.pickMediaFiles(),
   showItemInFolder: (filePath: string) => window.api.showItemInFolder(filePath),
   openPath: (filePath: string) => window.api.openPath(filePath),
   openExternal: (url: string) => window.api.openExternal(url),

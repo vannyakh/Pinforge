@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import classNames from "classnames";
-import { NavLink, useLocation } from "react-router-dom";
+import { Menu } from "@arco-design/web-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ApplicationOne,
   Info,
@@ -8,152 +9,121 @@ import {
   LinkCloud,
   Computer,
   Magic,
-  Down,
-  Right,
+  Share,
 } from "@icon-park/react";
 import siderStyles from "@renderer/components/layout/Sider/Sider.module.css";
 
+const MenuItem = Menu.Item;
+const SubMenu = Menu.SubMenu;
+
 const SECTIONS = [
   {
-    group: "Application",
-    collapsible: true,
+    key: "application",
+    label: "Application",
+    Icon: Platte,
     items: [
-      { path: "appearance", label: "Appearance", Icon: Platte },
-      { path: "remote", label: "Remote", Icon: LinkCloud },
-      { path: "system", label: "System", Icon: Computer },
+      { key: "appearance", label: "Appearance", Icon: Platte },
+      { key: "publishing", label: "Publishing", Icon: Share },
+      { key: "remote", label: "Remote", Icon: LinkCloud },
+      { key: "system", label: "System", Icon: Computer },
     ],
   },
   {
-    group: "Download",
-    collapsible: false,
+    key: "download",
+    label: "Download",
+    Icon: Magic,
     items: [
-      { path: "download", label: "Features", Icon: Magic },
-      { path: "providers", label: "Providers", Icon: ApplicationOne },
+      { key: "download", label: "Features", Icon: Magic },
+      { key: "providers", label: "Providers", Icon: ApplicationOne },
     ],
-  },
-  {
-    group: "Other",
-    collapsible: false,
-    items: [{ path: "about", label: "About", Icon: Info }],
   },
 ] as const;
+
+const OPEN_KEYS_STORAGE = "__pinforge_settings_menu_open";
 
 interface SettingsSiderProps {
   collapsed?: boolean;
   onItemClick?: () => void;
 }
 
-const STORAGE_KEY = "__pinforge_settings_groups";
-
-function readCollapsedGroups(): Record<string, boolean> {
+function readOpenKeys(): string[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, boolean>;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    const raw = localStorage.getItem(OPEN_KEYS_STORAGE);
+    if (!raw) return ["application", "download"];
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? parsed : ["application", "download"];
   } catch {
-    return {};
+    return ["application", "download"];
   }
 }
 
 const SettingsSider: React.FC<SettingsSiderProps> = ({ collapsed = false, onItemClick }) => {
+  const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [groupCollapsed, setGroupCollapsed] =
-    useState<Record<string, boolean>>(readCollapsedGroups);
+  const [openKeys, setOpenKeys] = useState<string[]>(readOpenKeys);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(groupCollapsed));
+      localStorage.setItem(OPEN_KEYS_STORAGE, JSON.stringify(openKeys));
     } catch {
       /* ignore */
     }
-  }, [groupCollapsed]);
+  }, [openKeys]);
 
-  const activePath = useMemo(() => {
+  const selectedKey = useMemo(() => {
     const match = pathname.match(/^\/settings\/([^/]+)/);
     return match?.[1] ?? "system";
   }, [pathname]);
 
-  const toggleGroup = (group: string) => {
-    setGroupCollapsed((prev) => ({ ...prev, [group]: !prev[group] }));
+  const onMenuClick = (key: string) => {
+    void navigate(`/settings/${key}`);
+    onItemClick?.();
   };
 
   return (
     <div
       className={classNames(
-        "size-full flex flex-col gap-2px overflow-y-auto overflow-x-hidden settings-sider",
+        "size-full flex flex-col overflow-y-auto overflow-x-hidden settings-sider px-4px",
         siderStyles.scrollArea,
         { "settings-sider--collapsed": collapsed }
       )}
     >
-      {SECTIONS.map((section) => {
-        const isGroupCollapsed = Boolean(groupCollapsed[section.group]);
-        const showItems = collapsed || !section.collapsible || !isGroupCollapsed;
-
-        return (
-          <div key={section.group} className="flex flex-col gap-2px">
-            {!collapsed &&
-              (section.collapsible ? (
-                <button
-                  type="button"
-                  className="settings-sider__group-header settings-sider__group-header--toggle w-full flex items-center justify-between gap-8px px-12px mt-8px mb-2px h-28px border-none bg-transparent cursor-pointer text-left"
-                  onClick={() => toggleGroup(section.group)}
-                  aria-expanded={!isGroupCollapsed}
-                >
-                  <span className="text-12px font-500 text-t-tertiary tracking-wide uppercase">
-                    {section.group}
-                  </span>
-                  {isGroupCollapsed ? (
-                    <Right
-                      theme="outline"
-                      size="12"
-                      fill="currentColor"
-                      strokeWidth={3}
-                      className="text-t-tertiary"
-                    />
-                  ) : (
-                    <Down
-                      theme="outline"
-                      size="12"
-                      fill="currentColor"
-                      strokeWidth={3}
-                      className="text-t-tertiary"
-                    />
-                  )}
-                </button>
-              ) : (
-                <div className="settings-sider__group-header px-12px mt-8px mb-2px h-28px flex items-center text-12px font-500 text-t-tertiary tracking-wide uppercase select-none">
-                  {section.group}
-                </div>
-              ))}
-
-            {showItems &&
-              section.items.map(({ path, label, Icon }) => {
-                const to = `/settings/${path}`;
-                const active =
-                  path === "providers"
-                    ? activePath === path || pathname.startsWith(`${to}/`)
-                    : activePath === path;
-                return (
-                  <NavLink
-                    key={path}
-                    to={to}
-                    onClick={onItemClick}
-                    title={collapsed ? label : undefined}
-                    className={classNames(
-                      "settings-sider__item flex items-center gap-10px rd-8px no-underline text-13px h-34px shrink-0",
-                      collapsed ? "w-full justify-center px-0" : "justify-start px-12px",
-                      active ? "bg-3 text-t-primary font-600" : "text-t-secondary hover:bg-hover"
-                    )}
-                  >
-                    <Icon theme="outline" size="16" fill="currentColor" strokeWidth={3} />
-                    {!collapsed && <span className="settings-sider__item-label">{label}</span>}
-                  </NavLink>
-                );
-              })}
-          </div>
-        );
-      })}
+      <Menu
+        className={classNames("app-sider-menu", collapsed && "app-sider-menu--collapsed")}
+        selectedKeys={[selectedKey]}
+        openKeys={openKeys}
+        onClickMenuItem={onMenuClick}
+        onClickSubMenu={(_key, keys) => setOpenKeys(keys)}
+      >
+        {SECTIONS.map((section) => (
+          <SubMenu
+            key={section.key}
+            title={
+              <span className="app-sider-menu__title inline-flex items-center gap-8px min-w-0">
+                <span className="app-sider-menu__title-icon shrink-0">
+                  <section.Icon theme="outline" size="16" fill="currentColor" strokeWidth={3} />
+                </span>
+                <span className="app-sider-menu__title-text">{section.label}</span>
+              </span>
+            }
+          >
+            {section.items.map(({ key, label, Icon }) => (
+              <MenuItem key={key}>
+                <span className="inline-flex items-center gap-8px">
+                  <Icon theme="outline" size="16" fill="currentColor" strokeWidth={3} />
+                  {label}
+                </span>
+              </MenuItem>
+            ))}
+          </SubMenu>
+        ))}
+        <MenuItem key="about">
+          <span className="inline-flex items-center gap-8px">
+            <Info theme="outline" size="16" fill="currentColor" strokeWidth={3} />
+            About
+          </span>
+        </MenuItem>
+      </Menu>
     </div>
   );
 };

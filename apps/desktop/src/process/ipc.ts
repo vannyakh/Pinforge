@@ -67,6 +67,17 @@ import {
 } from "./services/remoteRuntime";
 import { listRemoteUsers, removeRemoteUser, setRemoteUserStatus } from "./services/remoteAccess";
 import { testTelegramToken, normalizeTelegramToken } from "./channels/telegram";
+import {
+  disconnectMetaPublish,
+  getMetaPublishPublic,
+  listMetaPages,
+  listMetaPageVideos,
+  listMetaPagePosts,
+  postToMetaPage,
+  selectMetaPage,
+  setMetaAppConfig,
+  startMetaConnect,
+} from "./services/metaPublish";
 
 type ActiveRun = { abort: AbortController; jobId: string; packId: string };
 const activeRuns = new Map<string, ActiveRun>();
@@ -1016,6 +1027,48 @@ export function registerIpc(): void {
     return res.filePaths[0];
   });
 
+  ipcMain.handle("dialog:pickMediaFile", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: [
+        {
+          name: "Media",
+          extensions: [
+            "jpg",
+            "jpeg",
+            "png",
+            "gif",
+            "webp",
+            "bmp",
+            "mp4",
+            "mov",
+            "mkv",
+            "webm",
+            "m4v",
+          ],
+        },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    return res.filePaths[0];
+  });
+
+  ipcMain.handle("dialog:pickMediaFiles", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile", "multiSelections"],
+      filters: [
+        {
+          name: "Videos",
+          extensions: ["mp4", "mov", "mkv", "webm", "m4v"],
+        },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (res.canceled || res.filePaths.length === 0) return [];
+    return res.filePaths;
+  });
+
   ipcMain.handle("dialog:pickFormatPlugin", async () => {
     const res = await dialog.showOpenDialog({
       properties: ["openFile"],
@@ -1365,6 +1418,52 @@ export function registerIpc(): void {
         };
       }
     }
+  );
+
+  ipcMain.handle("publish:meta:get", async () => getMetaPublishPublic());
+
+  ipcMain.handle(
+    "publish:meta:setApp",
+    async (
+      _e,
+      partial: { appId?: string; appSecret?: string; redirectUri?: string }
+    ) => setMetaAppConfig(partial)
+  );
+
+  ipcMain.handle("publish:meta:startConnect", async () => startMetaConnect());
+
+  ipcMain.handle("publish:meta:disconnect", async () => disconnectMetaPublish());
+
+  ipcMain.handle("publish:meta:listPages", async () => listMetaPages());
+
+  ipcMain.handle(
+    "publish:meta:selectPage",
+    async (_e, payload: { pageId: string; pageName?: string }) => selectMetaPage(payload)
+  );
+
+  ipcMain.handle("publish:meta:listPageVideos", async (_e, limit?: number) =>
+    listMetaPageVideos(typeof limit === "number" ? limit : 25)
+  );
+
+  ipcMain.handle(
+    "publish:meta:listPagePosts",
+    async (_e, opts?: { limit?: number; after?: string }) => listMetaPagePosts(opts)
+  );
+
+  ipcMain.handle(
+    "publish:meta:post",
+    async (
+      _e,
+      payload: {
+        message: string;
+        filePath?: string;
+        filePaths?: string[];
+        postType?: import("../common/publish/types").MetaPostType;
+        link?: string;
+        videoIds?: string[];
+        carouselSlides?: import("../common/publish/types").MetaCarouselSlide[];
+      }
+    ) => postToMetaPage(payload)
   );
 
   ipcMain.handle("providers:listCustom", async () => getStore().get("customProviders") ?? []);

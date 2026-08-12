@@ -16,6 +16,16 @@ import {
 } from "@arco-design/web-react";
 import type { ColumnProps, SorterInfo } from "@arco-design/web-react/es/Table/interface";
 import { useResizableColumnWidths } from "@renderer/components/base/ResizableTableHeader";
+import MetaPublishDropdown from "@renderer/components/publish/MetaPublishDropdown";
+import type { MetaPostType, MetaCarouselSlide } from "@common/publish/types";
+import { useMetaPublishStore } from "@renderer/pages/publish/metaPublishStore";
+import {
+  isPublishableTaskStatus,
+  resolveTaskMediaPath,
+  resolveTaskVideoPaths,
+  buildPeSlidesFromTaskItems,
+  taskTitleForPublish,
+} from "@renderer/pages/publish/taskMedia";
 import {
   Clear,
   Close,
@@ -66,7 +76,7 @@ const TASKS_COL = {
   files: 80,
   preset: 96,
   updated: 112,
-  actions: 96,
+  actions: 112,
 } as const;
 
 type TaskColKey = keyof typeof TASKS_COL;
@@ -86,7 +96,7 @@ const TASKS_COL_MIN: Record<TaskColKey, number> = {
   files: 64,
   preset: 72,
   updated: 88,
-  actions: 80,
+  actions: 88,
 };
 
 function formatPresetLabel(format?: FormatPreset): string {
@@ -515,6 +525,7 @@ const TasksPage: React.FC = () => {
     pauseDownload,
     registerQueueSink,
   } = useApp();
+  const openMetaPublish = useMetaPublishStore((s) => s.openPublish);
   const cardRef = useRef<HTMLDivElement>(null);
   const queueHydratedRef = useRef(false);
   const [scrollY, setScrollY] = useState(360);
@@ -1021,9 +1032,66 @@ const TasksPage: React.FC = () => {
     return folder || null;
   };
 
+  const historyItemsForRow = useCallback(
+    (row: TaskRow): HistoryItem[] => {
+      if (row.isChild) return history.filter((h) => h.id === row.id);
+      return itemsForPack(row.id);
+    },
+    [history, itemsForPack]
+  );
+
+  const canPublishRow = useCallback((row: TaskRow): boolean => {
+    if (row.id === "pending" || row.status === "running" || row.status === "queued") return false;
+    if (!isPublishableTaskStatus(row.status)) return false;
+    if (row.files <= 0 && !row.isChild) return false;
+    return true;
+  }, []);
+
+  const openPublishForRow = useCallback(
+    (row: TaskRow, postType: MetaPostType) => {
+      const items = historyItemsForRow(row);
+      if (postType === "video_carousel") {
+        const slides: MetaCarouselSlide[] = buildPeSlidesFromTaskItems(items);
+        openMetaPublish({
+          postType,
+          message: taskTitleForPublish(row.title, row.url),
+          carouselSlides: slides,
+          sourceLabel: row.title || row.url,
+        });
+        return;
+      }
+      const filePath = resolveTaskMediaPath(items, postType);
+      if (postType !== "text" && !filePath) {
+        Message.warning(
+          postType === "photo" ? "No image file in this task." : "No video file in this task."
+        );
+        return;
+      }
+      openMetaPublish({
+        postType,
+        message: taskTitleForPublish(row.title, row.url),
+        filePath: filePath ?? "",
+        sourceLabel: row.title || row.url,
+      });
+    },
+    [historyItemsForRow, openMetaPublish]
+  );
+
   const selectedRows = useMemo(
     () => flattenTaskRows(rows).filter((r) => selectedKeys.includes(r.id) && r.id !== "pending"),
     [rows, selectedKeys]
+  );
+
+  const openPublishForSelection = useCallback(
+    (postType: MetaPostType) => {
+      const target = selectedRows.find(canPublishRow);
+      if (!target) {
+        Message.warning("Select a completed task with downloaded files.");
+        return;
+      }
+      openPublishForRow(target, postType);
+    },
+    [selectedRows, canPublishRow, openPublishForRow]
   );
 
   /** ZIP is batch-only (toolbar when rows are selected). */
@@ -1774,6 +1842,7 @@ const TasksPage: React.FC = () => {
           !row.isChild && canRetryStatus(row.status) && Boolean(row.url && row.url !== "…");
         const isQueued = row.status === "queued" || row.queued;
         const queueIndex = isQueued ? queue.findIndex((q) => q.id === row.id) : -1;
+        const canPublish = canPublishRow(row);
         return (
           <div className="tasks-table__actions flex items-center justify-end gap-2px">
             {isQueued && queueIndex >= 0 && (
@@ -1807,6 +1876,15 @@ const TasksPage: React.FC = () => {
                   onClick={() => openFolder(row)}
                 />
               </Tooltip>
+            )}
+            {canPublish && (
+              <MetaPublishDropdown
+                size="mini"
+                type="text"
+                showLabel={false}
+                tooltip="Publish to Facebook Page"
+                onSelect={(postType) => openPublishForRow(row, postType)}
+              />
             )}
             {canRetry && (
               <Tooltip
@@ -1915,6 +1993,10 @@ const TasksPage: React.FC = () => {
                   {selectedKeys.length}
                   <span className="tasks-header-btn__label"> selected</span>
                 </span>
+                <MetaPublishDropdown
+                  disabled={busy || !selectedRows.some(canPublishRow)}
+                  onSelect={openPublishForSelection}
+                />
                 <Tooltip content="ZIP selected download folders">
                   <Button
                     className="tasks-header-btn"

@@ -26,9 +26,15 @@ import {
 } from "../common/remote/types";
 import type { CustomProviderConfig, ProviderPrefs } from "../common/providers/types";
 import { DEFAULT_PROVIDER_PREFS } from "../common/providers/types";
+import {
+  DEFAULT_META_PUBLISH,
+  type PublishConfig,
+  type MetaPublishConfig,
+} from "../common/publish/types";
 
 export type { RemoteConfig, RemoteChannelConfig, CloudflareTunnelConfig };
 export type { CustomProviderConfig, ProviderPrefs };
+export type { PublishConfig, MetaPublishConfig };
 export type PackStatus = "running" | "done" | "failed" | "partial";
 
 /** Renderer Tasks queue row persisted across restarts. */
@@ -152,6 +158,7 @@ export interface AppStoreSchema {
   history: HistoryItem[];
   packs: DownloadPack[];
   remote: RemoteConfig;
+  publish: PublishConfig;
   system: SystemConfig;
   customProviders: CustomProviderConfig[];
   providerPrefs: ProviderPrefs;
@@ -184,6 +191,7 @@ export function getStore(): Store<AppStoreSchema> {
         history: [],
         packs: [],
         remote: DEFAULT_REMOTE,
+        publish: { meta: { ...DEFAULT_META_PUBLISH } },
         system: DEFAULT_SYSTEM,
         customProviders: [],
         providerPrefs: { ...DEFAULT_PROVIDER_PREFS },
@@ -191,6 +199,7 @@ export function getStore(): Store<AppStoreSchema> {
     });
     migrateFlatHistoryToPacks(store);
     ensureRemoteDefaults(store);
+    ensurePublishDefaults(store);
     ensureSystemDefaults(store);
     ensureEnhanceFeatures(store);
     ensureYoutubeOptions(store);
@@ -256,6 +265,17 @@ function ensureSystemDefaults(s: Store<AppStoreSchema>): void {
     return;
   }
   s.set("system", { ...DEFAULT_SYSTEM, ...system });
+}
+
+function ensurePublishDefaults(s: Store<AppStoreSchema>): void {
+  const publish = s.get("publish");
+  if (!publish?.meta) {
+    s.set("publish", { meta: { ...DEFAULT_META_PUBLISH } });
+    return;
+  }
+  s.set("publish", {
+    meta: { ...DEFAULT_META_PUBLISH, ...publish.meta },
+  });
 }
 
 function ensureRemoteDefaults(s: Store<AppStoreSchema>): void {

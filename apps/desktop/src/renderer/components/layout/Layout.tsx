@@ -6,6 +6,7 @@ import Titlebar from "@renderer/components/layout/Titlebar";
 import { LayoutContextProvider } from "@renderer/hooks/context/LayoutContext";
 import { LAST_PATH_KEY } from "@renderer/components/layout/Sider";
 import logoUrl from "@renderer/assets/logo.png";
+import MetaPublishModal from "@renderer/components/publish/MetaPublishModal";
 import "@renderer/styles/layout.css";
 
 const DEFAULT_SIDER_WIDTH = 260;
@@ -161,6 +162,7 @@ const Layout: React.FC<{ sider: React.ReactNode }> = ({ sider }) => {
             </div>
           </ArcoLayout.Content>
         </ArcoLayout>
+        <MetaPublishModal />
       </div>
     </LayoutContextProvider>
   );

@@ -419,6 +419,72 @@ export interface RemoteConfig {
   users: RemoteUser[];
 }
 
+export interface MetaPublishPublic {
+  appId: string;
+  redirectUri: string;
+  hasAppSecret: boolean;
+  connected: boolean;
+  userName?: string;
+  tokenExpiresAt?: number;
+  pageId?: string;
+  pageName?: string;
+  hasPageToken: boolean;
+}
+
+export interface MetaPageSummary {
+  id: string;
+  name: string;
+  category?: string;
+  tasks?: string[];
+}
+
+export interface MetaPostResult {
+  ok: boolean;
+  postId?: string;
+  message: string;
+}
+
+export type MetaPostType = "text" | "photo" | "video" | "video_carousel";
+
+export type MetaCarouselSlideKind = "video" | "photo";
+
+export interface MetaCarouselSlide {
+  kind: MetaCarouselSlideKind;
+  pageVideoId?: string;
+  filePath?: string;
+  name?: string;
+  description?: string;
+  link?: string;
+}
+
+export interface MetaPagePostsPage {
+  posts: MetaPagePostSummary[];
+  nextCursor?: string;
+}
+
+export interface MetaPagePostSummary {
+  id: string;
+  message?: string;
+  createdTime?: string;
+  updatedTime?: string;
+  permalinkUrl?: string;
+  pictureUrl?: string;
+  statusType?: string;
+  mediaType?: string;
+  isPublished?: boolean;
+  isCarousel?: boolean;
+  attachmentCount?: number;
+}
+
+export interface MetaPageVideoSummary {
+  id: string;
+  title?: string;
+  description?: string;
+  updatedTime?: string;
+  thumbnailUrl?: string;
+  permalinkUrl?: string;
+}
+
 export type RemoteRuntimeStatus = {
   api: { running: boolean; port: number; url: string | null; error?: string };
   telegram: { running: boolean; username?: string; error?: string };
@@ -521,6 +587,8 @@ const api = {
     ipcRenderer.invoke("dialog:pickFolder", defaultPath),
   pickProviderSource: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickProviderSource"),
   pickFormatPlugin: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickFormatPlugin"),
+  pickMediaFile: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickMediaFile"),
+  pickMediaFiles: (): Promise<string[]> => ipcRenderer.invoke("dialog:pickMediaFiles"),
   listCustomProviders: (): Promise<CustomProviderConfig[]> =>
     ipcRenderer.invoke("providers:listCustom"),
   listInstalledProviders: (): Promise<InstalledProviderView[]> =>
@@ -616,6 +684,36 @@ const api = {
   }): Promise<RemoteUser[]> => ipcRenderer.invoke("remote:setUserStatus", payload),
   removeRemoteUser: (id: string): Promise<RemoteUser[]> =>
     ipcRenderer.invoke("remote:removeUser", id),
+  getMetaPublish: (): Promise<MetaPublishPublic> => ipcRenderer.invoke("publish:meta:get"),
+  setMetaApp: (partial: {
+    appId?: string;
+    appSecret?: string;
+    redirectUri?: string;
+  }): Promise<MetaPublishPublic> => ipcRenderer.invoke("publish:meta:setApp", partial),
+  startMetaConnect: (): Promise<{ ok: boolean; message: string; userName?: string }> =>
+    ipcRenderer.invoke("publish:meta:startConnect"),
+  disconnectMetaPublish: (): Promise<MetaPublishPublic> =>
+    ipcRenderer.invoke("publish:meta:disconnect"),
+  listMetaPages: (): Promise<MetaPageSummary[]> => ipcRenderer.invoke("publish:meta:listPages"),
+  listMetaPageVideos: (limit?: number): Promise<MetaPageVideoSummary[]> =>
+    ipcRenderer.invoke("publish:meta:listPageVideos", limit),
+  listMetaPagePosts: (opts?: {
+    limit?: number;
+    after?: string;
+  }): Promise<MetaPagePostsPage> => ipcRenderer.invoke("publish:meta:listPagePosts", opts),
+  selectMetaPage: (payload: {
+    pageId: string;
+    pageName?: string;
+  }): Promise<MetaPublishPublic> => ipcRenderer.invoke("publish:meta:selectPage", payload),
+  postToMetaPage: (payload: {
+    message: string;
+    filePath?: string;
+    filePaths?: string[];
+    postType?: MetaPostType;
+    link?: string;
+    videoIds?: string[];
+    carouselSlides?: MetaCarouselSlide[];
+  }): Promise<MetaPostResult> => ipcRenderer.invoke("publish:meta:post", payload),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),
   openPath: (filePath: string): Promise<string> => ipcRenderer.invoke("shell:openPath", filePath),
