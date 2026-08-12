@@ -53,6 +53,21 @@ export function seedVideoIdFromMixPlaylistId(playlistId: string): string | null 
   return null;
 }
 
+/** True when URL host is a known YouTube domain. */
+export function isYouTubeUrl(url: string): boolean {
+  try {
+    const host = new URL(url.trim()).hostname.replace(/^www\./, "").toLowerCase();
+    return (
+      host === "youtu.be" ||
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "music.youtube.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** YouTube watch URL that also carries a playlist / mix (`list=`). */
 export function youtubeWatchHasList(url: string): boolean {
   try {

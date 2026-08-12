@@ -82,6 +82,7 @@ program
   .option("-f, --format <preset>", "best | mp4 | audio-only", "best")
   .option("--enhance <preset>", "Image enhance preset (auto|soft|crisp|upscale|off)", "auto")
   .option("--extractor <url>", "Piped-compatible API base for YouTube")
+  .option("--flat", "Save multi-file downloads loose instead of in their own folder")
   .action(async (url: string | undefined, opts) => {
     if (!url) {
       printBanner();
@@ -94,6 +95,7 @@ program
       format: opts.format,
       preset: opts.enhance,
       extractorUrl: opts.extractor,
+      packFolders: !opts.flat,
     });
   });
 
@@ -105,6 +107,7 @@ async function runDownload(
     enhance?: boolean;
     preset?: string;
     extractorUrl?: string;
+    packFolders?: boolean;
   }
 ) {
   try {
@@ -131,6 +134,7 @@ async function runDownload(
     enhance: opts.enhance,
     preset: opts.preset,
     extractorUrl: opts.extractorUrl,
+    packFolders: opts.packFolders,
   });
 
   const spinner = ora("Downloading…").start();

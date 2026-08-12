@@ -2660,6 +2660,19 @@
   color: var(--text-primary);
 }
 
+.about-link-row--disabled,
+.about-link-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  color: var(--text-tertiary);
+}
+
+.about-link-row--disabled:hover,
+.about-link-row:disabled:hover {
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
 /* Providers page — mirrored from AionUI Agents (LocalAgents + AgentCard) */
 .settings-pane:has(.providers-page) {
   overflow: hidden;
@@ -3098,6 +3111,15 @@
   max-width: 100%;
 }
 
+.tasks-header-sep {
+  display: inline-block;
+  width: 1px;
+  height: 20px;
+  background: var(--border-secondary);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
 .tasks-header-btn.arco-btn {
   display: inline-flex;
   align-items: center;
@@ -3522,6 +3544,33 @@ body.tasks-drag-selecting {
 
 .tasks-table__index--child {
   color: var(--color-text-4, #c9cdd4);
+}
+
+.tasks-table__media {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--color-fill-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tasks-table__media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tasks-table__media-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
 }
 
 .tasks-table__prog .arco-progress-line {

@@ -8,7 +8,10 @@ const GITHUB_URL = "https://github.com/vannyakh/Pinforge";
 const RELEASES_URL = `${GITHUB_URL}/releases`;
 const ISSUES_URL = `${GITHUB_URL}/issues`;
 
-type LinkItem = { title: string; url: string } | { title: string; onClick: () => void };
+type LinkItem =
+  | { title: string; url: string; disabled?: false }
+  | { title: string; onClick: () => void; disabled?: false }
+  | { title: string; disabled: true };
 
 function statusHint(status: AutoUpdateStatus | null): string {
   if (!status) return "";
@@ -158,7 +161,7 @@ const AboutSettings: React.FC = () => {
   const linkItems: LinkItem[] = [
     {
       title: "Help Documentation",
-      onClick: () => Message.info("Documentation will open here once published."),
+      disabled: true,
     },
     {
       title: "Update Log",
@@ -170,11 +173,11 @@ const AboutSettings: React.FC = () => {
     },
     {
       title: "Contact Me",
-      onClick: () => Message.info("Contact link coming soon."),
+      disabled: true,
     },
     {
       title: "Official Website",
-      onClick: () => Message.info("Website coming soon."),
+      disabled: true,
     },
   ];
 
@@ -248,14 +251,22 @@ const AboutSettings: React.FC = () => {
             <button
               key={item.title}
               type="button"
-              className="about-link-row"
+              className={`about-link-row${item.disabled ? " about-link-row--disabled" : ""}`}
+              disabled={Boolean(item.disabled)}
+              aria-disabled={Boolean(item.disabled)}
+              title={item.disabled ? "Coming soon" : undefined}
               onClick={() => {
+                if (item.disabled) return;
                 if ("url" in item && item.url) void openLink(item.url);
                 else if ("onClick" in item) item.onClick();
               }}
             >
               <span className="text-14px text-t-primary">{item.title}</span>
-              <Right theme="outline" size="16" fill="currentColor" />
+              {item.disabled ? (
+                <span className="text-11px text-t-tertiary">Soon</span>
+              ) : (
+                <Right theme="outline" size="16" fill="currentColor" />
+              )}
             </button>
           ))}
         </div>

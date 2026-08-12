@@ -13,6 +13,10 @@ import {
   markInstallerWindowStarted,
 } from "./process/windowInstaller";
 import { isUninstallWindow } from "./process/uninstallWindow";
+import { startClipboardMonitor } from "./process/clipboardMonitor";
+import { shutdownRemoteRuntime } from "./process/services/remoteRuntime";
+
+let mainWindow: BrowserWindow | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -125,6 +129,8 @@ function createWindow(): void {
   } else {
     win.loadFile(join(__dirname, "../renderer/index.html"));
   }
+
+  if (!needsInstaller) mainWindow = win;
 }
 
 app.whenReady().then(() => {
@@ -161,6 +167,7 @@ app.whenReady().then(() => {
   applyLoginItem(getStore().get("system"));
   registerIpc();
   createWindow();
+  startClipboardMonitor(() => mainWindow);
   initAutoUpdater();
 
   // Mark crash-interrupted downloads as paused for resume UI
@@ -179,6 +186,7 @@ app.whenReady().then(() => {
 
 app.on("before-quit", () => {
   markAppQuitting();
+  void shutdownRemoteRuntime().catch(() => undefined);
 });
 
 app.on("window-all-closed", () => {

@@ -109,3 +109,9 @@ export const DEFAULT_REMOTE: RemoteConfig = {
   channels: DEFAULT_REMOTE_CHANNELS,
   tunnel: DEFAULT_TUNNEL,
 };
+
+export type RemoteRuntimeStatus = {
+  api: { running: boolean; port: number; url: string | null; error?: string };
+  telegram: { running: boolean; username?: string; error?: string };
+  tunnel: { running: boolean; publicUrl?: string; error?: string };
+};

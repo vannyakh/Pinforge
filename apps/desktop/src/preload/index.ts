@@ -67,6 +67,11 @@ export interface PinterestOptions {
   zipBoards?: boolean;
 }
 
+export interface NamingTemplates {
+  fileName?: string;
+  folderName?: string;
+}
+
 export interface EnhanceFeatures {
   autoLevels: boolean;
   denoise: boolean;
@@ -92,6 +97,7 @@ export interface ProcessResponse {
   provider?: ProviderId;
   packId?: string;
   pack?: DownloadPack;
+  jobId?: string;
   results: ProcessResult[];
   errors: { url: string; error: string }[];
 }
@@ -107,6 +113,9 @@ export interface HistoryItem {
   kind?: MediaKind;
   packId?: string;
   createdAt: number;
+  height?: number;
+  format?: FormatPreset;
+  youtubeQuality?: YoutubeQuality;
 }
 
 export interface DownloadPack {
@@ -118,6 +127,10 @@ export interface DownloadPack {
   preset: PresetName;
   itemIds: string[];
   errorCount: number;
+  jobId?: string;
+  height?: number;
+  format?: FormatPreset;
+  youtubeQuality?: YoutubeQuality;
   createdAt: number;
   updatedAt: number;
 }
@@ -135,6 +148,20 @@ export interface MediaProgressEvent {
   totalBytes?: number | null;
   phase?: string;
   etaSec?: number | null;
+  speedBps?: number | null;
+}
+
+export interface PendingQueueJob {
+  id: string;
+  url: string;
+  addedAt: number;
+  opts: {
+    enhance: boolean;
+    format: FormatPreset;
+    preset: PresetName;
+    outDir: string;
+    youtube: Partial<YoutubeDownloadOptions>;
+  };
 }
 
 export interface ProviderInfo {
@@ -303,6 +330,12 @@ export interface AppSettings {
   enhance: boolean;
   enhanceFeatures: EnhanceFeatures;
   autoDownload: boolean;
+  packFolders: boolean;
+  naming: NamingTemplates;
+  clipboardMonitor: boolean;
+  clipboardMonitorBackground: boolean;
+  maxParallelDownloads: number;
+  pendingQueue: PendingQueueJob[];
   format: FormatPreset;
   youtube: YoutubeDownloadOptions;
   pinterest: PinterestOptions;
@@ -357,6 +390,12 @@ export interface RemoteConfig {
   tunnel: CloudflareTunnelConfig;
 }
 
+export type RemoteRuntimeStatus = {
+  api: { running: boolean; port: number; url: string | null; error?: string };
+  telegram: { running: boolean; username?: string; error?: string };
+  tunnel: { running: boolean; publicUrl?: string; error?: string };
+};
+
 export type SettingsPartial = Partial<{
   outDir: string;
   preset: PresetName;
@@ -364,6 +403,12 @@ export type SettingsPartial = Partial<{
   enhance: boolean;
   enhanceFeatures: Partial<EnhanceFeatures>;
   autoDownload: boolean;
+  packFolders: boolean;
+  naming: Partial<NamingTemplates>;
+  clipboardMonitor: boolean;
+  clipboardMonitorBackground: boolean;
+  maxParallelDownloads: number;
+  pendingQueue: PendingQueueJob[];
   format: FormatPreset;
   youtube: Partial<YoutubeDownloadOptions>;
   pinterest: Partial<PinterestOptions>;
@@ -385,6 +430,7 @@ export interface DownloadTask {
   totalBytes?: number | null;
   phase?: string;
   etaSec?: number | null;
+  speedBps?: number | null;
 }
 
 export interface DiskSpaceInfo {
@@ -421,7 +467,11 @@ const api = {
     features?: Partial<EnhanceFeatures>;
     youtube?: Partial<YoutubeDownloadOptions>;
     pinterest?: Partial<PinterestOptions>;
+    packFolders?: boolean;
+    naming?: Partial<NamingTemplates>;
   }): Promise<ProcessResponse> => ipcRenderer.invoke("media:process", payload),
+  resumeMedia: (jobId: string): Promise<ProcessResponse> =>
+    ipcRenderer.invoke("media:resume", { jobId }),
   cancelMedia: (): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke("media:cancel"),
   processPin: (url: string, preset: PresetName, outDir: string): Promise<ProcessResponse> =>
     ipcRenderer.invoke("pin:process", { url, preset, outDir }),
@@ -495,6 +545,12 @@ const api = {
       | "enhance"
       | "enhanceFeatures"
       | "autoDownload"
+      | "packFolders"
+      | "naming"
+      | "clipboardMonitor"
+      | "clipboardMonitorBackground"
+      | "maxParallelDownloads"
+      | "pendingQueue"
       | "format"
       | "youtube"
       | "pinterest"
@@ -519,6 +575,8 @@ const api = {
     webhookUrl?: string;
   }): Promise<{ ok: boolean; message: string }> =>
     ipcRenderer.invoke("remote:testChannel", payload),
+  getRemoteRuntimeStatus: (): Promise<RemoteRuntimeStatus> =>
+    ipcRenderer.invoke("remote:getRuntimeStatus"),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),
   openPath: (filePath: string): Promise<string> => ipcRenderer.invoke("shell:openPath", filePath),
@@ -535,6 +593,24 @@ const api = {
     const listener = (_e: Electron.IpcRendererEvent, payload: MediaProgressEvent) => cb(payload);
     ipcRenderer.on("media:progress", listener);
     return () => ipcRenderer.removeListener("media:progress", listener);
+  },
+
+  onClipboardUrls: (cb: (payload: { urls: string[] }) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: { urls: string[] }) => cb(payload);
+    ipcRenderer.on("clipboard:urls", listener);
+    return () => ipcRenderer.removeListener("clipboard:urls", listener);
+  },
+
+  onQueueUpdated: (cb: (payload: { added: number }) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: { added: number }) => cb(payload);
+    ipcRenderer.on("queue:updated", listener);
+    return () => ipcRenderer.removeListener("queue:updated", listener);
+  },
+
+  onRemoteRuntimeChanged: (cb: (status: RemoteRuntimeStatus) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: RemoteRuntimeStatus) => cb(payload);
+    ipcRenderer.on("remote:runtimeChanged", listener);
+    return () => ipcRenderer.removeListener("remote:runtimeChanged", listener);
   },
 
   ffmpegStatus: (): Promise<{

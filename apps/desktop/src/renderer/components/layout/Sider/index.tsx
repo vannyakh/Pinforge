@@ -138,13 +138,20 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                   key={path}
                   type="button"
                   className={classNames(
-                    "w-full flex items-center gap-10px rd-8px border-none cursor-pointer text-left font-inherit px-12px py-10px settings-sider__item",
-                    active
-                      ? "bg-primary-light-1 text-t-primary font-600"
-                      : "bg-transparent text-t-secondary hover:bg-hover"
+                    "w-full flex items-center gap-10px rd-8px border-none text-left font-inherit px-12px py-10px settings-sider__item",
+                    soon
+                      ? "cursor-not-allowed opacity-55 bg-transparent text-t-tertiary"
+                      : active
+                        ? "cursor-pointer bg-primary-light-1 text-t-primary font-600"
+                        : "cursor-pointer bg-transparent text-t-secondary hover:bg-hover"
                   )}
-                  onClick={() => go(path)}
-                  title={collapsed ? label : undefined}
+                  onClick={() => {
+                    if (soon) return;
+                    go(path);
+                  }}
+                  disabled={soon}
+                  aria-disabled={soon}
+                  title={soon ? `${label} — coming soon` : collapsed ? label : undefined}
                 >
                   {showTasksLoading ? (
                     <LoadingFour

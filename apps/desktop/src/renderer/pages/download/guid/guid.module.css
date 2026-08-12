@@ -82,6 +82,41 @@
   flex: 0 1 auto;
 }
 
+.actionConfigScroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: min(420px, 52vw);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.actionConfigScroll::-webkit-scrollbar {
+  display: none;
+}
+
+.clipboardLive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: rgb(var(--green-6));
+  background: color-mix(in srgb, rgb(var(--green-6)) 12%, transparent);
+  flex-shrink: 0;
+  animation: clipboard-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes clipboard-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 /* 首页输入框右下「模型 / 模式」按钮：与对话框 .sendbox-tools/.sendbox-actions 同款 */
 .actionSubmit :global(.sendbox-model-btn),
 .actionSubmit :global(.sendbox-model-btn:hover),

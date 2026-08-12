@@ -8,6 +8,8 @@ export async function downloadUrlToFile(
   destPath: string,
   opts: {
     concurrency?: number;
+    fragmentSize?: number;
+    minSizeForFragments?: number;
     signal?: AbortSignal;
     resume?: boolean;
     accept?: string;
@@ -18,6 +20,8 @@ export async function downloadUrlToFile(
     referer: "https://www.youtube.com/",
     accept: opts.accept ?? "*/*",
     concurrency: opts.concurrency ?? 4,
+    fragmentSize: opts.fragmentSize,
+    minSizeForFragments: opts.minSizeForFragments,
     signal: opts.signal,
     resume: opts.resume !== false,
     onProgress: opts.onProgress,

@@ -24,6 +24,7 @@ export type ChatDownloadCard = {
   status: ChatDownloadCardStatus;
   percent?: number;
   etaSec?: number | null;
+  speedBps?: number | null;
   phase?: string;
   message?: string;
   outPath?: string;
@@ -53,7 +54,7 @@ export type ChatMessage = {
   url?: string;
   detected?: DetectedProvider | null;
   extract?: ExtractPreview | null;
-  status?: "detecting" | "ready" | "error" | "started" | "done" | "failed";
+  status?: "detecting" | "ready" | "error" | "started" | "done" | "failed" | "cancelled";
   pendingConfirm?: boolean;
   /** Selected extract item URLs for profile / bulk pick-download. */
   selectedItemUrls?: string[];

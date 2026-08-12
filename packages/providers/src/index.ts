@@ -82,6 +82,7 @@ export type { YoutubePlaylistVideo, YoutubePlaylistResolveResult } from "./sites
 export {
   youtubeQualityChoices,
   fragmentConcurrencyForQuality,
+  streamDownloadOptionsForQuality,
   qualityCap,
   qualityFromFormat,
 } from "./sites/youtube";

@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Message } from "@arco-design/web-react";
 import {
   api,
@@ -43,6 +51,7 @@ export interface DownloadTask {
   totalBytes?: number | null;
   phase?: string;
   etaSec?: number | null;
+  speedBps?: number | null;
 }
 
 interface AppContextValue {
@@ -53,6 +62,7 @@ interface AppContextValue {
   busy: boolean;
   refresh: () => Promise<void>;
   processUrl: (url: string, opts?: ProcessOpts) => Promise<ProcessResponse | null>;
+  resumeMedia: (jobId: string, opts?: ProcessOpts) => Promise<ProcessResponse | null>;
   cancelDownload: () => Promise<boolean>;
   pauseDownload: () => Promise<boolean>;
   updateSettings: (partial: SettingsPartial) => Promise<void>;
@@ -60,6 +70,10 @@ interface AppContextValue {
   clearPacks: () => Promise<void>;
   removePacks: (ids: string[]) => Promise<void>;
   itemsForPack: (packId: string) => HistoryItem[];
+  /** Tasks page registers to receive clipboard-grabbed URLs. */
+  registerQueueSink: (fn: ((urls: string[]) => void) | null) => void;
+  /** Append URLs to the persisted Tasks queue (deduped). Returns count added. */
+  queueUrls: (urls: string[]) => Promise<number>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -70,6 +84,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [packs, setPacks] = useState<DownloadPack[]>([]);
   const [tasks, setTasks] = useState<DownloadTask[]>([]);
   const [busy, setBusy] = useState(false);
+  const activeCountRef = useRef(0);
+  const queueSinkRef = useRef<((urls: string[]) => void) | null>(null);
+  const settingsRef = useRef<AppSettings | null>(null);
+  const packsRef = useRef<DownloadPack[]>([]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    packsRef.current = packs;
+  }, [packs]);
+
+  const trackDownloadStart = useCallback(() => {
+    activeCountRef.current += 1;
+    setBusy(true);
+  }, []);
+
+  const trackDownloadEnd = useCallback(() => {
+    activeCountRef.current = Math.max(0, activeCountRef.current - 1);
+    setBusy(activeCountRef.current > 0);
+  }, []);
+
+  const registerQueueSink = useCallback((fn: ((urls: string[]) => void) | null) => {
+    queueSinkRef.current = fn;
+  }, []);
 
   const refresh = useCallback(async () => {
     const s = await api.getSettings();
@@ -99,6 +139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           totalBytes: ev.totalBytes,
           phase: ev.phase,
           etaSec: ev.etaSec,
+          speedBps: ev.speedBps,
         };
         const rest = prev.filter((t) => t.packId !== ev.packId);
         return [next, ...rest].slice(0, 30);
@@ -110,7 +151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     async (url: string, opts?: ProcessOpts): Promise<ProcessResponse | null> => {
       if (!settings) return null;
       const shouldNotify = opts?.notify !== false;
-      setBusy(true);
+      trackDownloadStart();
       try {
         const res = await api.processMedia({
           url,
@@ -119,8 +160,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           enhance: opts?.enhance ?? settings.enhance,
           format: opts?.format ?? settings.format,
           features: opts?.features ?? settings.enhanceFeatures,
-          youtube: opts?.youtube ?? settings.youtube,
+          youtube: { ...settings.youtube, ...opts?.youtube },
           pinterest: settings.pinterest,
+          packFolders: settings.packFolders !== false,
+          naming: settings.naming ?? undefined,
         });
         const stopped = res.errors.some((e) => /stopped/i.test(e.error));
         if (
@@ -152,10 +195,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await refresh();
         return null;
       } finally {
-        setBusy(false);
+        trackDownloadEnd();
       }
     },
-    [settings, refresh]
+    [settings, refresh, trackDownloadStart, trackDownloadEnd]
+  );
+
+  const resumeMedia = useCallback(
+    async (jobId: string, opts?: ProcessOpts): Promise<ProcessResponse | null> => {
+      if (!settings) return null;
+      const shouldNotify = opts?.notify !== false;
+      trackDownloadStart();
+      try {
+        const res = await api.resumeMedia(jobId);
+        const stopped = res.errors.some((e) => /stopped|paused/i.test(e.error));
+        if (
+          shouldNotify &&
+          !stopped &&
+          settings.system?.notifications &&
+          settings.system.notifyOnDownloadComplete &&
+          typeof Notification !== "undefined"
+        ) {
+          try {
+            new Notification("Pinforge", {
+              body: res.kind === "board" ? "Board resumed — saved" : "Download resumed — saved",
+            });
+          } catch {
+            /* denied */
+          }
+        }
+        await refresh();
+        return res;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (shouldNotify && !/abort|stopped/i.test(msg)) Message.error(msg);
+        await refresh();
+        return null;
+      } finally {
+        trackDownloadEnd();
+      }
+    },
+    [settings, refresh, trackDownloadStart, trackDownloadEnd]
   );
 
   const cancelDownload = useCallback(async () => {
@@ -180,12 +260,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               ? { ...prev.enhanceFeatures, ...next.enhanceFeatures }
               : prev.enhanceFeatures,
             autoDownload: next.autoDownload ?? prev.autoDownload,
+            packFolders: next.packFolders ?? prev.packFolders,
+            naming: next.naming ? { ...(prev.naming ?? {}), ...next.naming } : prev.naming,
+            clipboardMonitor: next.clipboardMonitor ?? prev.clipboardMonitor,
+            clipboardMonitorBackground:
+              next.clipboardMonitorBackground ?? prev.clipboardMonitorBackground,
+            maxParallelDownloads: next.maxParallelDownloads ?? prev.maxParallelDownloads,
+            pendingQueue: next.pendingQueue ?? prev.pendingQueue,
             youtube: next.youtube ? { ...prev.youtube, ...next.youtube } : prev.youtube,
             pinterest: next.pinterest ? { ...prev.pinterest, ...next.pinterest } : prev.pinterest,
           }
         : prev
     );
   }, []);
+
+  const queueUrls = useCallback(
+    async (urls: string[]) => {
+      const s = settingsRef.current;
+      if (!s?.outDir?.trim()) {
+        Message.warning("Set a download folder first.");
+        return 0;
+      }
+      const pending = s.pendingQueue ?? [];
+      const packUrls = new Set(packsRef.current.map((p) => p.url));
+      const existing = new Set([...pending.map((q) => q.url), ...packUrls]);
+      const next = [...pending];
+      let added = 0;
+      for (const url of urls) {
+        if (existing.has(url)) continue;
+        existing.add(url);
+        next.push({
+          id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          url,
+          addedAt: Date.now(),
+          opts: {
+            enhance: s.enhance,
+            format: s.format,
+            preset: s.preset,
+            outDir: s.outDir,
+            youtube: {
+              quality: s.youtube?.quality ?? "best",
+              audioContainer: s.youtube?.audioContainer ?? "m4a",
+              subtitles: s.youtube?.subtitles ?? "separate",
+              saveVideo: s.youtube?.saveVideo !== false,
+              saveAudio: s.youtube?.saveAudio !== false,
+              saveThumbnail: s.youtube?.saveThumbnail !== false,
+            },
+          },
+        });
+        added += 1;
+      }
+      if (added > 0) await updateSettings({ pendingQueue: next });
+      return added;
+    },
+    [updateSettings]
+  );
+
+  useEffect(() => {
+    return api.onClipboardUrls(({ urls }) => {
+      if (queueSinkRef.current) {
+        queueSinkRef.current(urls);
+        return;
+      }
+      void queueUrls(urls);
+    });
+  }, [queueUrls]);
+
+  useEffect(() => {
+    return api.onQueueUpdated(() => {
+      void refresh();
+    });
+  }, [refresh]);
 
   const clearHistory = useCallback(async () => {
     await api.clearHistory();
@@ -223,6 +368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       busy,
       refresh,
       processUrl,
+      resumeMedia,
       cancelDownload,
       pauseDownload,
       updateSettings,
@@ -230,6 +376,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearPacks,
       removePacks,
       itemsForPack,
+      registerQueueSink,
+      queueUrls,
     }),
     [
       settings,
@@ -239,6 +387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       busy,
       refresh,
       processUrl,
+      resumeMedia,
       cancelDownload,
       pauseDownload,
       updateSettings,
@@ -246,6 +395,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearPacks,
       removePacks,
       itemsForPack,
+      registerQueueSink,
+      queueUrls,
     ]
   );
 

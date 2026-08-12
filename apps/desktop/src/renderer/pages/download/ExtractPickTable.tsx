@@ -52,6 +52,7 @@ type Props = {
   busy?: boolean;
   onDownloadSelected: () => void;
   onDownloadOne: (item: ExtractPreviewItem) => void;
+  onCancel?: () => void;
 };
 
 function urlsEqual(a: string, b: string): boolean {
@@ -163,6 +164,7 @@ const ExtractPickTable: React.FC<Props> = ({
   busy,
   onDownloadSelected,
   onDownloadOne,
+  onCancel,
 }) => {
   const [maxDraft, setMaxDraft] = useState(listMax);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -525,6 +527,11 @@ const ExtractPickTable: React.FC<Props> = ({
                 <Button size="mini" onClick={() => onSelectionChange([])}>
                   None
                 </Button>
+                {onCancel ? (
+                  <Button size="small" disabled={busy} onClick={onCancel}>
+                    Cancel
+                  </Button>
+                ) : null}
                 <Button
                   type="primary"
                   size="small"

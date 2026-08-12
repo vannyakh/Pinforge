@@ -16,6 +16,7 @@ import {
   type CloudflareTunnelConfig,
   type RemoteChannelConfig,
   type RemoteConfig,
+  type RemoteRuntimeStatus,
 } from "@renderer/api";
 import telegramLogo from "@renderer/assets/channel-logos/telegram.svg";
 import discordLogo from "@renderer/assets/channel-logos/discord.svg";
@@ -281,15 +282,24 @@ const ChannelMenuItem: React.FC<{
   channel: RemoteChannelConfig;
   open: boolean;
   saving: boolean;
+  runtime?: RemoteRuntimeStatus;
   onToggleOpen: () => void;
   onLocalChange: (patch: Partial<RemoteChannelConfig>) => void;
   onSave: (channel: RemoteChannelConfig) => Promise<void>;
-}> = ({ channel, open, saving, onToggleOpen, onLocalChange, onSave }) => (
+}> = ({ channel, open, saving, runtime, onToggleOpen, onLocalChange, onSave }) => {
+  const key = channelKey(String(channel.id));
+  const tgRunning = key === "telegram" && runtime?.telegram.running;
+  const tgError = key === "telegram" ? runtime?.telegram.error : undefined;
+
+  return (
   <div className="remote-channel-card" data-channel-id={channel.id}>
     <Collapse
       bordered={false}
       activeKey={open ? ["body"] : []}
-      onChange={onToggleOpen}
+      onChange={() => {
+        if (!channel.available) return;
+        onToggleOpen();
+      }}
       className="remote-channel-collapse"
     >
       <Collapse.Item
@@ -302,6 +312,17 @@ const ChannelMenuItem: React.FC<{
               {!channel.available && (
                 <Tag size="small" color="gray">
                   Coming soon
+                </Tag>
+              )}
+              {channel.enabled && key === "telegram" && (
+                <Tag size="small" color={tgRunning ? "green" : tgError ? "red" : "gray"}>
+                  {tgRunning
+                    ? runtime?.telegram.username
+                      ? `@${runtime.telegram.username}`
+                      : "Running"
+                    : tgError
+                      ? "Error"
+                      : "Starting…"}
                 </Tag>
               )}
             </div>
@@ -323,21 +344,26 @@ const ChannelMenuItem: React.FC<{
       </Collapse.Item>
     </Collapse>
   </div>
-);
+  );
+};
 
 const RemoteSettings: React.FC = () => {
   const [remote, setRemote] = useState<RemoteConfig | null>(null);
+  const [runtime, setRuntime] = useState<RemoteRuntimeStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("tunnel");
   const [openId, setOpenId] = useState<string | null>("telegram");
 
   const load = useCallback(async () => {
-    const r = await api.getRemote();
+    const [r, rt] = await Promise.all([api.getRemote(), api.getRemoteRuntimeStatus()]);
     setRemote(r);
+    setRuntime(rt);
   }, []);
 
   useEffect(() => {
     load().catch((e) => Message.error(e instanceof Error ? e.message : String(e)));
+    const off = api.onRemoteRuntimeChanged((next) => setRuntime(next));
+    return off;
   }, [load]);
 
   const saveTunnel = async (partial: Partial<CloudflareTunnelConfig>) => {
@@ -441,42 +467,41 @@ const RemoteSettings: React.FC = () => {
               label="Enable tunnel"
               description={
                 <>
-                  Status:{" "}
+                  <span className="mr-8px">
+                    Exposes the local API over HTTPS via cloudflared. Status:
+                  </span>
                   <Tag
                     size="small"
                     color={
-                      tunnel.status === "running"
+                      runtime?.tunnel.running || tunnel.status === "running"
                         ? "green"
-                        : tunnel.status === "error"
+                        : runtime?.tunnel.error || tunnel.status === "error"
                           ? "red"
                           : "gray"
                     }
                   >
-                    {tunnel.status}
+                    {runtime?.tunnel.running ? "running" : tunnel.status}
                   </Tag>
                 </>
               }
             >
               <Switch
-                checked={tunnel.enabled}
+                checked={Boolean(tunnel.enabled)}
                 disabled={saving}
-                onChange={(v) =>
-                  void saveTunnel({
-                    enabled: v,
-                    status: v ? "starting" : "stopped",
-                    lastError: v
-                      ? "Tunnel runner not started yet — config saved. Runtime connect coming soon."
-                      : undefined,
-                  }).then(() => {
-                    if (v) {
-                      Message.info(
-                        "Tunnel settings saved. cloudflared process control is coming soon — use cloudflared CLI with this token for now."
-                      );
-                    }
-                  })
-                }
+                onChange={(v) => void saveTunnel({ enabled: v })}
               />
             </PreferenceRow>
+
+            {runtime?.api.running && runtime.api.url && (
+              <div className="text-12px text-t-secondary break-all pt-4px">
+                Local API: {runtime.api.url}/health
+              </div>
+            )}
+            {runtime?.api.error && (
+              <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                Local API error: {runtime.api.error}
+              </Typography.Text>
+            )}
 
             <PreferenceRow
               label="Tunnel token"
@@ -544,6 +569,11 @@ const RemoteSettings: React.FC = () => {
                 Public URL: {tunnel.publicUrl}
               </div>
             )}
+            {runtime?.tunnel.publicUrl && runtime.tunnel.publicUrl !== tunnel.publicUrl && (
+              <div className="text-12px text-t-secondary break-all pt-8px">
+                Live tunnel URL: {runtime.tunnel.publicUrl}
+              </div>
+            )}
             {tunnel.lastError && (
               <Typography.Text type="warning" style={{ fontSize: 12 }}>
                 {tunnel.lastError}
@@ -606,6 +636,7 @@ const RemoteSettings: React.FC = () => {
                 channel={ch}
                 open={openId === ch.id}
                 saving={saving}
+                runtime={runtime ?? undefined}
                 onToggleOpen={() => setOpenId((cur) => (cur === ch.id ? null : ch.id))}
                 onLocalChange={(patch) => patchChannelLocal(ch.id, patch)}
                 onSave={saveChannel}

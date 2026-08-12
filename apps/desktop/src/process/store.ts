@@ -9,11 +9,13 @@ import type {
   EnhanceFeatures,
   YoutubeDownloadOptions,
   PinterestOptions,
+  NamingTemplates,
 } from "@pinforge/core/types";
 import {
   DEFAULT_ENHANCE_FEATURES,
   DEFAULT_YOUTUBE_OPTIONS,
   DEFAULT_PINTEREST_OPTIONS,
+  DEFAULT_NAMING_TEMPLATES,
 } from "@pinforge/core/types";
 import {
   DEFAULT_REMOTE,
@@ -29,6 +31,24 @@ export type { RemoteConfig, RemoteChannelConfig, CloudflareTunnelConfig };
 export type { CustomProviderConfig, ProviderPrefs };
 export type PackStatus = "running" | "done" | "failed" | "partial";
 
+/** Renderer Tasks queue row persisted across restarts. */
+export interface PendingQueueJob {
+  id: string;
+  url: string;
+  addedAt: number;
+  opts: {
+    enhance: boolean;
+    format: FormatPreset;
+    preset: PresetName;
+    outDir: string;
+    youtube: {
+      quality?: YoutubeDownloadOptions["quality"];
+      audioContainer?: YoutubeDownloadOptions["audioContainer"];
+      subtitles?: YoutubeDownloadOptions["subtitles"];
+    };
+  };
+}
+
 export interface HistoryItem {
   id: string;
   url: string;
@@ -40,6 +60,10 @@ export interface HistoryItem {
   kind?: MediaKind;
   packId?: string;
   createdAt: number;
+  /** Actual stream height (px) when known. */
+  height?: number;
+  format?: FormatPreset;
+  youtubeQuality?: YoutubeDownloadOptions["quality"];
 }
 
 /** One download job grouped by source URL (board/pin/video pack). */
@@ -52,6 +76,12 @@ export interface DownloadPack {
   preset: PresetName;
   itemIds: string[];
   errorCount: number;
+  /** MediaCore job id — used to resume paused/interrupted downloads. */
+  jobId?: string;
+  /** Max stream height (px) across saved items when known. */
+  height?: number;
+  format?: FormatPreset;
+  youtubeQuality?: YoutubeDownloadOptions["quality"];
   createdAt: number;
   updatedAt: number;
 }
@@ -103,6 +133,18 @@ export interface AppStoreSchema {
   enhanceFeatures: EnhanceFeatures;
   /** Skip confirm and start the task after URL detection. */
   autoDownload: boolean;
+  /** Give downloads that produce several files their own folder. */
+  packFolders: boolean;
+  /** Custom file and folder name templates. */
+  naming: NamingTemplates;
+  /** Watch clipboard for media URLs and queue them (JDownloader-style link grabber). */
+  clipboardMonitor: boolean;
+  /** When clipboard monitor is on, also grab links while the app is in the background. */
+  clipboardMonitorBackground: boolean;
+  /** Max pack-level downloads running at once (1–3). */
+  maxParallelDownloads: number;
+  /** Pending download URLs waiting for Start in Tasks. */
+  pendingQueue: PendingQueueJob[];
   format: FormatPreset;
   youtube: YoutubeDownloadOptions;
   pinterest: PinterestOptions;
@@ -129,6 +171,12 @@ export function getStore(): Store<AppStoreSchema> {
         enhance: true,
         enhanceFeatures: { ...DEFAULT_ENHANCE_FEATURES },
         autoDownload: true,
+        packFolders: true,
+        naming: { ...DEFAULT_NAMING_TEMPLATES },
+        clipboardMonitor: false,
+        clipboardMonitorBackground: false,
+        maxParallelDownloads: 2,
+        pendingQueue: [],
         format: "best",
         youtube: { ...DEFAULT_YOUTUBE_OPTIONS },
         pinterest: { ...DEFAULT_PINTEREST_OPTIONS },
@@ -147,6 +195,16 @@ export function getStore(): Store<AppStoreSchema> {
     ensureEnhanceFeatures(store);
     ensureYoutubeOptions(store);
     ensurePinterestOptions(store);
+    ensureNamingOptions(store);
+    if (store.get("clipboardMonitor") === undefined) store.set("clipboardMonitor", false);
+    if (store.get("clipboardMonitorBackground") === undefined) {
+      store.set("clipboardMonitorBackground", false);
+    }
+    const parallel = store.get("maxParallelDownloads");
+    if (typeof parallel !== "number" || parallel < 1 || parallel > 3) {
+      store.set("maxParallelDownloads", 2);
+    }
+    if (!Array.isArray(store.get("pendingQueue"))) store.set("pendingQueue", []);
     if (!Array.isArray(store.get("customProviders"))) {
       store.set("customProviders", []);
     }
@@ -168,6 +226,11 @@ function ensureYoutubeOptions(s: Store<AppStoreSchema>): void {
 function ensurePinterestOptions(s: Store<AppStoreSchema>): void {
   const cur = s.get("pinterest");
   s.set("pinterest", { ...DEFAULT_PINTEREST_OPTIONS, ...cur });
+}
+
+function ensureNamingOptions(s: Store<AppStoreSchema>): void {
+  const cur = s.get("naming");
+  s.set("naming", { ...DEFAULT_NAMING_TEMPLATES, ...cur });
 }
 
 function ensureProviderPrefs(s: Store<AppStoreSchema>): void {

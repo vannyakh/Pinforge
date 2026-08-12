@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, Select, Switch } from "@arco-design/web-react";
+import { Button, Checkbox, Message, Select, Switch } from "@arco-design/web-react";
 import { ArrowRightUp, Right } from "@icon-park/react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
@@ -29,7 +29,7 @@ import {
 import GuidHomeInputCard from "./guid/GuidHomeInputCard";
 import GuidHomeActionRow from "./guid/GuidHomeActionRow";
 import ExtractPickTable from "./ExtractPickTable";
-import { resolveYoutubeExtractUrl, youtubeWatchHasList } from "./youtubeUrl";
+import { resolveYoutubeExtractUrl, youtubeWatchHasList, isYouTubeUrl } from "./youtubeUrl";
 import { youtubeQualityChoices } from "./youtubeQuality";
 import ShimmerText from "@renderer/components/base/ShimmerText";
 import styles from "./guid/guid.module.css";
@@ -97,7 +97,7 @@ function describeExtract(extract: ExtractPreview): string {
 
 const DownloadPage: React.FC = () => {
   const navigate = useNavigate();
-  const { settings, busy, processUrl, updateSettings } = useApp();
+  const { settings, busy, processUrl, updateSettings, queueUrls } = useApp();
 
   const url = useHomeChatStore((s) => s.url);
   const filter = useHomeChatStore((s) => s.filter);
@@ -262,6 +262,7 @@ const DownloadPage: React.FC = () => {
         ...(coverUrl ? { coverUrl } : {}),
         ...(typeof percent === "number" ? { percent } : {}),
         ...(ev.etaSec !== undefined ? { etaSec: ev.etaSec } : {}),
+        ...(ev.speedBps !== undefined ? { speedBps: ev.speedBps } : {}),
         ...(ev.phase ? { phase: ev.phase } : {}),
         ...(ev.message ? { message: ev.message } : {}),
         packId: ev.packId,
@@ -806,6 +807,23 @@ const DownloadPage: React.FC = () => {
     );
   };
 
+  const cancelExtractPick = (messageId: string) => {
+    mapMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const head = m.extract
+          ? describeExtract(m.extract).split("\n")[0]
+          : m.text.split("\n")[0];
+        return {
+          ...m,
+          status: "cancelled",
+          text: `${head}\nCancelled. Paste another link when you're ready.`,
+          selectedItemUrls: [],
+        };
+      })
+    );
+  };
+
   const setMessageSelection = (messageId: string, urls: string[]) => {
     mapMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, selectedItemUrls: urls } : m))
@@ -910,6 +928,21 @@ const DownloadPage: React.FC = () => {
   ) : null;
 
   const showEnhanceToolbar = filter === "auto" || filter === "pinterest";
+  const trimmedUrl = url.trim();
+  const showYoutubeTools = filter === "youtube" || isYouTubeUrl(trimmedUrl);
+  const queueCount = settings?.pendingQueue?.length ?? 0;
+  const clipboardMonitor = Boolean(settings?.clipboardMonitor);
+
+  const handleQueueToTasks = async () => {
+    const urls = parseMediaUrls(trimmedUrl);
+    if (urls.length === 0) return;
+    const added = await queueUrls(urls);
+    if (added > 0) {
+      Message.success(added === 1 ? "Added to Tasks queue" : `Added ${added} links to Tasks queue`);
+    } else {
+      Message.info("Already in Tasks queue");
+    }
+  };
 
   const actionRow = (
     <GuidHomeActionRow
@@ -919,6 +952,24 @@ const DownloadPage: React.FC = () => {
       format={confirmFormat}
       enhance={confirmEnhance}
       showEnhance={showEnhanceToolbar}
+      showYoutubeQuality={showYoutubeTools}
+      youtubeQuality={confirmYtQuality}
+      youtubeQualityChoices={youtubeQualityChoices()}
+      onYoutubeQualityChange={(q) => {
+        setConfirmYtQuality(q);
+        void updateSettings({ youtube: { quality: q } });
+      }}
+      showSubtitles={showYoutubeTools}
+      subtitles={confirmSubs}
+      onSubtitlesChange={(mode) => {
+        setConfirmSubs(mode);
+        void updateSettings({ youtube: { subtitles: mode } });
+      }}
+      clipboardMonitor={clipboardMonitor}
+      queueCount={queueCount}
+      canQueue={hasUrl && Boolean(settings?.outDir?.trim())}
+      onQueue={() => void handleQueueToTasks()}
+      onOpenTasks={() => navigate("/tasks")}
       leftOptions={
         youtubeWatchHasList(url.trim()) ? (
           <label className="home-composer-playlist-opt">
@@ -1034,6 +1085,8 @@ const DownloadPage: React.FC = () => {
                                     "Done"
                                   ) : msg.status === "failed" ? (
                                     "Failed"
+                                  ) : msg.status === "cancelled" ? (
+                                    "Cancelled"
                                   ) : extract?.modeSupported ? (
                                     "Ready"
                                   ) : (
@@ -1061,6 +1114,7 @@ const DownloadPage: React.FC = () => {
                                   msg.status === "ready" ||
                                   msg.status === "error" ||
                                   msg.status === "failed" ||
+                                  msg.status === "cancelled" ||
                                   msg.status === "detecting" ||
                                   msg.status === "started" ||
                                   msg.status === "done" ||
@@ -1101,6 +1155,7 @@ const DownloadPage: React.FC = () => {
                               msg.status !== "started" &&
                               msg.status !== "done" &&
                               msg.status !== "failed" &&
+                              msg.status !== "cancelled" &&
                               !msg.batchJob && (
                                 <ExtractPickTable
                                   messageId={msg.id}
@@ -1137,6 +1192,7 @@ const DownloadPage: React.FC = () => {
                                   busy={false}
                                   onDownloadSelected={() => beginSelectedDownload(msg)}
                                   onDownloadOne={(item) => beginSelectedDownload(msg, [item.url])}
+                                  onCancel={() => cancelExtractPick(msg.id)}
                                 />
                               )}
 
@@ -1448,6 +1504,20 @@ function formatEta(sec: number | null | undefined): string {
   return rm > 0 ? `${h}h ${rm}m left` : `${h}h left`;
 }
 
+function formatSpeed(bps: number | null | undefined): string {
+  if (bps == null || !Number.isFinite(bps) || bps <= 0) return "";
+  if (bps < 1024) return `${Math.round(bps)} B/s`;
+  const units = ["KB", "MB", "GB"];
+  let v = bps / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const digits = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return `${v.toFixed(digits)} ${units[i]}/s`;
+}
+
 function cardStatusLabel(card: ChatDownloadCard): string {
   switch (card.status) {
     case "extracting":
@@ -1460,8 +1530,13 @@ function cardStatusLabel(card: ChatDownloadCard): string {
       if (card.phase === "mux") return "Merging…";
       if (card.phase === "convert") return "Converting…";
       if (typeof card.percent === "number") {
+        const speed =
+          typeof card.speedBps === "number" && card.speedBps > 0 ? formatSpeed(card.speedBps) : "";
         const eta = formatEta(card.etaSec);
-        return eta ? `${card.percent}% · ${eta}` : `${card.percent}%`;
+        const parts = [`${card.percent}%`];
+        if (speed) parts.push(speed);
+        if (eta) parts.push(eta);
+        return parts.join(" · ");
       }
       return card.message || "Downloading…";
     case "done":

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Checkbox,
@@ -22,23 +22,32 @@ import {
   FolderClose,
   FolderOpen,
   FileZip,
+  LinkOne,
+  Music,
   Pause,
+  Pic,
   PlayOne,
   Plus,
   Redo,
-  Remind,
+  Up,
+  Down,
+  VideoOne,
 } from "@icon-park/react";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import AionModal from "@renderer/components/base/AionModal";
+import { coverUrlFromMediaUrl } from "@renderer/pages/download/homeChatStore";
 import {
   api,
   type FormatPreset,
+  type HistoryItem,
   type PackStatus,
   type PresetName,
   type YoutubeQuality,
   type AudioContainer,
   type SubtitleMode,
 } from "@renderer/api";
+
+type TaskMediaKind = "image" | "video" | "audio";
 
 /**
  * Min table content width (column mins + sticky left/right).
@@ -47,8 +56,11 @@ import {
 const TASKS_TABLE_MIN_X =
   44 + // No.
   40 + // check
+  52 + // Media
   240 + // Task min
   100 + // Source
+  88 + // Quality
+  88 + // Resolution
   112 + // Prog
   96 + // Downloaded
   96 + // Estimate
@@ -57,7 +69,129 @@ const TASKS_TABLE_MIN_X =
   80 + // Preset
   100 + // Updated
   88; // Actions
-// = 1156
+// = 1384
+
+function formatPresetLabel(format?: FormatPreset): string {
+  const hit = FORMAT_OPTIONS.find((o) => o.value === format);
+  return hit?.label ?? (format ? String(format) : "—");
+}
+
+function youtubeQualityLabel(q?: YoutubeQuality): string {
+  if (!q || q === "best") return "Best";
+  return `${q}p`;
+}
+
+function maxHeightFromHistory(items: HistoryItem[]): number | undefined {
+  let max: number | undefined;
+  for (const h of items) {
+    if (typeof h.height === "number" && h.height > 0) {
+      max = max == null ? h.height : Math.max(max, h.height);
+    }
+  }
+  return max;
+}
+
+function taskQualityLabel(
+  row: Pick<TaskRow, "format" | "youtubeQuality" | "provider" | "mediaKind">
+): string {
+  if (row.format === "audio-only" || row.mediaKind === "audio") return "Audio";
+  if (row.provider === "youtube" || row.youtubeQuality) {
+    return youtubeQualityLabel(row.youtubeQuality);
+  }
+  return formatPresetLabel(row.format);
+}
+
+function taskResolutionLabel(
+  row: Pick<TaskRow, "height" | "format" | "mediaKind" | "youtubeQuality">
+): string {
+  if (row.format === "audio-only" || row.mediaKind === "audio") return "—";
+  if (typeof row.height === "number" && row.height > 0) return `${row.height}p`;
+  if (row.youtubeQuality && row.youtubeQuality !== "best") return `≤${row.youtubeQuality}p`;
+  return "—";
+}
+
+const IMAGE_PATH_RE = /\.(jpe?g|png|webp|gif|avif|bmp)$/i;
+
+function isImagePath(filePath: string): boolean {
+  return IMAGE_PATH_RE.test(filePath);
+}
+
+function toPinmediaUrl(filePath: string): string {
+  return `pinmedia://${encodeURIComponent(filePath.replace(/\\/g, "/"))}`;
+}
+
+/** Prefer mid-size pinimg URLs in the renderer (originals often fail to load). */
+function previewCoverUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (!/^https?:\/\//i.test(url)) return url;
+  return url
+    .replace(/\/originals\//i, "/474x/")
+    .replace(/\/1200x\//i, "/474x/")
+    .replace(/\/75x75(?:_RS)?\//i, "/474x/");
+}
+
+function coverFromHistory(items: HistoryItem[]): string | undefined {
+  for (const item of items) {
+    if (item.outPath && isImagePath(item.outPath)) return toPinmediaUrl(item.outPath);
+    if (item.originalPath && isImagePath(item.originalPath)) return toPinmediaUrl(item.originalPath);
+  }
+  return undefined;
+}
+
+function mediaKindFromHistory(items: HistoryItem[]): TaskMediaKind | undefined {
+  for (const item of items) {
+    if (item.kind) return item.kind;
+    if (item.outPath && isImagePath(item.outPath)) return "image";
+  }
+  return undefined;
+}
+
+function resolveTaskCoverUrl(url: string, items: HistoryItem[]): string | undefined {
+  return previewCoverUrl(coverFromHistory(items) || coverUrlFromMediaUrl(url));
+}
+
+function mediaKindIcon(
+  row: Pick<TaskRow, "provider" | "mediaKind" | "collection">
+): React.ReactNode {
+  const size = 18;
+  if (row.mediaKind === "audio") return <Music theme="outline" size={size} />;
+  if (row.mediaKind === "image") return <Pic theme="outline" size={size} />;
+  if (row.mediaKind === "video") return <VideoOne theme="outline" size={size} />;
+  if (row.collection) return <FolderClose theme="outline" size={size} />;
+  const provider = (row.provider || "").toLowerCase();
+  if (provider.includes("youtube") || provider.includes("tiktok")) {
+    return <VideoOne theme="outline" size={size} />;
+  }
+  if (provider.includes("pinterest")) return <Pic theme="outline" size={size} />;
+  return <LinkOne theme="outline" size={size} />;
+}
+
+const TaskMediaThumb: React.FC<{
+  coverUrl?: string;
+  row: Pick<TaskRow, "provider" | "mediaKind" | "collection">;
+}> = ({ coverUrl, row }) => {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(coverUrl) && !failed;
+
+  return (
+    <div className="tasks-table__media">
+      {showImage ? (
+        <img
+          className="tasks-table__media-img"
+          src={coverUrl}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="tasks-table__media-icon" aria-hidden>
+          {mediaKindIcon(row)}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
 
@@ -97,6 +231,9 @@ type QueuedJob = {
       quality: YoutubeQuality;
       audioContainer: AudioContainer;
       subtitles: SubtitleMode;
+      saveVideo?: boolean;
+      saveAudio?: boolean;
+      saveThumbnail?: boolean;
     };
   };
 };
@@ -115,10 +252,23 @@ type TaskRow = {
   errors: number;
   provider?: string;
   preset?: string;
+  /** Download format preset (best / mp4 / audio-only). */
+  format?: FormatPreset;
+  /** YouTube max-height target when applicable. */
+  youtubeQuality?: YoutubeQuality;
+  /** Actual stream height (px) when known. */
+  height?: number;
   percent: number;
   downloadedBytes?: number;
   estimateBytes?: number | null;
   etaSec?: number | null;
+  speedBps?: number | null;
+  /** Remote or local preview thumbnail when available. */
+  coverUrl?: string;
+  /** Best-effort media type for icon fallback. */
+  mediaKind?: TaskMediaKind;
+  /** MediaCore job id when paused — Continue resumes instead of restarting. */
+  jobId?: string;
   queued?: boolean;
   /** Board / playlist / profile collection parent. */
   collection?: CollectionKind | null;
@@ -299,6 +449,11 @@ function formatBytes(n: number | null | undefined): string {
   return `${v.toFixed(digits)} ${units[i]}`;
 }
 
+function formatSpeed(bps: number | null | undefined): string {
+  if (bps == null || !Number.isFinite(bps) || bps <= 0) return "";
+  return `${formatBytes(bps)}/s`;
+}
+
 function rowPercent(
   row: Pick<TaskRow, "current" | "total" | "status" | "downloadedBytes" | "estimateBytes">
 ): number {
@@ -330,6 +485,8 @@ const TasksPage: React.FC = () => {
     busy,
     history,
     processUrl,
+    resumeMedia,
+    refresh,
     itemsForPack,
     settings,
     updateSettings,
@@ -337,8 +494,10 @@ const TasksPage: React.FC = () => {
     removePacks,
     cancelDownload,
     pauseDownload,
+    registerQueueSink,
   } = useApp();
   const cardRef = useRef<HTMLDivElement>(null);
+  const queueHydratedRef = useRef(false);
   const [scrollY, setScrollY] = useState(360);
   const [scrollX, setScrollX] = useState(TASKS_TABLE_MIN_X);
   const [selectedKeys, setSelectedKeys] = useState<(string | number)[]>([]);
@@ -371,10 +530,6 @@ const TasksPage: React.FC = () => {
   const [fileBytesByPath, setFileBytesByPath] = useState<Record<string, number>>({});
   const [queue, setQueue] = useState<QueuedJob[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
-  const [resumeOpen, setResumeOpen] = useState(false);
-  const [resumeJobs, setResumeJobs] = useState<
-    Array<{ id: string; url: string; title?: string; percent?: number; checked: boolean }>
-  >([]);
   const stopBatchRef = useRef(false);
   const tableScrollHideRef = useRef<number | null>(null);
   const dragSelectRef = useRef<{
@@ -384,6 +539,8 @@ const TasksPage: React.FC = () => {
     baseKeys: (string | number)[];
   } | null>(null);
   const rowsRef = useRef<TaskRow[]>([]);
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
   const selectedKeysRef = useRef(selectedKeys);
   selectedKeysRef.current = selectedKeys;
 
@@ -394,28 +551,35 @@ const TasksPage: React.FC = () => {
   const pushNotify = settings?.system?.notifyOnDownloadComplete !== false;
 
   useEffect(() => {
-    let cancelled = false;
-    void api.listUnfinishedJobs().then((jobs) => {
-      if (cancelled || !jobs.length) return;
-      const paused = jobs.filter(
-        (j) => j.status === "paused" || j.status === "queued" || j.status === "downloading"
-      );
-      if (!paused.length) return;
-      setResumeJobs(
-        paused.map((j) => ({
-          id: j.id,
-          url: j.url,
-          title: j.title,
-          percent: j.progress?.percent,
-          checked: true,
-        }))
-      );
-      setResumeOpen(true);
+    if (!settings || queueHydratedRef.current) return;
+    queueHydratedRef.current = true;
+    if (settings.pendingQueue?.length) {
+      setQueue(settings.pendingQueue as QueuedJob[]);
+    }
+  }, [settings]);
+
+  useEffect(() => {
+    if (!queueHydratedRef.current) return;
+    void updateSettings({ pendingQueue: queue });
+  }, [queue, updateSettings]);
+
+  useEffect(() => {
+    void (async () => {
+      await api.recoverJobs();
+      await refresh();
+    })();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!settings?.pendingQueue?.length) return;
+    setQueue((prev) => {
+      const byUrl = new Map(prev.map((q) => [q.url, q]));
+      for (const item of settings.pendingQueue) {
+        if (!byUrl.has(item.url)) byUrl.set(item.url, item as QueuedJob);
+      }
+      return [...byUrl.values()].sort((a, b) => a.addedAt - b.addedAt);
     });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [settings?.pendingQueue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -513,6 +677,7 @@ const TasksPage: React.FC = () => {
       const current = p.itemIds.length;
       const total = Math.max(current + p.errorCount, 1);
       const savedBytes = packFileBytes[p.id];
+      const packHistory = history.filter((h) => h.packId === p.id);
       const draft: TaskRow = {
         id: p.id,
         url: p.url,
@@ -527,6 +692,12 @@ const TasksPage: React.FC = () => {
         errors: p.errorCount,
         provider: p.provider,
         preset: p.preset,
+        format: p.format,
+        youtubeQuality: p.youtubeQuality,
+        height: p.height ?? maxHeightFromHistory(packHistory),
+        jobId: p.jobId,
+        coverUrl: resolveTaskCoverUrl(p.url, packHistory),
+        mediaKind: mediaKindFromHistory(packHistory),
         percent: 0,
         downloadedBytes: savedBytes,
         estimateBytes: savedBytes,
@@ -562,10 +733,17 @@ const TasksPage: React.FC = () => {
         errors: prev?.errors ?? 0,
         provider: prev?.provider,
         preset: prev?.preset,
+        format: prev?.format,
+        youtubeQuality: prev?.youtubeQuality,
+        height: prev?.height,
+        jobId: prev?.jobId,
+        coverUrl: prev?.coverUrl,
+        mediaKind: prev?.mediaKind,
         percent: 0,
         downloadedBytes: downloaded,
         estimateBytes: estimate,
         etaSec: t.etaSec,
+        speedBps: t.speedBps,
       };
       next.percent =
         typeof t.percent === "number" && t.status === "running" ? t.percent : rowPercent(next);
@@ -607,7 +785,11 @@ const TasksPage: React.FC = () => {
         percent: 0,
         queued: true,
         preset: q.opts.preset,
+        format: q.opts.format,
+        youtubeQuality: q.opts.youtube.quality,
         collection,
+        coverUrl: resolveTaskCoverUrl(q.url, []),
+        mediaKind: q.opts.format === "audio-only" ? "audio" : undefined,
       });
     }
 
@@ -636,6 +818,11 @@ const TasksPage: React.FC = () => {
             errors: 0,
             provider: h.provider ?? row.provider,
             preset: h.preset ?? row.preset,
+            format: h.format ?? row.format,
+            youtubeQuality: h.youtubeQuality ?? row.youtubeQuality,
+            height: h.height,
+            coverUrl: resolveTaskCoverUrl(h.url || row.url, [h]),
+            mediaKind: h.kind ?? (h.outPath && isImagePath(h.outPath) ? "image" : row.mediaKind),
             percent: 100,
             downloadedBytes: size,
             estimateBytes: size,
@@ -691,6 +878,13 @@ const TasksPage: React.FC = () => {
         case "files":
           cmp = a.files - b.files;
           break;
+        case "height":
+          cmp = (a.height ?? 0) - (b.height ?? 0);
+          break;
+        case "format": {
+          cmp = taskQualityLabel(a).localeCompare(taskQualityLabel(b));
+          break;
+        }
         case "updatedAt":
         default:
           cmp = a.updatedAt - b.updatedAt;
@@ -878,7 +1072,9 @@ const TasksPage: React.FC = () => {
       return;
     }
     for (const r of list) {
-      if (r.status === "queued" || r.queued) {
+      if (r.status === "partial" && r.jobId) {
+        await resumeMedia(r.jobId);
+      } else if (r.status === "queued" || r.queued) {
         const queued = queue.find((q) => q.id === r.id);
         setQueue((prev) => prev.filter((q) => q.id !== r.id));
         await processUrl(r.url, queued?.opts);
@@ -941,29 +1137,30 @@ const TasksPage: React.FC = () => {
     [rows]
   );
 
-  const startLabel =
-    unfinishedRows.some((r) => r.status === "failed" || r.status === "partial") ||
-    (unfinishedRows.length > 0 && rows.some((r) => r.status === "done"))
-      ? "Continue"
-      : "Start";
+  const failedRows = useMemo(
+    () => unfinishedRows.filter((r) => r.status === "failed"),
+    [unfinishedRows]
+  );
+
+  const completedRows = useMemo(
+    () => rows.filter((r) => !r.isChild && r.id !== "pending" && r.status === "done"),
+    [rows]
+  );
 
   const pauseDownloads = async () => {
     stopBatchRef.current = true;
     const ok = await pauseDownload();
-    Message.info(ok ? "Paused — press Continue to resume" : "No active download");
+    Message.info(ok ? "Paused — press Start to resume" : "No active download");
   };
 
   const cancelActiveDownload = async () => {
     stopBatchRef.current = true;
     const ok = await cancelDownload();
-    Message.info(ok ? "Cancelled" : "No active download");
+    Message.info(ok ? "Stopped" : "No active download");
   };
 
-  const startOrContinueDownloads = async () => {
-    if (isProcessing || batchRunning) {
-      await pauseDownloads();
-      return;
-    }
+  const startDownloads = async () => {
+    if (isProcessing || batchRunning) return;
     const jobs = unfinishedRows;
     if (jobs.length === 0) {
       Message.info("Nothing left to download.");
@@ -972,58 +1169,102 @@ const TasksPage: React.FC = () => {
     stopBatchRef.current = false;
     setBatchRunning(true);
     setSelectedKeys([]);
+
+    const defaultOpts: QueuedJob["opts"] = {
+      enhance: settings?.enhance ?? true,
+      format: settings?.format ?? "best",
+      preset: settings?.preset ?? "auto",
+      outDir: settings?.outDir ?? "",
+      youtube: {
+        quality: settings?.youtube?.quality ?? "best",
+        audioContainer: settings?.youtube?.audioContainer ?? "m4a",
+        subtitles: settings?.youtube?.subtitles ?? "separate",
+        saveVideo: settings?.youtube?.saveVideo !== false,
+        saveAudio: settings?.youtube?.saveAudio !== false,
+        saveThumbnail: settings?.youtube?.saveThumbnail !== false,
+      },
+    };
+
+    const runDownloadJob = async (job: TaskRow): Promise<"done" | "stopped"> => {
+      if (stopBatchRef.current) return "stopped";
+
+      if (job.status === "queued" || job.queued) {
+        const queued = queueRef.current.find((q) => q.id === job.id);
+        setQueue((prev) => prev.filter((q) => q.id !== job.id && q.url !== job.url));
+        const res = await processUrl(job.url, { ...(queued?.opts ?? defaultOpts), notify: false });
+        if (stopBatchRef.current || res?.errors.some((e) => /stopped|paused/i.test(e.error))) {
+          if (stopBatchRef.current && job.url) {
+            setQueue((prev) => {
+              if (prev.some((q) => q.url === job.url)) return prev;
+              return [
+                ...prev,
+                {
+                  id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  url: job.url,
+                  addedAt: Date.now(),
+                  opts: queued?.opts ?? defaultOpts,
+                },
+              ];
+            });
+          }
+          return "stopped";
+        }
+        return "done";
+      }
+
+      if (job.status === "partial" && job.jobId) {
+        const res = await resumeMedia(job.jobId, { notify: false });
+        if (stopBatchRef.current || res?.errors.some((e) => /stopped|paused/i.test(e.error))) {
+          return "stopped";
+        }
+        return "done";
+      }
+
+      const res = await processUrl(job.url, { notify: false });
+      if (stopBatchRef.current || res?.errors.some((e) => /stopped|paused/i.test(e.error))) {
+        return "stopped";
+      }
+      return "done";
+    };
+
     let stopped = false;
     let doneCount = 0;
+    const maxParallel = Math.max(1, Math.min(3, settings?.maxParallelDownloads ?? 2));
+    let cursor = 0;
+
     try {
-      for (const job of jobs) {
-        if (stopBatchRef.current) {
-          stopped = true;
-          break;
+      const worker = async () => {
+        while (cursor < jobs.length) {
+          if (stopBatchRef.current) {
+            stopped = true;
+            break;
+          }
+          const job = jobs[cursor++]!;
+          const outcome = await runDownloadJob(job);
+          if (outcome === "stopped") stopped = true;
+          else doneCount += 1;
         }
-        if (job.status === "queued" || job.queued) {
-          const queued = queue.find((q) => q.id === job.id);
-          setQueue((prev) => prev.filter((q) => q.id !== job.id && q.url !== job.url));
-          const res = await processUrl(job.url, queued?.opts);
-          if (stopBatchRef.current || res?.errors.some((e) => /stopped/i.test(e.error))) {
-            stopped = true;
-            // Re-queue remaining if stopped mid-item
-            if (stopBatchRef.current && job.url) {
-              setQueue((prev) => {
-                if (prev.some((q) => q.url === job.url)) return prev;
-                return [
-                  ...prev,
-                  {
-                    id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                    url: job.url,
-                    addedAt: Date.now(),
-                    opts: queued?.opts ?? {
-                      enhance: settings?.enhance ?? true,
-                      format: settings?.format ?? "best",
-                      preset: settings?.preset ?? "auto",
-                      outDir: settings?.outDir ?? "",
-                      youtube: {
-                        quality: settings?.youtube?.quality ?? "best",
-                        audioContainer: settings?.youtube?.audioContainer ?? "m4a",
-                        subtitles: settings?.youtube?.subtitles ?? "separate",
-                      },
-                    },
-                  },
-                ];
-              });
-            }
-            break;
-          }
-          doneCount += 1;
-        } else {
-          const res = await processUrl(job.url);
-          if (stopBatchRef.current || res?.errors.some((e) => /stopped/i.test(e.error))) {
-            stopped = true;
-            break;
-          }
-          doneCount += 1;
+      };
+
+      await Promise.all(Array.from({ length: Math.min(maxParallel, jobs.length) }, () => worker()));
+
+      if (
+        pushNotify &&
+        !stopped &&
+        doneCount > 0 &&
+        settings?.system?.notifications &&
+        typeof Notification !== "undefined"
+      ) {
+        try {
+          new Notification("Pinforge", {
+            body: doneCount === 1 ? "Download finished" : `${doneCount} downloads finished`,
+          });
+        } catch {
+          /* denied */
         }
       }
-      if (stopped) Message.info("Stopped — press Continue to resume");
+
+      if (stopped) Message.info("Stopped — press Start to resume");
       else Message.success(doneCount ? "Downloads finished" : "Nothing to download");
     } finally {
       setBatchRunning(false);
@@ -1031,28 +1272,93 @@ const TasksPage: React.FC = () => {
     }
   };
 
-  const toggleStartStop = () => {
-    if (isProcessing || batchRunning) void pauseDownloads();
-    else void startOrContinueDownloads();
-  };
-
-  const resumeSelectedJobs = async () => {
-    const selected = resumeJobs.filter((j) => j.checked);
-    setResumeOpen(false);
-    if (!selected.length) return;
-    stopBatchRef.current = false;
-    setBatchRunning(true);
-    try {
-      for (const job of selected) {
-        if (stopBatchRef.current) break;
-        await api.resumeJob(job.id);
-        await processUrl(job.url);
-      }
-      Message.success("Resume finished");
-    } finally {
-      setBatchRunning(false);
+  const retryFailedDownloads = async () => {
+    if (failedRows.length === 0) {
+      Message.info("No failed downloads to retry.");
+      return;
+    }
+    for (const r of failedRows) {
+      await processUrl(r.url);
     }
   };
+
+  const removeCompletedDownloads = async () => {
+    if (completedRows.length === 0) {
+      Message.info("No completed downloads to remove.");
+      return;
+    }
+    await removeFromList(completedRows);
+  };
+
+  const moveQueueItem = (id: string, dir: -1 | 1) => {
+    setQueue((prev) => {
+      const i = prev.findIndex((q) => q.id === id);
+      if (i < 0) return prev;
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j]!, next[i]!];
+      return next;
+    });
+  };
+
+  const addUrlsToQueue = useCallback(
+    (urls: string[], opts?: QueuedJob["opts"], source: "manual" | "clipboard" = "manual") => {
+      const outDir = opts?.outDir ?? settings?.outDir;
+      if (!outDir) {
+        Message.warning("Set a download folder first.");
+        return;
+      }
+      const jobOpts: QueuedJob["opts"] =
+        opts ??
+        ({
+          enhance: settings?.enhance ?? true,
+          format: settings?.format ?? "best",
+          preset: settings?.preset ?? "auto",
+          outDir,
+          youtube: {
+            quality: settings?.youtube?.quality ?? "best",
+            audioContainer: settings?.youtube?.audioContainer ?? "m4a",
+            subtitles: settings?.youtube?.subtitles ?? "separate",
+          },
+        } satisfies QueuedJob["opts"]);
+      const packUrls = new Set(packs.map((p) => p.url));
+      const existing = new Set([...queueRef.current.map((q) => q.url), ...packUrls]);
+      const nextJobs: QueuedJob[] = [];
+      for (const url of urls) {
+        if (existing.has(url)) continue;
+        existing.add(url);
+        nextJobs.push({
+          id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          url,
+          addedAt: Date.now(),
+          opts: jobOpts,
+        });
+      }
+      if (nextJobs.length === 0) {
+        Message.info(
+          source === "clipboard" ? "Link already in queue." : "Those links are already in the list."
+        );
+        return;
+      }
+      setQueue((prev) => [...prev, ...nextJobs]);
+      Message.success(
+        source === "clipboard"
+          ? nextJobs.length === 1
+            ? "Grabbed link from clipboard — press Start"
+            : `Grabbed ${nextJobs.length} links from clipboard — press Start`
+          : nextJobs.length === 1
+            ? "Added to queue — press Start to download"
+            : `Queued ${nextJobs.length} links — press Start to download`
+      );
+    },
+    [settings, packs]
+  );
+
+  useEffect(() => {
+    registerQueueSink((urls) => addUrlsToQueue(urls, undefined, "clipboard"));
+    return () => registerQueueSink(null);
+  }, [registerQueueSink, addUrlsToQueue]);
 
   const submitAddTask = () => {
     const urls = extractUrls(addText);
@@ -1065,39 +1371,21 @@ const TasksPage: React.FC = () => {
       Message.warning("Set a download folder first.");
       return;
     }
-    const opts = {
-      enhance: addEnhance,
-      format: addFormat,
-      preset: addPreset,
-      outDir,
-      youtube: {
-        quality: addYtQuality,
-        audioContainer: addAudio,
-        subtitles: addSubs,
-      },
-    };
-    const existing = new Set([...queue.map((q) => q.url), ...packs.map((p) => p.url)]);
-    const nextJobs: QueuedJob[] = [];
-    for (const url of urls) {
-      if (existing.has(url)) continue;
-      existing.add(url);
-      nextJobs.push({
-        id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        url,
-        addedAt: Date.now(),
-        opts,
-      });
-    }
     closeAddModal();
-    if (nextJobs.length === 0) {
-      Message.info("Those links are already in the list.");
-      return;
-    }
-    setQueue((prev) => [...prev, ...nextJobs]);
-    Message.success(
-      nextJobs.length === 1
-        ? "Added to queue — press Start to download"
-        : `Queued ${nextJobs.length} links — press Start to download`
+    addUrlsToQueue(
+      urls,
+      {
+        enhance: addEnhance,
+        format: addFormat,
+        preset: addPreset,
+        outDir,
+        youtube: {
+          quality: addYtQuality,
+          audioContainer: addAudio,
+          subtitles: addSubs,
+        },
+      },
+      "manual"
     );
   };
 
@@ -1170,6 +1458,24 @@ const TasksPage: React.FC = () => {
           disabled={row.id === "pending"}
           onChange={(checked) => toggleRowSelected(row.id, checked)}
           onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    },
+    {
+      title: "",
+      width: 52,
+      align: "center",
+      className: "tasks-table__col-media",
+      headerCellStyle: { padding: "10px 4px" },
+      bodyCellStyle: { padding: "10px 4px" },
+      render: (_col, row) => (
+        <TaskMediaThumb
+          coverUrl={row.coverUrl}
+          row={{
+            provider: row.provider,
+            mediaKind: row.mediaKind,
+            collection: row.collection,
+          }}
         />
       ),
     },
@@ -1273,6 +1579,26 @@ const TasksPage: React.FC = () => {
       },
     },
     {
+      title: "Quality",
+      dataIndex: "format",
+      width: 88,
+      sorter: true,
+      ellipsis: true,
+      render: (_col, row) => (
+        <span className="text-12px text-t-secondary tabular-nums">{taskQualityLabel(row)}</span>
+      ),
+    },
+    {
+      title: "Resolution",
+      dataIndex: "height",
+      width: 88,
+      sorter: true,
+      align: "right",
+      render: (_col, row) => (
+        <span className="text-12px text-t-secondary tabular-nums">{taskResolutionLabel(row)}</span>
+      ),
+    },
+    {
       title: "Prog.",
       dataIndex: "percent",
       width: 112,
@@ -1290,6 +1616,10 @@ const TasksPage: React.FC = () => {
               ? `${row.percent}%`
               : row.status === "running"
                 ? `${row.current}/${row.total}${
+                    typeof row.speedBps === "number" && row.speedBps > 0
+                      ? ` · ${formatSpeed(row.speedBps)}`
+                      : ""
+                  }${
                     typeof row.etaSec === "number" && row.etaSec > 0
                       ? ` · ${row.etaSec < 60 ? `${row.etaSec}s` : `${Math.ceil(row.etaSec / 60)}m`}`
                       : ""
@@ -1416,8 +1746,32 @@ const TasksPage: React.FC = () => {
         const canOpen = (row.files > 0 || row.isChild) && row.status !== "running";
         const canRetry =
           !row.isChild && canRetryStatus(row.status) && Boolean(row.url && row.url !== "…");
+        const isQueued = row.status === "queued" || row.queued;
+        const queueIndex = isQueued ? queue.findIndex((q) => q.id === row.id) : -1;
         return (
           <div className="tasks-table__actions flex items-center justify-end gap-2px">
+            {isQueued && queueIndex >= 0 && (
+              <>
+                <Tooltip content="Move up">
+                  <Button
+                    type="text"
+                    size="mini"
+                    disabled={queueIndex === 0}
+                    icon={<Up theme="outline" size="14" />}
+                    onClick={() => moveQueueItem(row.id, -1)}
+                  />
+                </Tooltip>
+                <Tooltip content="Move down">
+                  <Button
+                    type="text"
+                    size="mini"
+                    disabled={queueIndex >= queue.length - 1}
+                    icon={<Down theme="outline" size="14" />}
+                    onClick={() => moveQueueItem(row.id, 1)}
+                  />
+                </Tooltip>
+              </>
+            )}
             {canOpen && (
               <Tooltip content="Reveal in folder">
                 <Button
@@ -1429,12 +1783,18 @@ const TasksPage: React.FC = () => {
               </Tooltip>
             )}
             {canRetry && (
-              <Tooltip content="Retry download">
+              <Tooltip
+                content={row.status === "partial" && row.jobId ? "Resume" : "Retry download"}
+              >
                 <Button
                   type="text"
                   size="mini"
                   icon={<Redo theme="outline" size="14" />}
-                  onClick={() => void processUrl(row.url)}
+                  onClick={() =>
+                    void (row.status === "partial" && row.jobId
+                      ? resumeMedia(row.jobId)
+                      : processUrl(row.url))
+                  }
                 />
               </Tooltip>
             )}
@@ -1591,82 +1951,51 @@ const TasksPage: React.FC = () => {
               <>
                 <Tooltip
                   content={
-                    isProcessing || batchRunning
-                      ? "Pause current download — Continue resumes from checkpoint"
-                      : unfinishedRows.length === 0
-                        ? "Add links that are not downloaded yet"
-                        : `${startLabel} ${unfinishedRows.length} unfinished download${unfinishedRows.length === 1 ? "" : "s"}`
+                    unfinishedRows.length === 0
+                      ? "Add links that are not downloaded yet"
+                      : `Start ${unfinishedRows.length} unfinished download${unfinishedRows.length === 1 ? "" : "s"}`
                   }
                 >
                   <Button
                     className="tasks-header-btn"
                     size="small"
-                    type={isProcessing || batchRunning ? "outline" : "primary"}
-                    icon={
-                      isProcessing || batchRunning ? (
-                        <Pause theme="outline" size="14" />
-                      ) : (
-                        <PlayOne theme="outline" size="14" />
-                      )
-                    }
-                    disabled={!(isProcessing || batchRunning) && unfinishedRows.length === 0}
-                    onClick={toggleStartStop}
-                    aria-label={isProcessing || batchRunning ? "Pause" : startLabel}
+                    type="primary"
+                    icon={<PlayOne theme="outline" size="14" />}
+                    disabled={isProcessing || batchRunning || unfinishedRows.length === 0}
+                    onClick={() => void startDownloads()}
+                    aria-label="Start downloads"
                   >
-                    <span className="tasks-header-btn__label">
-                      {isProcessing || batchRunning ? "Pause" : startLabel}
-                    </span>
+                    <span className="tasks-header-btn__label">Start</span>
                   </Button>
                 </Tooltip>
-                {isProcessing || batchRunning ? (
-                  <Tooltip content="Cancel current download (keep partial files)">
-                    <Button
-                      className="tasks-header-btn"
-                      size="small"
-                      type="outline"
-                      status="danger"
-                      icon={<Close theme="outline" size="14" />}
-                      onClick={() => void cancelActiveDownload()}
-                      aria-label="Cancel"
-                    >
-                      <span className="tasks-header-btn__label">Cancel</span>
-                    </Button>
-                  </Tooltip>
-                ) : null}
-                <Tooltip content={pushNotify ? "Push notify: on" : "Push notify: off"}>
+                <Tooltip content="Pause active downloads">
                   <Button
                     className="tasks-header-btn"
                     size="small"
-                    type={pushNotify ? "primary" : "outline"}
-                    icon={<Remind theme="outline" size="14" />}
-                    onClick={() =>
-                      void updateSettings({
-                        system: {
-                          ...(settings?.system ?? {}),
-                          notifyOnDownloadComplete: !pushNotify,
-                        },
-                      })
-                    }
-                    aria-label="Push notifications"
-                    aria-pressed={pushNotify}
+                    type="outline"
+                    icon={<Pause theme="outline" size="14" />}
+                    disabled={!(isProcessing || batchRunning)}
+                    onClick={() => void pauseDownloads()}
+                    aria-label="Pause downloads"
                   >
-                    <span className="tasks-header-btn__label">Push</span>
+                    <span className="tasks-header-btn__label">Pause</span>
                   </Button>
                 </Tooltip>
-                <Tooltip content="Clear task list">
+                <Tooltip content="Stop active downloads (keeps partial files)">
                   <Button
                     className="tasks-header-btn"
                     size="small"
                     type="outline"
                     status="danger"
-                    icon={<Clear theme="outline" size="14" />}
-                    disabled={busy || rows.length === 0}
-                    onClick={confirmClearList}
-                    aria-label="Clear task list"
+                    icon={<Close theme="outline" size="14" />}
+                    disabled={!(isProcessing || batchRunning)}
+                    onClick={() => void cancelActiveDownload()}
+                    aria-label="Stop downloads"
                   >
-                    <span className="tasks-header-btn__label">Clear list</span>
+                    <span className="tasks-header-btn__label">Stop</span>
                   </Button>
                 </Tooltip>
+                <span className="tasks-header-sep" aria-hidden />
                 <Tooltip content="Add links to queue">
                   <Button
                     className="tasks-header-btn"
@@ -1678,6 +2007,46 @@ const TasksPage: React.FC = () => {
                     aria-label="Add links"
                   >
                     <span className="tasks-header-btn__label">Add</span>
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Retry all failed downloads">
+                  <Button
+                    className="tasks-header-btn"
+                    size="small"
+                    type="outline"
+                    icon={<Redo theme="outline" size="14" />}
+                    disabled={busy || failedRows.length === 0}
+                    onClick={() => void retryFailedDownloads()}
+                    aria-label="Retry failed"
+                  >
+                    <span className="tasks-header-btn__label">Retry failed</span>
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Remove completed downloads from list">
+                  <Button
+                    className="tasks-header-btn"
+                    size="small"
+                    type="outline"
+                    icon={<Delete theme="outline" size="14" />}
+                    disabled={busy || completedRows.length === 0}
+                    onClick={() => void removeCompletedDownloads()}
+                    aria-label="Remove completed"
+                  >
+                    <span className="tasks-header-btn__label">Remove done</span>
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Clear entire task list">
+                  <Button
+                    className="tasks-header-btn"
+                    size="small"
+                    type="outline"
+                    status="danger"
+                    icon={<Clear theme="outline" size="14" />}
+                    disabled={busy || rows.length === 0}
+                    onClick={confirmClearList}
+                    aria-label="Clear task list"
+                  >
+                    <span className="tasks-header-btn__label">Clear list</span>
                   </Button>
                 </Tooltip>
               </>
@@ -1936,44 +2305,6 @@ const TasksPage: React.FC = () => {
 
           <div className="tasks-add-modal__note">
             Links are queued here — press Start on the Tasks page to download.
-          </div>
-        </div>
-      </AionModal>
-
-      <AionModal
-        title="Resume downloads?"
-        visible={resumeOpen}
-        onCancel={() => setResumeOpen(false)}
-        onOk={() => void resumeSelectedJobs()}
-        okText="Resume Selected"
-        cancelText="Not now"
-        style={{ width: 480 }}
-      >
-        <div className="flex flex-col gap-12px">
-          <div className="text-13px text-t-secondary">
-            {resumeJobs.length} unfinished download
-            {resumeJobs.length === 1 ? "" : "s"} found after restart.
-          </div>
-          <div className="flex flex-col gap-8px max-h-280px overflow-auto">
-            {resumeJobs.map((j) => (
-              <label
-                key={j.id}
-                className="flex items-center gap-10px text-13px text-t-primary cursor-pointer"
-              >
-                <Checkbox
-                  checked={j.checked}
-                  onChange={(checked) =>
-                    setResumeJobs((prev) =>
-                      prev.map((x) => (x.id === j.id ? { ...x, checked: Boolean(checked) } : x))
-                    )
-                  }
-                />
-                <span className="flex-1 truncate">
-                  {j.title || j.url}
-                  {typeof j.percent === "number" ? ` — ${Math.round(j.percent)}%` : ""}
-                </span>
-              </label>
-            ))}
           </div>
         </div>
       </AionModal>

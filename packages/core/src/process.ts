@@ -27,26 +27,43 @@ import {
   resolveYouTubePlaylist,
   resolveTikTokProfile,
   extractTikTok,
+  fragmentConcurrencyForQuality,
+  qualityFromFormat,
   type MediaProvider,
 } from "@pinforge/providers";
 import { resolveYouTubeVideo } from "@pinforge/providers/youtube/service";
-import { sanitizeFilename, sleep } from "@pinforge/types";
+import { packFolderName, resolveMediaFileBase, sanitizeFilename, sleep } from "@pinforge/types";
+import type { NamingTemplates } from "@pinforge/types";
 import { mapPool } from "@pinforge/download";
 import { zipFolder } from "./zip/folderZip";
 
 export type { ProcessBoardOptions };
 
+function resolveFragmentConcurrency(opts: ProcessBoardOptions): number {
+  if (typeof opts.fragmentConcurrency === "number" && opts.fragmentConcurrency > 0) {
+    return opts.fragmentConcurrency;
+  }
+  const quality = qualityFromFormat(opts.format ?? "best", opts.youtube?.quality);
+  return fragmentConcurrencyForQuality(quality);
+}
+
 async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promise<ProcessResult> {
   await fs.mkdir(opts.outDir, { recursive: true });
 
+  const downloadMeta = {
+    height: media.height,
+    format: opts.format,
+    youtubeQuality: opts.youtube?.quality,
+  };
+
   const enhance = opts.enhance !== false && media.kind === "image" && media.buffer;
   const idPart = media.id ? sanitizeFilename(media.id) : "";
-  const titlePart = sanitizeFilename(
-    media.title?.trim() || (idPart ? media.provider : `${media.provider}-${Date.now()}`)
-  );
-  // Stable name when id known → resume / duplicate skip
-  const base = idPart ? sanitizeFilename(`${titlePart}-${idPart}`.slice(0, 180)) : titlePart;
   const stamp = idPart ? "" : `-${Date.now()}`;
+  const base = resolveMediaFileBase(media, {
+    naming: opts.naming,
+    quality: opts.youtube?.quality,
+    stamp,
+  });
 
   const exists = async (p: string) => {
     try {
@@ -75,6 +92,7 @@ async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promis
         provider: media.provider,
         kind: media.kind,
         skipped: true,
+        ...downloadMeta,
       };
     }
     let originalPath: string | undefined;
@@ -92,6 +110,7 @@ async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promis
       title: media.title,
       provider: media.provider,
       kind: media.kind,
+      ...downloadMeta,
     };
   }
 
@@ -106,6 +125,7 @@ async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promis
         title: media.title,
         provider: media.provider,
         kind: media.kind,
+        ...downloadMeta,
       };
     }
     const dest = path.join(opts.outDir, `${base}${stamp}.${media.ext}`);
@@ -117,6 +137,7 @@ async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promis
         provider: media.provider,
         kind: media.kind,
         skipped: true,
+        ...downloadMeta,
       };
     }
     await fs.copyFile(media.filePath, dest);
@@ -126,6 +147,7 @@ async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promis
       title: media.title,
       provider: media.provider,
       kind: media.kind,
+      ...downloadMeta,
     };
   }
 
@@ -141,6 +163,7 @@ async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promis
       provider: media.provider,
       kind: media.kind,
       skipped: true,
+      ...downloadMeta,
     };
   }
   await fs.writeFile(outPath, buffer);
@@ -150,12 +173,44 @@ async function writeResolved(media: ResolvedMedia, opts: ProcessOptions): Promis
     title: media.title,
     provider: media.provider,
     kind: media.kind,
+    ...downloadMeta,
   };
 }
 
 type ItemOutcome =
   | { ok: true; index: number; result: ProcessResult; url: string }
   | { ok: false; index: number; error: string; url: string };
+
+function isUnder(filePath: string, root: string): boolean {
+  const target = path.resolve(filePath);
+  const base = path.resolve(root);
+  return target === base || target.startsWith(base + path.sep);
+}
+
+/**
+ * Where the files of one download should land: a dedicated folder when the
+ * download yields several files, otherwise the shared output directory.
+ * Files a provider already wrote into `outDir` stay put — moving them would
+ * duplicate what is on disk.
+ */
+export function outDirForItems(
+  outDir: string,
+  items: { title?: string; id?: string; provider?: string; filePath?: string }[],
+  packFolders?: boolean,
+  naming?: NamingTemplates
+): string {
+  if (packFolders === false || items.length < 2) return outDir;
+  if (items.some((item) => item.filePath && isUnder(item.filePath, outDir))) return outDir;
+  const first = items[0];
+  if (!first) return outDir;
+  return path.join(
+    outDir,
+    packFolderName(
+      { title: first.title, id: first.id, provider: first.provider },
+      naming?.folderName
+    )
+  );
+}
 
 /**
  * Detect provider → resolve → save (enhance images when enabled).
@@ -189,9 +244,11 @@ export async function processMedia(
     format: opts.format,
     outDir: opts.outDir,
     extractorUrl: opts.extractorUrl,
-    fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+    fragmentConcurrency: resolveFragmentConcurrency(opts),
     signal: opts.signal,
     youtube: opts.youtube,
+    packFolders: opts.packFolders,
+    naming: opts.naming,
     onByteProgress: (p) => {
       const percent =
         p.total && p.total > 0
@@ -220,9 +277,11 @@ export async function processMedia(
       percent: 0,
     });
   }
+  const outDir = outDirForItems(opts.outDir, list, opts.packFolders, opts.naming);
+  const itemOpts = outDir === opts.outDir ? opts : { ...opts, outDir };
   const outcomes = await mapPool(list, itemConcurrency, async (item, i) => {
     try {
-      const result = await writeResolved(item, opts);
+      const result = await writeResolved(item, itemOpts);
       const outcome: ItemOutcome = { ok: true, index: i, result, url: item.sourceUrl };
       opts.onProgress?.({
         current: i + 1,
@@ -292,21 +351,19 @@ async function processPinterestBoard(
       const meta = pinMeta.get(pinUrl);
       const assetOrList = await resolvePin(pinUrl);
       const assets = Array.isArray(assetOrList) ? assetOrList : [assetOrList];
+      const media = assets.map((asset) => ({
+        kind: asset.kind ?? ("image" as const),
+        buffer: asset.buffer,
+        ext: asset.ext,
+        sourceUrl: asset.sourceUrl,
+        title: asset.title || meta?.title,
+        provider: providerId,
+        id: asset.pinId || meta?.pinId,
+      }));
+      const pinDir = outDirForItems(outDir, media, opts.packFolders, opts.naming);
       const written = [];
-      for (const asset of assets) {
-        const result = await writeResolved(
-          {
-            kind: asset.kind ?? "image",
-            buffer: asset.buffer,
-            ext: asset.ext,
-            sourceUrl: asset.sourceUrl,
-            title: asset.title || meta?.title,
-            provider: providerId,
-            id: asset.pinId || meta?.pinId,
-          },
-          { ...opts, outDir }
-        );
-        written.push(result);
+      for (const item of media) {
+        written.push(await writeResolved(item, { ...opts, outDir: pinDir }));
       }
       const result = written[written.length - 1]!;
       opts.onProgress?.({
@@ -399,7 +456,9 @@ async function processYouTubeChannel(
         youtube: opts.youtube,
         outDir,
         extractorUrl: opts.extractorUrl,
-        fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+        fragmentConcurrency: resolveFragmentConcurrency(opts),
+        packFolders: opts.packFolders,
+    naming: opts.naming,
         signal: opts.signal,
         onByteProgress: (p) => {
           const percent =
@@ -494,7 +553,9 @@ async function processYouTubePlaylist(
         youtube: opts.youtube,
         outDir,
         extractorUrl: opts.extractorUrl,
-        fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+        fragmentConcurrency: resolveFragmentConcurrency(opts),
+        packFolders: opts.packFolders,
+    naming: opts.naming,
         signal: opts.signal,
         onByteProgress: (p) => {
           const percent =
@@ -583,13 +644,14 @@ async function processTikTokProfile(
     opts.signal?.throwIfAborted?.();
     try {
       const mediaOrList = await extractTikTok(video.url, opts.format ?? "best", {
-        fragmentConcurrency: opts.fragmentConcurrency ?? 4,
+        fragmentConcurrency: resolveFragmentConcurrency(opts),
         signal: opts.signal,
       });
       const list = Array.isArray(mediaOrList) ? mediaOrList : [mediaOrList];
+      const postDir = outDirForItems(outDir, list, opts.packFolders, opts.naming);
       const written: ProcessResult[] = [];
       for (const media of list) {
-        written.push(await writeResolved(media, { ...opts, outDir }));
+        written.push(await writeResolved(media, { ...opts, outDir: postDir }));
       }
       const result = written[written.length - 1]!;
       opts.onProgress?.({

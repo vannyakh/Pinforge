@@ -1,6 +1,7 @@
 import type {
   DownloadMode,
   FormatPreset,
+  NamingTemplates,
   ProviderId,
   ResolvedMedia,
   YoutubeDownloadOptions,
@@ -13,6 +14,10 @@ export interface ResolveContext {
   /** Piped-compatible API base for YouTube (optional). */
   extractorUrl?: string;
   fragmentConcurrency?: number;
+  /** Keep a download that writes several files in its own folder (default true). */
+  packFolders?: boolean;
+  /** Custom file / folder name templates. */
+  naming?: NamingTemplates;
   signal?: AbortSignal;
   youtube?: YoutubeDownloadOptions;
   /** Byte-level download progress (YouTube / fragment downloads). */

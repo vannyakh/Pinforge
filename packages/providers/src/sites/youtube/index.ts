@@ -46,6 +46,8 @@ export const youtubeProvider: MediaProvider = {
       outDir: ctx?.outDir,
       extractorUrl: ctx?.extractorUrl,
       fragmentConcurrency: ctx?.fragmentConcurrency,
+      packFolders: ctx?.packFolders,
+      naming: ctx?.naming,
       signal: ctx?.signal,
       onByteProgress: ctx?.onByteProgress,
     }),

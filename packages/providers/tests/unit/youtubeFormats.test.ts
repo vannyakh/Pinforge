@@ -6,6 +6,7 @@ import {
   pickDashPair,
   pickProgressive,
   qualityCap,
+  streamDownloadOptionsForQuality,
   youtubeQualityChoices,
   type YtStreamFormat,
 } from "../../src/sites/youtube/formats.ts";
@@ -57,11 +58,27 @@ describe("fragmentConcurrencyForQuality", () => {
   });
 
   it("bumps concurrency for best and 1080p+", () => {
-    assert.equal(fragmentConcurrencyForQuality("best"), 6);
+    assert.equal(fragmentConcurrencyForQuality("best"), 8);
+    assert.equal(fragmentConcurrencyForQuality("2160"), 8);
     assert.equal(fragmentConcurrencyForQuality("1080"), 6);
-    assert.equal(fragmentConcurrencyForQuality("2160"), 6);
     assert.equal(fragmentConcurrencyForQuality("720"), 4);
     assert.equal(fragmentConcurrencyForQuality("360"), 4);
+  });
+});
+
+describe("streamDownloadOptionsForQuality", () => {
+  it("uses larger fragments for high quality targets", () => {
+    const best = streamDownloadOptionsForQuality("best");
+    assert.equal(best.concurrency, 8);
+    assert.equal(best.fragmentSize, 10 * 1024 * 1024);
+
+    const hd = streamDownloadOptionsForQuality("1080");
+    assert.equal(hd.concurrency, 6);
+    assert.equal(hd.fragmentSize, 8 * 1024 * 1024);
+
+    const sd = streamDownloadOptionsForQuality("360");
+    assert.equal(sd.concurrency, 4);
+    assert.equal(sd.fragmentSize, 4 * 1024 * 1024);
   });
 });
 

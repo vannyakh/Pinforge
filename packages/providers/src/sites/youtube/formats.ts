@@ -84,10 +84,35 @@ export function youtubeQualityChoices(availableHeights?: number[]): YoutubeQuali
 /** Default fragment concurrency for a quality target (higher for 1080p+ / best). */
 export function fragmentConcurrencyForQuality(quality: YoutubeQuality, override?: number): number {
   if (typeof override === "number" && override > 0) return override;
-  if (quality === "best") return 6;
+  if (quality === "best") return 8;
   const cap = qualityCap(quality);
+  if (cap != null && cap >= 2160) return 8;
   if (cap != null && cap >= 1080) return 6;
   return 4;
+}
+
+export type YtStreamDownloadOptions = {
+  concurrency: number;
+  /** Bytes per HTTP Range fragment (default scales with quality). */
+  fragmentSize: number;
+  /** Min file size before multi-fragment mode kicks in. */
+  minSizeForFragments: number;
+};
+
+/** Parallel Range segment settings tuned for YouTube adaptive streams. */
+export function streamDownloadOptionsForQuality(
+  quality: YoutubeQuality,
+  overrideConcurrency?: number
+): YtStreamDownloadOptions {
+  const concurrency = fragmentConcurrencyForQuality(quality, overrideConcurrency);
+  const cap = qualityCap(quality);
+  const high = quality === "best" || (cap != null && cap >= 1080);
+  const ultra = quality === "best" || (cap != null && cap >= 2160);
+  return {
+    concurrency,
+    fragmentSize: ultra ? 10 * 1024 * 1024 : high ? 8 * 1024 * 1024 : 4 * 1024 * 1024,
+    minSizeForFragments: high ? 512 * 1024 : 2 * 1024 * 1024,
+  };
 }
 
 export function pickAudioOnly(

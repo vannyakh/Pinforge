@@ -1,7 +1,20 @@
-import React from "react";
-import { Input, InputNumber, Select, Switch } from "@arco-design/web-react";
+import React, { useMemo } from "react";
+import { Button, Input, InputNumber, Select, Switch } from "@arco-design/web-react";
 import { useApp } from "@renderer/hooks/context/AppContext";
 import type { FormatPreset, PresetName, YoutubeQuality } from "@renderer/api";
+import { DEFAULT_NAMING_TEMPLATES, NAMING_TEMPLATE_VARIABLES, renderNamingTemplate } from "@pinforge/core/types";
+
+const NAMING_PREVIEW_VARS = {
+  title: "My Video Title",
+  id: "dQw4w9WgXcQ",
+  provider: "youtube",
+  channel: "Artist Name",
+  ext: "mp4",
+  date: "2024-06-01",
+  quality: "1080",
+  height: "1080",
+  index: 1,
+};
 
 const Row: React.FC<{
   title: string;
@@ -30,6 +43,18 @@ const FEATURE_ITEMS = [
 const DownloadSettings: React.FC = () => {
   const { settings, updateSettings } = useApp();
   if (!settings) return null;
+
+  const fileTemplate = settings.naming?.fileName ?? DEFAULT_NAMING_TEMPLATES.fileName;
+  const folderTemplate = settings.naming?.folderName ?? DEFAULT_NAMING_TEMPLATES.folderName;
+
+  const filePreview = useMemo(
+    () => renderNamingTemplate(fileTemplate, NAMING_PREVIEW_VARS),
+    [fileTemplate]
+  );
+  const folderPreview = useMemo(
+    () => renderNamingTemplate(folderTemplate, NAMING_PREVIEW_VARS),
+    [folderTemplate]
+  );
 
   return (
     <div className="max-w-640px w-full">
@@ -106,6 +131,115 @@ const DownloadSettings: React.FC = () => {
             onChange={(v) => void updateSettings({ autoDownload: v })}
           />
         </Row>
+        <Row
+          title="Clipboard link grabber"
+          description="While Pinforge is focused, copy a media URL and it is added to the Tasks queue automatically (JDownloader-style)."
+        >
+          <Switch
+            checked={Boolean(settings.clipboardMonitor)}
+            onChange={(v) => void updateSettings({ clipboardMonitor: v })}
+          />
+        </Row>
+        <Row
+          title="Grab links in background"
+          description="When clipboard monitor is on, also capture URLs while Pinforge is unfocused and append them to the Tasks queue."
+        >
+          <Switch
+            checked={Boolean(settings.clipboardMonitorBackground)}
+            disabled={!settings.clipboardMonitor}
+            onChange={(v) => void updateSettings({ clipboardMonitorBackground: v })}
+          />
+        </Row>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">Parallel downloads</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            How many pack-level downloads Tasks runs at once (1–3). Boards and playlists still
+            download items inside each pack with their own concurrency.
+          </div>
+          <Select
+            className="w-full"
+            value={String(settings.maxParallelDownloads ?? 2)}
+            onChange={(v) => void updateSettings({ maxParallelDownloads: Number(v) })}
+          >
+            <Select.Option value="1">1 — one at a time</Select.Option>
+            <Select.Option value="2">2 — recommended</Select.Option>
+            <Select.Option value="3">3 — fastest</Select.Option>
+          </Select>
+        </div>
+        <Row
+          title="Folder per download"
+          description="Each download gets its own folder — videos with separate audio or subtitles, carousels, and multi-file posts stay grouped instead of loose in the download directory."
+        >
+          <Switch
+            checked={settings.packFolders !== false}
+            onChange={(v) => void updateSettings({ packFolders: v })}
+          />
+        </Row>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">File name template</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            Output filename without extension. Use {"{key}"} placeholders — preview updates below.
+          </div>
+          <Input
+            className="w-full"
+            value={fileTemplate}
+            placeholder={DEFAULT_NAMING_TEMPLATES.fileName}
+            onChange={(v) => void updateSettings({ naming: { fileName: v } })}
+          />
+          <div className="text-12px text-t-tertiary mt-6px font-mono">
+            Preview: {filePreview}.mp4
+          </div>
+        </div>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">Folder name template</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            Used when folder per download is on. Same {"{key}"} syntax as filenames.
+          </div>
+          <Input
+            className="w-full"
+            value={folderTemplate}
+            placeholder={DEFAULT_NAMING_TEMPLATES.folderName}
+            onChange={(v) => void updateSettings({ naming: { folderName: v } })}
+          />
+          <div className="text-12px text-t-tertiary mt-6px font-mono">Preview: {folderPreview}/</div>
+        </div>
+        <div className="py-14px border-b border-b-base">
+          <div className="text-14px text-t-primary mb-4px">Template variables</div>
+          <div className="text-12px text-t-tertiary mb-8px">
+            Click to copy a placeholder into your template.
+          </div>
+          <div className="flex flex-wrap gap-6px">
+            {NAMING_TEMPLATE_VARIABLES.map((v) => (
+              <Button
+                key={v.key}
+                size="mini"
+                type="outline"
+                title={v.description}
+                onClick={() => {
+                  void navigator.clipboard.writeText(`{${v.key}}`).catch(() => undefined);
+                }}
+              >
+                {`{${v.key}}`}
+              </Button>
+            ))}
+          </div>
+          <div className="mt-10px">
+            <Button
+              size="mini"
+              type="text"
+              onClick={() =>
+                void updateSettings({
+                  naming: {
+                    fileName: DEFAULT_NAMING_TEMPLATES.fileName,
+                    folderName: DEFAULT_NAMING_TEMPLATES.folderName,
+                  },
+                })
+              }
+            >
+              Reset naming to default
+            </Button>
+          </div>
+        </div>
         <div className="py-14px border-b border-b-base">
           <div className="text-14px text-t-primary mb-4px">Default video format</div>
           <div className="text-12px text-t-tertiary mb-8px">

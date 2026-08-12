@@ -93,7 +93,15 @@ export {
   DEFAULT_ENHANCE_FEATURES,
   DEFAULT_YOUTUBE_OPTIONS,
   DEFAULT_PINTEREST_OPTIONS,
+  DEFAULT_NAMING_TEMPLATES,
+  NAMING_TEMPLATE_VARIABLES,
 } from "@pinforge/types";
+export {
+  renderNamingTemplate,
+  resolveMediaFileBase,
+  packFolderName,
+} from "@pinforge/types";
+export type { NamingTemplates, NamingTemplateKey } from "@pinforge/types";
 export { cleanUrl, uniqHttpUrls, uniqStrings, isHttpUrl } from "@pinforge/common";
 export type {
   PresetName,

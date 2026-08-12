@@ -6,6 +6,7 @@ import { app } from "electron";
 import { join } from "node:path";
 import { configureMediaCore, getMediaCore, type MediaCore } from "@pinforge/core/engine";
 import type { DownloadJob } from "@pinforge/core/jobs";
+import { syncRecoveredJobsToPacks } from "./jobRecovery";
 
 let configured = false;
 
@@ -22,5 +23,7 @@ export function ensureMediaCore(): MediaCore {
 export async function recoverJobsOnStartup(): Promise<DownloadJob[]> {
   const core = ensureMediaCore();
   await core.init();
-  return core.recover();
+  const recovered = await core.recover();
+  syncRecoveredJobsToPacks(recovered);
+  return recovered;
 }

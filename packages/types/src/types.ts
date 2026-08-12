@@ -31,6 +31,46 @@ export type ProviderId =
 
 export type FormatPreset = "best" | "mp4" | "audio-only";
 
+/** Placeholder keys for file / folder name templates (Settings → Download). */
+export type NamingTemplateKey =
+  | "title"
+  | "id"
+  | "provider"
+  | "channel"
+  | "ext"
+  | "date"
+  | "quality"
+  | "height"
+  | "index";
+
+export interface NamingTemplates {
+  /** Output filename without extension. Default `{title}-{id}`. */
+  fileName?: string;
+  /** Pack folder name when folder-per-download is on. Default `{title}-{id}`. */
+  folderName?: string;
+}
+
+export const DEFAULT_NAMING_TEMPLATES: Required<NamingTemplates> = {
+  fileName: "{title}-{id}",
+  folderName: "{title}-{id}",
+};
+
+export const NAMING_TEMPLATE_VARIABLES: ReadonlyArray<{
+  key: NamingTemplateKey;
+  label: string;
+  description: string;
+}> = [
+  { key: "title", label: "Title", description: "Video or post title" },
+  { key: "id", label: "ID", description: "Source id (video id, pin id, …)" },
+  { key: "provider", label: "Provider", description: "Site id (youtube, pinterest, …)" },
+  { key: "channel", label: "Channel", description: "Uploader or channel name" },
+  { key: "ext", label: "Ext", description: "File extension (filenames only)" },
+  { key: "date", label: "Date", description: "Upload date or today (YYYY-MM-DD)" },
+  { key: "quality", label: "Quality", description: "YouTube quality target (best, 1080, …)" },
+  { key: "height", label: "Height", description: "Stream height in px when known" },
+  { key: "index", label: "Index", description: "1-based index in a batch" },
+];
+
 export type FeatureSupport = "yes" | "limited" | "no";
 
 export type PlatformFeature =
@@ -137,6 +177,13 @@ export interface ProcessOptions {
   itemConcurrency?: number;
   /** Parallel Range fragments per file (default 4). */
   fragmentConcurrency?: number;
+  /**
+   * Put downloads that produce several files (carousels, photo posts, videos
+   * with subtitle/audio/thumbnail sidecars) in their own folder (default true).
+   */
+  packFolders?: boolean;
+  /** Custom file and folder name templates ({title}, {id}, …). */
+  naming?: NamingTemplates;
   signal?: AbortSignal;
 }
 
@@ -203,6 +250,12 @@ export interface ProcessResult {
   kind?: MediaKind;
   /** True when file already existed and download was skipped. */
   skipped?: boolean;
+  /** Output stream height (px) when known (e.g. YouTube adaptive pick). */
+  height?: number;
+  /** Format preset used for this download. */
+  format?: FormatPreset;
+  /** YouTube max-height target when applicable. */
+  youtubeQuality?: YoutubeQuality;
 }
 
 export interface DownloadResult {

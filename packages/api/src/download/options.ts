@@ -11,11 +11,13 @@ export interface NormalizeDownloadOptionsInput {
    */
   preset?: PresetName | "off" | "false" | string;
   extractorUrl?: string;
+  /** Group multi-file downloads in their own folder (default true). */
+  packFolders?: boolean;
 }
 
 export type NormalizedDownloadOptions = Pick<
   ProcessBoardOptions,
-  "outDir" | "preset" | "enhance" | "format" | "extractorUrl"
+  "outDir" | "preset" | "enhance" | "format" | "extractorUrl" | "packFolders"
 >;
 
 const FORMAT_PRESETS: FormatPreset[] = ["best", "mp4", "audio-only"];
@@ -46,5 +48,6 @@ export function normalizeDownloadOptions(
     enhance: input.enhance !== undefined ? Boolean(input.enhance) && !enhanceOff : !enhanceOff,
     format: asFormatPreset(input.format),
     extractorUrl: input.extractorUrl,
+    packFolders: input.packFolders !== false,
   };
 }

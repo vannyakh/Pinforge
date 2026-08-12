@@ -7,28 +7,24 @@ import {
   type ResolvedMedia,
   type YoutubeDownloadOptions,
 } from "@pinforge/types";
-import { sanitizeFilename } from "@pinforge/types";
+import type { NamingTemplates } from "@pinforge/types";
+import { resolveMediaFileBase, sanitizeFilename } from "@pinforge/types";
+import { resolveYoutubePackDir } from "../packDir";
 import { fetchBinary, toResolved } from "@pinforge/download";
 import { extractYouTubeId } from "../extract";
 import {
   audioOutputExt,
-  extFromMime,
-  heightFromLabel,
-  pickAudioOnly,
-  pickDashPair,
-  pickProgressive,
   qualityFromFormat,
   fragmentConcurrencyForQuality,
-  qualityCap,
 } from "../formats";
 import {
   convertAudio,
   embedMetadata,
-  muxAv,
   requireFfmpegMessage,
   resolveFfmpeg,
 } from "../../../media/mux";
 import { downloadUrlToFile, pickCaption, writeCaptionFile } from "./download";
+import { downloadYouTubeStreams } from "./adaptive";
 import { resolveInnertubeMeta, type VideoMeta } from "./meta";
 
 export { previewYouTubeVideo } from "./meta";
@@ -39,6 +35,10 @@ export type YoutubeResolveOpts = {
   youtube?: YoutubeDownloadOptions;
   outDir?: string;
   fragmentConcurrency?: number;
+  /** Put the video and its sidecar files in their own folder (default true). */
+  packFolders?: boolean;
+  /** Custom file / folder name templates. */
+  naming?: NamingTemplates;
   signal?: AbortSignal;
   /** Legacy Piped/Invidious fallback base. */
   extractorUrl?: string;
@@ -62,7 +62,6 @@ export async function resolveYouTubeVideo(
   const audioOnly = format === "audio-only";
   /** Prefer MP4 output container; stream pick always ranks by height for quality. */
   const preferMp4Out = format === "mp4";
-  const preferMp4 = format === "mp4" && quality !== "best";
 
   let meta: VideoMeta;
   try {
@@ -88,14 +87,11 @@ export async function resolveYouTubeVideo(
       : (opts.outDir ?? workRoot);
   if (opts.outDir) await fs.mkdir(channelDir, { recursive: true });
 
-  // Stable names so Stop → Continue can resume the same .part paths
-  const baseName = sanitizeFilename(`${meta.title}-${id}`.slice(0, 180));
+  // Stable names so Stop → Continue can resume the same .part paths (temp only)
+  const tmpBase = sanitizeFilename(`${meta.title}-${id}`.slice(0, 120));
   const tmpDir = path.join(workRoot, ".yt-tmp", id);
   await fs.mkdir(tmpDir, { recursive: true });
 
-  const headersAcceptVideo = "video/mp4,video/webm,video/*,*/*;q=0.8";
-  const headersAcceptAudio = "audio/*,*/*;q=0.8";
-  const concurrency = fragmentConcurrencyForQuality(quality, opts.fragmentConcurrency);
   const resume = ytOpts.resume;
   const onProg = opts.onByteProgress;
 
@@ -114,21 +110,21 @@ export async function resolveYouTubeVideo(
 
   try {
     if (audioOnly) {
-      const audio = pickAudioOnly(meta.formats, preferMp4 || ytOpts.audioContainer === "m4a");
-      if (!audio?.url) throw new Error("No audio stream available");
-      const srcExt = extFromMime(audio.mime_type) || "m4a";
-      const rawPath = path.join(tmpDir, `audio.${srcExt}`);
-      await downloadUrlToFile(audio.url, rawPath, {
-        concurrency,
-        signal: opts.signal,
+      const audioResult = await downloadYouTubeStreams({
+        formats: meta.formats,
+        quality,
+        format,
+        tmpDir,
+        fragmentConcurrency: opts.fragmentConcurrency,
         resume,
-        accept: headersAcceptAudio,
+        signal: opts.signal,
         onProgress: onProg,
       });
-
       const want = ytOpts.audioContainer;
       outExt = audioOutputExt(want);
+      const rawPath = audioResult.mediaPath;
       mediaPath = path.join(tmpDir, `out.${outExt}`);
+      const srcExt = path.extname(rawPath).slice(1) || "m4a";
       if (want === "m4a" && (srcExt === "m4a" || srcExt === "mp4")) {
         await fs.copyFile(rawPath, mediaPath);
       } else {
@@ -138,111 +134,24 @@ export async function resolveYouTubeVideo(
         await convertAudio(rawPath, mediaPath, want);
       }
     } else {
-      // Prefer highest adaptive (DASH) streams; mp4 preference only affects container ranking.
-      const dashPreferMp4 = preferMp4;
-      const dash = pickDashPair(meta.formats, quality, dashPreferMp4);
-      const ff = await resolveFfmpeg();
-      const cap = qualityCap(quality);
-      const needsHighQuality = quality === "best" || (cap != null && cap >= 1080);
-
-      if (dash?.video.url && dash.audio.url) {
-        if (!ff) {
-          throw new Error(
-            `${requireFfmpegMessage()} High-quality YouTube needs ffmpeg to merge video + audio streams.`
-          );
-        }
-        const vExt = extFromMime(dash.video.mime_type) || "mp4";
-        const aExt = extFromMime(dash.audio.mime_type) || "m4a";
-        const vPath = path.join(tmpDir, `video.${vExt}`);
-        const aPath = path.join(tmpDir, `audio.${aExt}`);
-        selectedHeight = heightFromLabel(dash.video.quality_label, dash.video.height) || undefined;
-        onProg?.({
-          downloaded: 0,
-          total: null,
-          phase: "download",
-        });
-        let vTotal: number | null = null;
-        let aTotal: number | null = null;
-        let vDone = 0;
-        let aDone = 0;
-        const emitDash = () => {
-          const total =
-            vTotal != null && aTotal != null
-              ? vTotal + aTotal
-              : vTotal != null
-                ? vTotal * 1.25
-                : null;
-          const downloaded = vDone + aDone;
-          onProg?.({ downloaded, total, phase: "download" });
-        };
-        await Promise.all([
-          downloadUrlToFile(dash.video.url, vPath, {
-            concurrency,
-            signal: opts.signal,
-            resume,
-            accept: headersAcceptVideo,
-            onProgress: (p) => {
-              vDone = p.downloaded;
-              vTotal = p.total;
-              emitDash();
-            },
-          }),
-          downloadUrlToFile(dash.audio.url, aPath, {
-            concurrency,
-            signal: opts.signal,
-            resume,
-            accept: headersAcceptAudio,
-            onProgress: (p) => {
-              aDone = p.downloaded;
-              aTotal = p.total;
-              emitDash();
-            },
-          }),
-        ]);
-        dashAudioPath = aPath;
-        dashAudioExt = aExt;
-        outExt =
-          preferMp4Out || vExt === "mp4"
-            ? "mp4"
-            : vExt === "webm" && aExt === "webm"
-              ? "webm"
-              : "mp4";
-        mediaPath = path.join(tmpDir, `merged.${outExt}`);
-        onProg?.({
-          downloaded: (vTotal ?? vDone) + (aTotal ?? aDone),
-          total: (vTotal ?? vDone) + (aTotal ?? aDone),
-          phase: "mux",
-        });
-        if (wantsVideo) {
-          await muxAv(vPath, aPath, mediaPath);
-        } else {
-          // Audio-sidecar-only path still needs a primary file for process pipeline.
-          mediaPath = aPath;
-          outExt = aExt;
-          kind = "audio";
-        }
-      } else {
-        if (needsHighQuality && !ff) {
-          throw new Error(
-            `${requireFfmpegMessage()} No progressive stream matches ${quality === "best" ? "best" : `${quality}p`}; install ffmpeg for DASH.`
-          );
-        }
-        const progressive = pickProgressive(meta.formats, quality, preferMp4);
-        if (!progressive?.url) {
-          throw new Error("No matching video stream");
-        }
-        selectedHeight =
-          heightFromLabel(progressive.quality_label, progressive.height) || undefined;
-        outExt = extFromMime(progressive.mime_type) || "mp4";
-        mediaPath = path.join(tmpDir, `progressive.${outExt}`);
-        await downloadUrlToFile(progressive.url, mediaPath, {
-          concurrency,
-          signal: opts.signal,
-          resume,
-          accept: headersAcceptVideo,
-          onProgress: onProg,
-        });
-      }
+      const streamResult = await downloadYouTubeStreams({
+        formats: meta.formats,
+        quality,
+        format,
+        tmpDir,
+        preferMp4Out,
+        wantsVideo,
+        fragmentConcurrency: opts.fragmentConcurrency,
+        resume,
+        signal: opts.signal,
+        onProgress: onProg,
+      });
+      mediaPath = streamResult.mediaPath;
+      outExt = streamResult.outExt;
+      kind = streamResult.kind;
+      selectedHeight = streamResult.selectedHeight;
+      dashAudioPath = streamResult.dashAudioPath;
+      dashAudioExt = streamResult.dashAudioExt;
     }
 
     const subtitlePaths: string[] = [];
@@ -250,7 +159,7 @@ export async function resolveYouTubeVideo(
     if (ytOpts.subtitles !== "none" && meta.captions.length) {
       const track = pickCaption(meta.captions, ytOpts.subtitleLang);
       if (track) {
-        const capBase = path.join(tmpDir, baseName);
+        const capBase = path.join(tmpDir, tmpBase);
         const capPath = await writeCaptionFile(track, capBase, opts.signal);
         if (capPath) {
           if (ytOpts.subtitles === "embed") embedSub = capPath;
@@ -274,7 +183,26 @@ export async function resolveYouTubeVideo(
       }
     }
 
-    const finalDir = channelDir;
+    const baseName = resolveMediaFileBase(
+      {
+        title: meta.title,
+        id,
+        provider: "youtube",
+        channel: meta.channel,
+        ext: outExt,
+        height: selectedHeight,
+        date: meta.uploadDate,
+      },
+      { naming: opts.naming, quality }
+    );
+
+    const finalDir = resolveYoutubePackDir({
+      packFolders: opts.packFolders,
+      channelDir,
+      title: meta.title,
+      videoId: id,
+      folderTemplate: opts.naming?.folderName,
+    });
     await fs.mkdir(finalDir, { recursive: true });
     let finalPath = path.join(finalDir, `${baseName}.${outExt}`);
 
@@ -364,6 +292,7 @@ export async function resolveYouTubeVideo(
       sourceUrl: url,
       title: meta.title,
       provider: "youtube",
+      id,
       channel: meta.channel,
       subtitlePaths: savedSubs,
       audioPath: savedAudioPath,

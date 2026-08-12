@@ -13,6 +13,7 @@ import type {
   RemoteConfig,
   RemoteChannelConfig,
   CloudflareTunnelConfig,
+  RemoteRuntimeStatus,
   SystemConfig,
   CustomProviderConfig,
   FormatPluginConfig,
@@ -28,6 +29,7 @@ import type {
   DiskSpaceInfo,
   SystemResourcesInfo,
   PinterestOptions,
+  NamingTemplates,
   ProviderPrefs,
   RegistryListItem,
   InstalledProviderView,
@@ -36,6 +38,7 @@ import type {
   DownloadJob,
   JobStatus,
   JobProgress,
+  PendingQueueJob,
 } from "../../preload/index";
 
 export type {
@@ -53,6 +56,7 @@ export type {
   RemoteConfig,
   RemoteChannelConfig,
   CloudflareTunnelConfig,
+  RemoteRuntimeStatus,
   SystemConfig,
   CustomProviderConfig,
   FormatPluginConfig,
@@ -68,6 +72,7 @@ export type {
   DiskSpaceInfo,
   SystemResourcesInfo,
   PinterestOptions,
+  NamingTemplates,
   ProviderPrefs,
   RegistryListItem,
   InstalledProviderView,
@@ -76,6 +81,7 @@ export type {
   DownloadJob,
   JobStatus,
   JobProgress,
+  PendingQueueJob,
 };
 
 export const api = {
@@ -90,7 +96,10 @@ export const api = {
     features?: Partial<EnhanceFeatures>;
     youtube?: Partial<YoutubeDownloadOptions>;
     pinterest?: Partial<PinterestOptions>;
+    packFolders?: boolean;
+    naming?: Partial<NamingTemplates>;
   }) => window.api.processMedia(payload),
+  resumeMedia: (jobId: string) => window.api.resumeMedia(jobId),
   cancelMedia: () => window.api.cancelMedia(),
   processPin: (url: string, preset: PresetName, outDir: string) =>
     window.api.processPin(url, preset, outDir),
@@ -136,6 +145,9 @@ export const api = {
     window.api.upsertRemoteChannel(channel),
   testRemoteChannel: (payload: { id: string; botToken?: string; webhookUrl?: string }) =>
     window.api.testRemoteChannel(payload),
+  getRemoteRuntimeStatus: () => window.api.getRemoteRuntimeStatus(),
+  onRemoteRuntimeChanged: (cb: (status: RemoteRuntimeStatus) => void) =>
+    window.api.onRemoteRuntimeChanged(cb),
   showItemInFolder: (filePath: string) => window.api.showItemInFolder(filePath),
   openPath: (filePath: string) => window.api.openPath(filePath),
   openExternal: (url: string) => window.api.openExternal(url),
@@ -145,6 +157,8 @@ export const api = {
   zipFolder: (folderPath: string, outZipPath?: string) =>
     window.api.zipFolder(folderPath, outZipPath),
   onMediaProgress: (cb: (event: MediaProgressEvent) => void) => window.api.onMediaProgress(cb),
+  onClipboardUrls: (cb: (payload: { urls: string[] }) => void) => window.api.onClipboardUrls(cb),
+  onQueueUpdated: (cb: (payload: { added: number }) => void) => window.api.onQueueUpdated(cb),
   ffmpegStatus: () => window.api.ffmpegStatus(),
   ffmpegInstall: () => window.api.ffmpegInstall(),
   ffmpegPick: () => window.api.ffmpegPick(),
