@@ -50,6 +50,14 @@ export interface MetaPostResult {
   message: string;
 }
 
+export type MetaPublishTimingMode = "now" | "schedule";
+
+/** When mode is `schedule`, `scheduledPublishTime` is required (Unix seconds, UTC). */
+export interface MetaPublishTiming {
+  mode: MetaPublishTimingMode;
+  scheduledPublishTime?: number;
+}
+
 export type MetaPostType = "text" | "photo" | "video" | "video_carousel";
 
 export type MetaCarouselSlideKind = "video" | "photo";
@@ -92,9 +100,60 @@ export interface MetaPagePostSummary {
   isPublished?: boolean;
   isCarousel?: boolean;
   attachmentCount?: number;
+  /** Summary counts from Graph API post object. */
+  reactionCount?: number;
+  commentCount?: number;
+  shareCount?: number;
 }
 
 export interface MetaPagePostsPage {
   posts: MetaPagePostSummary[];
   nextCursor?: string;
+}
+
+export interface MetaPostInsightMetrics {
+  impressions?: number;
+  reach?: number;
+  engaged?: number;
+  clicks?: number;
+  reactions?: number;
+  comments?: number;
+  shares?: number;
+  likes?: number;
+  loves?: number;
+  videoViews?: number;
+}
+
+export interface MetaPostInsight {
+  postId: string;
+  ok: boolean;
+  message?: string;
+  metrics?: MetaPostInsightMetrics;
+}
+
+export interface MetaSharePostItemResult {
+  postId: string;
+  pageId: string;
+  pageName?: string;
+  ok: boolean;
+  message: string;
+  newPostId?: string;
+}
+
+export interface MetaSharePostsResult {
+  ok: boolean;
+  message: string;
+  results: MetaSharePostItemResult[];
+}
+
+export interface MetaDeletePostItemResult {
+  postId: string;
+  ok: boolean;
+  message: string;
+}
+
+export interface MetaDeletePostsResult {
+  ok: boolean;
+  message: string;
+  results: MetaDeletePostItemResult[];
 }

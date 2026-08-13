@@ -70,13 +70,16 @@ import { testTelegramToken, normalizeTelegramToken } from "./channels/telegram";
 import {
   disconnectMetaPublish,
   getMetaPublishPublic,
+  getMetaPostInsights,
   listMetaPages,
   listMetaPageVideos,
   listMetaPagePosts,
   postToMetaPage,
   selectMetaPage,
   setMetaAppConfig,
+  shareMetaPostsToPages,
   startMetaConnect,
+  deleteMetaPagePosts,
 } from "./services/metaPublish";
 
 type ActiveRun = { abort: AbortController; jobId: string; packId: string };
@@ -1450,6 +1453,27 @@ export function registerIpc(): void {
     async (_e, opts?: { limit?: number; after?: string }) => listMetaPagePosts(opts)
   );
 
+  ipcMain.handle("publish:meta:getPostInsights", async (_e, postIds: string[]) =>
+    getMetaPostInsights(Array.isArray(postIds) ? postIds : [])
+  );
+
+  ipcMain.handle(
+    "publish:meta:sharePostsToPages",
+    async (
+      _e,
+      payload: {
+        postIds: string[];
+        targetPageIds: string[];
+        posts?: Array<{ id: string; message?: string; permalinkUrl?: string }>;
+        shareMessage?: string;
+      }
+    ) => shareMetaPostsToPages(payload)
+  );
+
+  ipcMain.handle("publish:meta:deletePagePosts", async (_e, postIds: string[]) =>
+    deleteMetaPagePosts(Array.isArray(postIds) ? postIds : [])
+  );
+
   ipcMain.handle(
     "publish:meta:post",
     async (
@@ -1462,6 +1486,7 @@ export function registerIpc(): void {
         link?: string;
         videoIds?: string[];
         carouselSlides?: import("../common/publish/types").MetaCarouselSlide[];
+        timing?: import("../common/publish/types").MetaPublishTiming;
       }
     ) => postToMetaPage(payload)
   );

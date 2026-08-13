@@ -44,10 +44,16 @@ import type {
   PendingQueueJob,
   MetaPostResult,
   MetaPostType,
+  MetaPublishTiming,
+  MetaPublishTimingMode,
   MetaCarouselSlide,
   MetaPageVideoSummary,
   MetaPagePostSummary,
   MetaPagePostsPage,
+  MetaPostInsight,
+  MetaPostInsightMetrics,
+  MetaSharePostsResult,
+  MetaDeletePostsResult,
   MetaPublishPublic,
   MetaPageSummary,
 } from "../../preload/index";
@@ -98,10 +104,16 @@ export type {
   PendingQueueJob,
   MetaPostResult,
   MetaPostType,
+  MetaPublishTiming,
+  MetaPublishTimingMode,
   MetaCarouselSlide,
   MetaPageVideoSummary,
   MetaPagePostSummary,
   MetaPagePostsPage,
+  MetaPostInsight,
+  MetaPostInsightMetrics,
+  MetaSharePostsResult,
+  MetaDeletePostsResult,
   MetaPublishPublic,
   MetaPageSummary,
 } from "../../preload/index";
@@ -185,6 +197,14 @@ export const api = {
   listMetaPageVideos: (limit?: number) => window.api.listMetaPageVideos(limit),
   listMetaPagePosts: (opts?: { limit?: number; after?: string }) =>
     window.api.listMetaPagePosts(opts),
+  getMetaPostInsights: (postIds: string[]) => window.api.getMetaPostInsights(postIds),
+  shareMetaPostsToPages: (payload: {
+    postIds: string[];
+    targetPageIds: string[];
+    posts?: Array<{ id: string; message?: string; permalinkUrl?: string }>;
+    shareMessage?: string;
+  }) => window.api.shareMetaPostsToPages(payload),
+  deleteMetaPagePosts: (postIds: string[]) => window.api.deleteMetaPagePosts(postIds),
   selectMetaPage: (payload: { pageId: string; pageName?: string }) =>
     window.api.selectMetaPage(payload),
   postToMetaPage: (payload: {
@@ -195,6 +215,7 @@ export const api = {
     link?: string;
     videoIds?: string[];
     carouselSlides?: MetaCarouselSlide[];
+    timing?: MetaPublishTiming;
   }) => window.api.postToMetaPage(payload),
   pickMediaFile: () => window.api.pickMediaFile(),
   pickMediaFiles: () => window.api.pickMediaFiles(),

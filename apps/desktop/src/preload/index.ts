@@ -446,6 +446,13 @@ export interface MetaPostResult {
 
 export type MetaPostType = "text" | "photo" | "video" | "video_carousel";
 
+export type MetaPublishTimingMode = "now" | "schedule";
+
+export interface MetaPublishTiming {
+  mode: MetaPublishTimingMode;
+  scheduledPublishTime?: number;
+}
+
 export type MetaCarouselSlideKind = "video" | "photo";
 
 export interface MetaCarouselSlide {
@@ -474,6 +481,56 @@ export interface MetaPagePostSummary {
   isPublished?: boolean;
   isCarousel?: boolean;
   attachmentCount?: number;
+  reactionCount?: number;
+  commentCount?: number;
+  shareCount?: number;
+}
+
+export interface MetaPostInsightMetrics {
+  impressions?: number;
+  reach?: number;
+  engaged?: number;
+  clicks?: number;
+  reactions?: number;
+  comments?: number;
+  shares?: number;
+  likes?: number;
+  loves?: number;
+  videoViews?: number;
+}
+
+export interface MetaPostInsight {
+  postId: string;
+  ok: boolean;
+  message?: string;
+  metrics?: MetaPostInsightMetrics;
+}
+
+export interface MetaSharePostItemResult {
+  postId: string;
+  pageId: string;
+  pageName?: string;
+  ok: boolean;
+  message: string;
+  newPostId?: string;
+}
+
+export interface MetaSharePostsResult {
+  ok: boolean;
+  message: string;
+  results: MetaSharePostItemResult[];
+}
+
+export interface MetaDeletePostItemResult {
+  postId: string;
+  ok: boolean;
+  message: string;
+}
+
+export interface MetaDeletePostsResult {
+  ok: boolean;
+  message: string;
+  results: MetaDeletePostItemResult[];
 }
 
 export interface MetaPageVideoSummary {
@@ -701,6 +758,17 @@ const api = {
     limit?: number;
     after?: string;
   }): Promise<MetaPagePostsPage> => ipcRenderer.invoke("publish:meta:listPagePosts", opts),
+  getMetaPostInsights: (postIds: string[]): Promise<MetaPostInsight[]> =>
+    ipcRenderer.invoke("publish:meta:getPostInsights", postIds),
+  shareMetaPostsToPages: (payload: {
+    postIds: string[];
+    targetPageIds: string[];
+    posts?: Array<{ id: string; message?: string; permalinkUrl?: string }>;
+    shareMessage?: string;
+  }): Promise<MetaSharePostsResult> =>
+    ipcRenderer.invoke("publish:meta:sharePostsToPages", payload),
+  deleteMetaPagePosts: (postIds: string[]): Promise<MetaDeletePostsResult> =>
+    ipcRenderer.invoke("publish:meta:deletePagePosts", postIds),
   selectMetaPage: (payload: {
     pageId: string;
     pageName?: string;
@@ -713,6 +781,7 @@ const api = {
     link?: string;
     videoIds?: string[];
     carouselSlides?: MetaCarouselSlide[];
+    timing?: MetaPublishTiming;
   }): Promise<MetaPostResult> => ipcRenderer.invoke("publish:meta:post", payload),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),

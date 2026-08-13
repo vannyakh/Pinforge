@@ -37,26 +37,22 @@ export function resolveTaskImagePaths(items: HistoryItem[]): string[] {
 }
 
 export function buildPeSlidesFromTaskItems(items: HistoryItem[]): MetaCarouselSlide[] {
-  const videos = resolveTaskVideoPaths(items);
-  const images = resolveTaskImagePaths(items);
-  const slides: MetaCarouselSlide[] = [];
-  for (const filePath of videos) {
-    slides.push({
+  const photoPath = resolveTaskImagePaths(items)[0];
+  const videoPath = resolveTaskVideoPaths(items)[0];
+  return [
+    {
       kind: "video",
-      filePath,
-      name: filePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, ""),
+      filePath: videoPath,
+      name: videoPath?.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, ""),
       description: "Like Page",
-    });
-  }
-  for (const filePath of images) {
-    slides.push({
+    },
+    {
       kind: "photo",
-      filePath,
-      name: filePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, ""),
+      filePath: photoPath,
+      name: photoPath?.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, ""),
       description: "Like Page",
-    });
-  }
-  return slides.slice(0, 5);
+    },
+  ];
 }
 
 export function defaultPostTypeForPath(filePath?: string): MetaPostType {
