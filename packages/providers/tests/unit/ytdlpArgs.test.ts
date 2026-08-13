@@ -54,6 +54,21 @@ describe("buildYtdlpDownloadArgs", () => {
     assert.ok(args.includes("-x"));
     assert.ok(args.includes("--audio-format"));
   });
+
+  it("only passes ffmpeg-location for filesystem paths", () => {
+    const withPath = buildYtdlpDownloadArgs({
+      url: "https://example.com/a",
+      outTemplate: "o.%(ext)s",
+      ffmpegPath: "/usr/local/bin/ffmpeg",
+    });
+    assert.ok(withPath.includes("--ffmpeg-location"));
+    const bare = buildYtdlpDownloadArgs({
+      url: "https://example.com/a",
+      outTemplate: "o.%(ext)s",
+      ffmpegPath: "ffmpeg",
+    });
+    assert.equal(bare.includes("--ffmpeg-location"), false);
+  });
 });
 
 describe("buildYtdlpProbeArgs", () => {

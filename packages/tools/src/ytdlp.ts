@@ -17,7 +17,7 @@ export function clearYtdlpCache(): void {
 }
 
 export function requireYtdlpMessage(): string {
-  return "yt-dlp is not available. Install it in Settings → System, then enable yt-dlp tools.";
+  return "yt-dlp is not available. Install or reinstall it in Settings → System, then enable yt-dlp tools.";
 }
 
 async function probe(bin: string): Promise<boolean> {

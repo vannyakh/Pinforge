@@ -28,13 +28,15 @@ import type { CustomProviderConfig, ProviderPrefs } from "../common/providers/ty
 import { DEFAULT_PROVIDER_PREFS } from "../common/providers/types";
 import {
   DEFAULT_META_PUBLISH,
+  DEFAULT_YOUTUBE_PUBLISH,
   type PublishConfig,
   type MetaPublishConfig,
+  type YouTubePublishConfig,
 } from "../common/publish/types";
 
 export type { RemoteConfig, RemoteChannelConfig, CloudflareTunnelConfig };
 export type { CustomProviderConfig, ProviderPrefs };
-export type { PublishConfig, MetaPublishConfig };
+export type { PublishConfig, MetaPublishConfig, YouTubePublishConfig };
 export type PackStatus = "running" | "done" | "failed" | "partial";
 
 /** Renderer Tasks queue row persisted across restarts. */
@@ -191,7 +193,12 @@ export function getStore(): Store<AppStoreSchema> {
         history: [],
         packs: [],
         remote: DEFAULT_REMOTE,
-        publish: { meta: { ...DEFAULT_META_PUBLISH } },
+        publish: {
+          meta: { ...DEFAULT_META_PUBLISH },
+          youtube: { ...DEFAULT_YOUTUBE_PUBLISH },
+          captionTitleSuggestions: [],
+          hashtagSuggestions: [],
+        },
         system: DEFAULT_SYSTEM,
         customProviders: [],
         providerPrefs: { ...DEFAULT_PROVIDER_PREFS },
@@ -269,13 +276,15 @@ function ensureSystemDefaults(s: Store<AppStoreSchema>): void {
 
 function ensurePublishDefaults(s: Store<AppStoreSchema>): void {
   const publish = s.get("publish");
-  if (!publish?.meta) {
-    s.set("publish", { meta: { ...DEFAULT_META_PUBLISH } });
-    return;
-  }
-  s.set("publish", {
-    meta: { ...DEFAULT_META_PUBLISH, ...publish.meta },
-  });
+  const meta = { ...DEFAULT_META_PUBLISH, ...(publish?.meta ?? {}) };
+  const youtube = { ...DEFAULT_YOUTUBE_PUBLISH, ...(publish?.youtube ?? {}) };
+  const captionTitleSuggestions = Array.isArray(publish?.captionTitleSuggestions)
+    ? publish.captionTitleSuggestions.filter((t): t is string => typeof t === "string")
+    : [];
+  const hashtagSuggestions = Array.isArray(publish?.hashtagSuggestions)
+    ? publish.hashtagSuggestions.filter((t): t is string => typeof t === "string")
+    : [];
+  s.set("publish", { meta, youtube, captionTitleSuggestions, hashtagSuggestions });
 }
 
 function ensureRemoteDefaults(s: Store<AppStoreSchema>): void {

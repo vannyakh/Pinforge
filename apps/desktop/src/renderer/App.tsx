@@ -8,6 +8,7 @@ import DownloadPage from "./pages/download";
 import TasksPage from "./pages/tasks";
 import PostsPage from "./pages/posts";
 import PublishPage from "./pages/publish";
+import YouTubePublishPage from "./pages/publish/youtube";
 import SchedulePage from "./pages/schedule";
 import SettingsPage from "./pages/settings";
 import { AppProvider, useApp } from "./hooks/context/AppContext";
@@ -32,6 +33,7 @@ const AppRoutes: React.FC = () => (
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/posts" element={<PostsPage />} />
           <Route path="/publish" element={<PublishPage />} />
+          <Route path="/publish/youtube" element={<YouTubePublishPage />} />
           <Route path="/schedule" element={<SchedulePage />} />
           <Route path="/settings/*" element={<SettingsPage />} />
           <Route path="*" element={<DownloadPage />} />

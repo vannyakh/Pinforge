@@ -705,7 +705,7 @@ const RemoteSettings: React.FC = () => {
   };
 
   if (!remote) {
-    return <SettingsLoading />;
+    return <SettingsLoading label="Loading remote settings…" />;
   }
 
   const tunnel = remote.tunnel;
@@ -714,7 +714,7 @@ const RemoteSettings: React.FC = () => {
     <SettingsPage width="wide" className="remote-page">
       <SettingsHeader
         title="Remote"
-        description="Connect chatbot agents online. Use a Cloudflare tunnel so bots can reach this app and receive downloaded files."
+        description="Connect chatbot agents online and expose media for Facebook publishing. Use a Cloudflare tunnel so bots and Meta can reach this app over HTTPS."
       />
 
       <Tabs activeTab={tab} onChange={setTab} type="line" className="settings-remote-tabs">

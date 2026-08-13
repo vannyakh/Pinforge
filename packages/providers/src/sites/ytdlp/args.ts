@@ -59,7 +59,8 @@ export function buildYtdlpDownloadArgs(opts: YtdlpDownloadArgOpts): string[] {
   } else if (opts.format === "mp4") {
     args.push("--merge-output-format", "mp4");
   }
-  if (opts.ffmpegPath) {
+  // yt-dlp --ffmpeg-location needs a real filesystem path (dir or binary), not a PATH name.
+  if (opts.ffmpegPath && (opts.ffmpegPath.includes("/") || opts.ffmpegPath.includes("\\"))) {
     args.push("--ffmpeg-location", opts.ffmpegPath);
   }
   return args;

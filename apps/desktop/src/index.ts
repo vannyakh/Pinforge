@@ -18,6 +18,39 @@ import { shutdownRemoteRuntime } from "./process/services/remoteRuntime";
 
 let mainWindow: BrowserWindow | null = null;
 
+function resolvePinmediaFilePath(requestUrl: string): string | null {
+  try {
+    const u = new URL(requestUrl);
+
+    if (/^[a-zA-Z]:$/.test(u.hostname)) {
+      const raw = `${u.hostname}${decodeURI(u.pathname)}`;
+      return process.platform === "win32" ? raw.replace(/\//g, "\\") : raw;
+    }
+
+    if (/^[a-zA-Z]$/.test(u.hostname) && u.pathname.startsWith("/")) {
+      const raw = `${u.hostname}:${decodeURI(u.pathname)}`;
+      return process.platform === "win32" ? raw.replace(/\//g, "\\") : raw.replace(/\\/g, "/");
+    }
+
+    if (!u.hostname || u.hostname === "local") {
+      let path = decodeURI(u.pathname);
+      if (process.platform === "win32") {
+        if (path.startsWith("/")) path = path.slice(1);
+        return path.replace(/\//g, "\\");
+      }
+      return path;
+    }
+
+    let raw = decodeURIComponent(requestUrl.replace(/^pinmedia:\/\//i, ""));
+    raw = raw.replace(/^\/+/, "");
+    if (raw.startsWith("localhost/")) raw = raw.slice("localhost/".length);
+    if (process.platform === "win32") return raw.replace(/\//g, "\\");
+    return raw.startsWith("/") ? raw : `/${raw}`;
+  } catch {
+    return null;
+  }
+}
+
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "pinmedia",
@@ -136,26 +169,8 @@ function createWindow(): void {
 app.whenReady().then(() => {
   protocol.handle("pinmedia", async (request) => {
     try {
-      let raw = decodeURIComponent(request.url.replace(/^pinmedia:\/\//i, ""));
-      raw = raw.replace(/^\/+/, "");
-      if (raw.startsWith("localhost/")) raw = raw.slice("localhost/".length);
-      // Windows: pinmedia://C:/path → host "C:" may be split; rebuild from URL parts
-      try {
-        const u = new URL(request.url);
-        if (/^[a-zA-Z]:$/.test(u.hostname)) {
-          raw = `${u.hostname}${u.pathname}`;
-        }
-      } catch {
-        /* keep raw */
-      }
-      const filePath =
-        process.platform === "win32"
-          ? raw.replace(/\//g, "\\")
-          : raw.startsWith("/")
-            ? raw
-            : `/${raw}`;
-
-      if (!existsSync(filePath)) {
+      const filePath = resolvePinmediaFilePath(request.url);
+      if (!filePath || !existsSync(filePath)) {
         return new Response("", { status: 404, statusText: "Not Found" });
       }
       return net.fetch(pathToFileURL(filePath).href);

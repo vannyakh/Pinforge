@@ -8,6 +8,7 @@ import {
   listRemoteProviders,
   queueRemoteUrls,
 } from "../services/remoteTools";
+import { acceptMetaMediaRequest, serveMetaMediaRequest } from "../services/metaMediaHost";
 
 export type RemoteApiHandlers = {
   onQueueUrls: (urls: string[]) => number;
@@ -91,6 +92,17 @@ async function handleRequest(
       "Access-Control-Allow-Headers": "Content-Type",
     });
     res.end();
+    return;
+  }
+
+  if (method === "GET" && path.startsWith("/api/meta/media/")) {
+    const token = path.slice("/api/meta/media/".length).trim();
+    if (!token || !acceptMetaMediaRequest(req)) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not found");
+      return;
+    }
+    await serveMetaMediaRequest(token, req, res);
     return;
   }
 

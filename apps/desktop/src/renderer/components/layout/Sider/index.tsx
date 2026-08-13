@@ -3,7 +3,7 @@ import classNames from "classnames";
 import { Menu, Tag, Modal, Notification } from "@arco-design/web-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Home,
+  Download,
   Checklist,
   AlarmClock,
   SettingTwo,
@@ -14,7 +14,6 @@ import {
   Message as MessageIcon,
   Delete,
   LoadingFour,
-  Share,
   LinkCloud,
 } from "@icon-park/react";
 import { useThemeContext } from "@renderer/hooks/context/ThemeContext";
@@ -26,6 +25,8 @@ import {
   chatSessionIsBusy,
   useHomeChatStore,
 } from "@renderer/pages/download/homeChatStore";
+import facebookLogo from "@renderer/assets/provider-logos/facebook.svg";
+import youtubeLogo from "@renderer/assets/provider-logos/youtube.svg";
 import siderStyles from "./Sider.module.css";
 
 const MenuItem = Menu.Item;
@@ -43,22 +44,25 @@ const LAST_PATH_KEY = "pinforge:last-non-settings-path";
 function readOpenKeys(): string[] {
   try {
     const raw = localStorage.getItem(OPEN_KEYS_STORAGE);
-    if (!raw) return ["publish"];
+    if (!raw) return ["publish", "youtube"];
     const parsed = JSON.parse(raw) as string[];
-    return Array.isArray(parsed) ? parsed.filter((k) => k === "publish") : ["publish"];
+    return Array.isArray(parsed)
+      ? parsed.filter((k) => k === "publish" || k === "youtube")
+      : ["publish", "youtube"];
   } catch {
-    return ["publish"];
+    return ["publish", "youtube"];
   }
 }
 
 function routeSelectedKey(pathname: string, activeId: string | null): string {
   if (pathname === "/" && activeId) return `recent/${activeId}`;
-  if (pathname === "/" || pathname === "") return "workspace/home";
+  if (pathname === "/" || pathname === "") return "workspace/download";
   if (pathname.startsWith("/tasks")) return "workspace/tasks";
   if (pathname.startsWith("/posts")) return "publish/posts";
+  if (pathname.startsWith("/publish/youtube")) return "youtube/upload";
   if (pathname.startsWith("/publish")) return "publish/create";
   if (pathname.startsWith("/schedule")) return "workspace/schedule";
-  return "workspace/home";
+  return "workspace/download";
 }
 
 const SubMenuTitle: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
@@ -66,6 +70,20 @@ const SubMenuTitle: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon
     <span className="app-sider-menu__title-icon shrink-0">{icon}</span>
     <span className="app-sider-menu__title-text">{label}</span>
   </span>
+);
+
+const ProviderMenuIcon: React.FC<{ src: string; alt: string; size?: number }> = ({
+  src,
+  alt,
+  size = 16,
+}) => (
+  <img
+    src={src}
+    alt={alt}
+    className="shrink-0 object-contain"
+    draggable={false}
+    style={{ width: size, height: size }}
+  />
 );
 
 const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
@@ -95,7 +113,12 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
 
   useEffect(() => {
     if (pathname.startsWith("/posts") || pathname.startsWith("/publish")) {
-      setOpenKeys((prev) => (prev.includes("publish") ? prev : [...prev, "publish"]));
+      setOpenKeys((prev) => {
+        const next = new Set(prev);
+        if (pathname.startsWith("/publish/youtube")) next.add("youtube");
+        else next.add("publish");
+        return [...next];
+      });
     }
   }, [pathname]);
 
@@ -161,13 +184,18 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
     if (key.startsWith("workspace/")) {
       if (key === "workspace/schedule") return;
-      go(key === "workspace/home" ? "/" : `/${key.replace("workspace/", "")}`);
+      go(key === "workspace/download" ? "/" : `/${key.replace("workspace/", "")}`);
       return;
     }
     if (key.startsWith("publish/")) {
       const action = key.replace("publish/", "");
       if (action === "posts") go("/posts");
       else if (action === "create") go("/publish");
+      return;
+    }
+    if (key.startsWith("youtube/")) {
+      if (key === "youtube/upload") go("/publish/youtube");
+      return;
     }
   };
 
@@ -189,15 +217,17 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               selectedKeys={selectedKeys}
               openKeys={openKeys}
               onClickMenuItem={onMenuClick}
-              onClickSubMenu={(_key, keys) => setOpenKeys(keys.filter((k) => k === "publish"))}
+              onClickSubMenu={(_key, keys) =>
+                setOpenKeys(keys.filter((k) => k === "publish" || k === "youtube"))
+              }
             >
               <MenuItem key="section-workspace" disabled className="app-sider-section-label-item">
                 Workspace
               </MenuItem>
-              <MenuItem key="workspace/home">
+              <MenuItem key="workspace/download">
                 <span className="inline-flex items-center gap-8px">
-                  <Home theme="outline" size="16" fill="currentColor" strokeWidth={3} />
-                  Home
+                  <Download theme="outline" size="16" fill="currentColor" strokeWidth={3} />
+                  Download
                 </span>
               </MenuItem>
               <MenuItem key="workspace/tasks">
@@ -235,14 +265,14 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                 key="publish"
                 title={
                   <SubMenuTitle
-                    icon={<Share theme="outline" size="16" fill="currentColor" strokeWidth={3} />}
-                    label="Publish"
+                    icon={<ProviderMenuIcon src={facebookLogo} alt="" size={16} />}
+                    label="Facebook Post"
                   />
                 }
               >
                 <MenuItem key="publish/create">
                   <span className="inline-flex items-center gap-8px">
-                    <Share theme="outline" size="14" fill="currentColor" strokeWidth={3} />
+                    <ProviderMenuIcon src={facebookLogo} alt="" size={14} />
                     Create post
                   </span>
                 </MenuItem>
@@ -250,6 +280,23 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                   <span className="inline-flex items-center gap-8px">
                     <LinkCloud theme="outline" size="14" fill="currentColor" strokeWidth={3} />
                     Page posts
+                  </span>
+                </MenuItem>
+              </SubMenu>
+
+              <SubMenu
+                key="youtube"
+                title={
+                  <SubMenuTitle
+                    icon={<ProviderMenuIcon src={youtubeLogo} alt="" size={16} />}
+                    label="YouTube"
+                  />
+                }
+              >
+                <MenuItem key="youtube/upload">
+                  <span className="inline-flex items-center gap-8px">
+                    <ProviderMenuIcon src={youtubeLogo} alt="" size={14} />
+                    Upload video
                   </span>
                 </MenuItem>
               </SubMenu>

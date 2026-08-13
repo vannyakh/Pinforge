@@ -259,13 +259,19 @@ export const BUILTIN_PROVIDER_META: Record<
     version: "1.0.0",
   },
   facebook: {
-    description: "Public videos, Watch, Reels, and photos from Facebook.",
-    hosts: "facebook.com, fb.watch, fb.com, m.facebook.com",
+    description: "Public videos, Watch, Reels, photos, and profiles (profiles via yt-dlp).",
+    hosts: "facebook.com, web.facebook.com, fb.watch, fb.com, m.facebook.com",
     formats: ["best", "mp4"],
     engine: "http-meta",
-    capabilities: ["video.download", "image.download", "metadata.fetch"],
+    capabilities: [
+      "video.download",
+      "image.download",
+      "profile.download",
+      "metadata.fetch",
+      "batch.download",
+    ],
     category: "social",
-    version: "1.0.0",
+    version: "1.1.0",
   },
   ytdlp: {
     description:

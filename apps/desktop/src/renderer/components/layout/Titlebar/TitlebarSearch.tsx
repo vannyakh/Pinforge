@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@renderer/hooks/context/AppContext";
 
 const PAGES = [
-  { path: "/", label: "Home", hint: "Download composer" },
+  { path: "/", label: "Download", hint: "Download composer" },
   { path: "/tasks", label: "Tasks", hint: "Active & recent jobs" },
   { path: "/schedule", label: "Schedule", hint: "Coming soon" },
   { path: "/settings/system", label: "Settings", hint: "System & environment" },

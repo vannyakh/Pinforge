@@ -27,6 +27,12 @@ files:
   - "!release/**"
   - "!resources/**"
 
+extraResources:
+  - from: resources/thumbnails
+    to: thumbnails
+    filter:
+      - "**/*"
+
 asarUnpack:
   - "**/*.node"
   - "**/sharp/**"

@@ -39,7 +39,11 @@ function bundledYtdlpBin(): string {
 async function probeBinary(bin: string): Promise<{ ok: boolean; version?: string }> {
   if (!bin.trim()) return { ok: false };
   try {
-    if (path.isAbsolute(bin)) await fs.access(bin);
+    if (path.isAbsolute(bin)) {
+      const st = await fs.stat(bin);
+      // Official mac/linux yt-dlp zipapp is typically >1MB; tiny files are HTML/error pages.
+      if (!st.isFile() || st.size < 500_000) return { ok: false };
+    }
   } catch {
     if (path.isAbsolute(bin)) return { ok: false };
   }
@@ -49,15 +53,17 @@ async function probeBinary(bin: string): Promise<{ ok: boolean; version?: string
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
+    let err = "";
     child.stdout?.on("data", (d: Buffer) => {
       out += d.toString();
     });
     child.stderr?.on("data", (d: Buffer) => {
-      out += d.toString();
+      err += d.toString();
     });
     child.on("error", () => resolve({ ok: false }));
     child.on("close", (code) => {
-      if (code !== 0) {
+      const combined = `${out}\n${err}`;
+      if (code !== 0 || /bad local file header|zipimport|EOFError/i.test(combined)) {
         resolve({ ok: false });
         return;
       }
@@ -65,6 +71,16 @@ async function probeBinary(bin: string): Promise<{ ok: boolean; version?: string
       resolve({ ok: true, version });
     });
   });
+}
+
+async function removeCorruptBundled(): Promise<void> {
+  const bundled = bundledYtdlpBin();
+  try {
+    await fs.rm(bundled, { force: true });
+    await fs.rm(`${bundled}.download`, { force: true });
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function getYtdlpStatus(): Promise<YtdlpStatus> {
@@ -84,6 +100,13 @@ export async function getYtdlpStatus(): Promise<YtdlpStatus> {
         installing,
       };
     }
+    // Clear a broken custom path that points at our bundle so install can replace it.
+    if (custom === bundledYtdlpBin()) {
+      await removeCorruptBundled();
+      if (system.ytdlpPath === custom) {
+        getStore().set("system", { ...system, ytdlpPath: "", ytdlpEnabled: false });
+      }
+    }
   }
 
   const bundled = bundledYtdlpBin();
@@ -99,6 +122,8 @@ export async function getYtdlpStatus(): Promise<YtdlpStatus> {
         installing,
       };
     }
+    // Drop corrupt leftover so the next install is clean.
+    await removeCorruptBundled();
   }
 
   for (const bin of process.platform === "win32" ? ["yt-dlp.exe", "yt-dlp"] : ["yt-dlp"]) {
@@ -176,10 +201,21 @@ export async function installYtdlp(
     await downloadToFile(url, tmp, (pct) => {
       onProgress?.({ phase: "download", percent: pct, message: `Downloading yt-dlp… ${pct}%` });
     });
+    const st = await fs.stat(tmp);
+    if (st.size < 500_000) {
+      await fs.rm(tmp, { force: true }).catch(() => undefined);
+      throw new Error("yt-dlp download looks incomplete (file too small). Check network and retry.");
+    }
     await fs.rm(destBin, { force: true }).catch(() => undefined);
     await fs.rename(tmp, destBin);
     if (process.platform !== "win32") {
       await fs.chmod(destBin, 0o755).catch(() => undefined);
+    }
+
+    const probe = await probeBinary(destBin);
+    if (!probe.ok) {
+      await fs.rm(destBin, { force: true }).catch(() => undefined);
+      throw new Error("yt-dlp downloaded but failed to run. Retry install in Settings → System.");
     }
 
     const system = store.get("system");

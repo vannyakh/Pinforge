@@ -1,6 +1,6 @@
 import React from "react";
 import classNames from "classnames";
-import { Button, Input } from "@arco-design/web-react";
+import { Button, Input, Spin } from "@arco-design/web-react";
 import { FolderOpen } from "@icon-park/react";
 
 type SettingsPageWidth = "narrow" | "wide" | "appearance" | "full" | "about";
@@ -21,6 +21,16 @@ export const SettingsPage: React.FC<{
   <div className={classNames("settings-page", WIDTH_CLASS[width], className)}>{children}</div>
 );
 
+/** Full-height single scroll region for publish and other main-pane forms. */
+export const SettingsScrollShell: React.FC<{
+  className?: string;
+  children: React.ReactNode;
+}> = ({ className, children }) => (
+  <div className={classNames("settings-scroll-shell", className)}>
+    <div className="settings-scroll-shell__body">{children}</div>
+  </div>
+);
+
 export const SettingsHeader: React.FC<{
   title: string;
   description?: React.ReactNode;
@@ -39,11 +49,17 @@ export const SettingsHeader: React.FC<{
 export const SettingsSection: React.FC<{
   title?: string;
   className?: string;
+  /** Skip bordered card wrapper — use for flat form layouts (e.g. publish). */
+  plain?: boolean;
   children: React.ReactNode;
-}> = ({ title, className, children }) => (
-  <section className={classNames("settings-section", className)}>
+}> = ({ title, className, plain, children }) => (
+  <section className={classNames("settings-section", plain && "settings-section--plain", className)}>
     {title ? <div className="settings-section__label">{title}</div> : null}
-    <div className="settings-section__card">{children}</div>
+    {plain ? (
+      <div className="settings-section__body">{children}</div>
+    ) : (
+      <div className="settings-section__card">{children}</div>
+    )}
   </section>
 );
 
@@ -77,6 +93,13 @@ export const SettingsField: React.FC<{
   </div>
 );
 
+export const SettingsSectionFooter: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className }) => (
+  <div className={classNames("settings-section__footer", className)}>{children}</div>
+);
+
 export const SettingsPathField: React.FC<{
   label: string;
   description?: string;
@@ -98,6 +121,12 @@ export const SettingsPathField: React.FC<{
   </SettingsField>
 );
 
-export const SettingsLoading: React.FC<{ label?: string }> = ({ label = "Loading…" }) => (
-  <div className="settings-loading text-t-secondary">{label}</div>
+export const SettingsLoading: React.FC<{
+  label?: string;
+  centered?: boolean;
+}> = ({ label = "Loading…", centered = true }) => (
+  <div className={classNames("settings-loading", centered && "settings-loading--centered")}>
+    <Spin size={32} />
+    {label ? <span className="settings-loading__label">{label}</span> : null}
+  </div>
 );

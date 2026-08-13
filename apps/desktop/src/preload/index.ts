@@ -429,6 +429,9 @@ export interface MetaPublishPublic {
   pageId?: string;
   pageName?: string;
   hasPageToken: boolean;
+  clonePageUrl?: string;
+  clonePostLimit?: number;
+  clonePostMode?: "single" | "carousel" | "all";
 }
 
 export interface MetaPageSummary {
@@ -445,6 +448,17 @@ export interface MetaPostResult {
 }
 
 export type MetaPostType = "text" | "photo" | "video" | "video_carousel";
+
+export type MetaPhotoPostMode = "single" | "album" | "carousel";
+
+export type MetaPhotoAlbumDestination = "feed" | "facebook_album";
+
+export interface MetaPageAlbumSummary {
+  id: string;
+  name: string;
+  photoCount?: number;
+  coverPhotoUrl?: string;
+}
 
 export type MetaPublishTimingMode = "now" | "schedule";
 
@@ -467,6 +481,19 @@ export interface MetaCarouselSlide {
 export interface MetaPagePostsPage {
   posts: MetaPagePostSummary[];
   nextCursor?: string;
+}
+
+export interface MetaClonePagePostsResult extends MetaPagePostsPage {
+  page: MetaPageSummary;
+}
+
+export interface MetaPagePostCloneDetail {
+  postId: string;
+  postType: MetaPostType;
+  message: string;
+  link: string;
+  filePath?: string;
+  carouselSlides?: MetaCarouselSlide[];
 }
 
 export interface MetaPagePostSummary {
@@ -531,6 +558,40 @@ export interface MetaDeletePostsResult {
   ok: boolean;
   message: string;
   results: MetaDeletePostItemResult[];
+}
+
+export interface YouTubePublishPublic {
+  clientId: string;
+  redirectUri: string;
+  hasClientSecret: boolean;
+  connected: boolean;
+  userName?: string;
+  tokenExpiresAt?: number;
+  channelId?: string;
+  channelTitle?: string;
+  channelThumbnailUrl?: string;
+  hasChannel: boolean;
+}
+
+export interface YouTubeChannelSummary {
+  id: string;
+  title: string;
+  thumbnailUrl?: string;
+}
+
+export interface YouTubePostResult {
+  ok: boolean;
+  videoId?: string;
+  message: string;
+}
+
+export type YouTubePrivacyStatus = "public" | "private" | "unlisted";
+
+export type YouTubePublishTimingMode = "now" | "schedule";
+
+export interface YouTubePublishTiming {
+  mode: YouTubePublishTimingMode;
+  scheduledPublishTime?: number;
 }
 
 export interface MetaPageVideoSummary {
@@ -646,6 +707,24 @@ const api = {
   pickFormatPlugin: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickFormatPlugin"),
   pickMediaFile: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickMediaFile"),
   pickMediaFiles: (): Promise<string[]> => ipcRenderer.invoke("dialog:pickMediaFiles"),
+  pickImageFiles: (): Promise<string[]> => ipcRenderer.invoke("dialog:pickImageFiles"),
+  resolveThumbnailPath: (fileName: string): Promise<string | null> =>
+    ipcRenderer.invoke("publish:resolveThumbnailPath", fileName),
+  generateVideoThumbnails: (videoPath: string): Promise<string[]> =>
+    ipcRenderer.invoke("publish:generateVideoThumbnails", videoPath),
+  listLocalMediaInFolder: (
+    dirPath: string,
+    kind: "video" | "photo"
+  ): Promise<Array<{ filePath: string; name: string; mtimeMs: number }>> =>
+    ipcRenderer.invoke("publish:listLocalMediaInFolder", dirPath, kind),
+  getCaptionTitleSuggestions: (): Promise<string[]> =>
+    ipcRenderer.invoke("publish:captionSuggestions:get"),
+  setCaptionTitleSuggestions: (titles: string[]): Promise<string[]> =>
+    ipcRenderer.invoke("publish:captionSuggestions:set", titles),
+  getHashtagSuggestions: (): Promise<string[]> =>
+    ipcRenderer.invoke("publish:hashtagSuggestions:get"),
+  setHashtagSuggestions: (tags: string[]): Promise<string[]> =>
+    ipcRenderer.invoke("publish:hashtagSuggestions:set", tags),
   listCustomProviders: (): Promise<CustomProviderConfig[]> =>
     ipcRenderer.invoke("providers:listCustom"),
   listInstalledProviders: (): Promise<InstalledProviderView[]> =>
@@ -754,10 +833,31 @@ const api = {
   listMetaPages: (): Promise<MetaPageSummary[]> => ipcRenderer.invoke("publish:meta:listPages"),
   listMetaPageVideos: (limit?: number): Promise<MetaPageVideoSummary[]> =>
     ipcRenderer.invoke("publish:meta:listPageVideos", limit),
+  listMetaPageAlbums: (limit?: number): Promise<MetaPageAlbumSummary[]> =>
+    ipcRenderer.invoke("publish:meta:listPageAlbums", limit),
+  createMetaPageAlbum: (name: string): Promise<MetaPageAlbumSummary> =>
+    ipcRenderer.invoke("publish:meta:createPageAlbum", name),
   listMetaPagePosts: (opts?: {
     limit?: number;
     after?: string;
   }): Promise<MetaPagePostsPage> => ipcRenderer.invoke("publish:meta:listPagePosts", opts),
+  listMetaPagePostsFromUrl: (opts: {
+    pageUrl: string;
+    limit?: number;
+    after?: string;
+    mode?: "single" | "carousel" | "all";
+  }): Promise<MetaClonePagePostsResult> =>
+    ipcRenderer.invoke("publish:meta:listPagePostsFromUrl", opts),
+  getMetaPagePostCloneDetail: (payload: {
+    postId: string;
+    sourcePageId: string;
+  }): Promise<MetaPagePostCloneDetail> =>
+    ipcRenderer.invoke("publish:meta:getPagePostCloneDetail", payload),
+  setMetaCloneConfig: (partial: {
+    clonePageUrl?: string;
+    clonePostLimit?: number;
+    clonePostMode?: "single" | "carousel" | "all";
+  }): Promise<MetaPublishPublic> => ipcRenderer.invoke("publish:meta:setCloneConfig", partial),
   getMetaPostInsights: (postIds: string[]): Promise<MetaPostInsight[]> =>
     ipcRenderer.invoke("publish:meta:getPostInsights", postIds),
   shareMetaPostsToPages: (payload: {
@@ -778,11 +878,41 @@ const api = {
     filePath?: string;
     filePaths?: string[];
     postType?: MetaPostType;
+    photoPostMode?: MetaPhotoPostMode;
+    photoAlbumDestination?: MetaPhotoAlbumDestination;
+    photoAlbumFacebookId?: string;
+    photoAlbumNewName?: string;
     link?: string;
     videoIds?: string[];
     carouselSlides?: MetaCarouselSlide[];
+    videoThumbnailPath?: string;
     timing?: MetaPublishTiming;
   }): Promise<MetaPostResult> => ipcRenderer.invoke("publish:meta:post", payload),
+  getYouTubePublish: (): Promise<YouTubePublishPublic> => ipcRenderer.invoke("publish:youtube:get"),
+  setYouTubeApp: (partial: {
+    clientId?: string;
+    clientSecret?: string;
+    redirectUri?: string;
+  }): Promise<YouTubePublishPublic> => ipcRenderer.invoke("publish:youtube:setApp", partial),
+  startYouTubeConnect: (): Promise<{ ok: boolean; message: string; userName?: string }> =>
+    ipcRenderer.invoke("publish:youtube:startConnect"),
+  disconnectYouTubePublish: (): Promise<YouTubePublishPublic> =>
+    ipcRenderer.invoke("publish:youtube:disconnect"),
+  listYouTubeChannels: (): Promise<YouTubeChannelSummary[]> =>
+    ipcRenderer.invoke("publish:youtube:listChannels"),
+  selectYouTubeChannel: (payload: {
+    channelId: string;
+    channelTitle?: string;
+    channelThumbnailUrl?: string;
+  }): Promise<YouTubePublishPublic> => ipcRenderer.invoke("publish:youtube:selectChannel", payload),
+  uploadToYouTube: (payload: {
+    title: string;
+    description?: string;
+    tags?: string[];
+    privacyStatus?: YouTubePrivacyStatus;
+    filePath: string;
+    timing?: YouTubePublishTiming;
+  }): Promise<YouTubePostResult> => ipcRenderer.invoke("publish:youtube:upload", payload),
   showItemInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke("shell:showItem", filePath),
   openPath: (filePath: string): Promise<string> => ipcRenderer.invoke("shell:openPath", filePath),

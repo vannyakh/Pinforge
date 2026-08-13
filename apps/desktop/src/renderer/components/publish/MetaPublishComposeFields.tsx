@@ -1,56 +1,46 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Button, Input, Message, Select } from "@arco-design/web-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Message, Select } from "@arco-design/web-react";
+import CarouselSourceModal from "@renderer/components/publish/CarouselSourceModal";
 import PeCarouselBuilder from "@renderer/components/publish/PeCarouselBuilder";
-import { api, type MetaPageVideoSummary, type MetaPostType, type MetaPublishPublic } from "@renderer/api";
+import PhotoPostBuilder from "@renderer/components/publish/PhotoPostBuilder";
+import PublishCaptionSection from "@renderer/components/publish/PublishCaptionSection";
+import PublishHashtagSection from "@renderer/components/publish/PublishHashtagSection";
+import PublishPostPreview from "@renderer/components/publish/PublishPostPreview";
+import { pathToPreview } from "@renderer/components/publish/carouselPreview";
+import { api, type MetaPageVideoSummary, type MetaPostType } from "@renderer/api";
 import {
   META_POST_TYPE_LABELS,
   useMetaPublishStore,
+  type CarouselSlideDraft,
 } from "@renderer/pages/publish/metaPublishStore";
 
 const POST_TYPE_OPTIONS: MetaPostType[] = ["text", "photo", "video", "video_carousel"];
 
+const COMPOSE_MEDIA_SLIDE_ID = "compose-media";
+
 type MetaPublishComposeFieldsProps = {
   showPostTypePicker?: boolean;
   pageId?: string;
-  onConfigLoaded?: (config: MetaPublishPublic | null) => void;
+  inlinePreview?: boolean;
 };
 
 const MetaPublishComposeFields: React.FC<MetaPublishComposeFieldsProps> = ({
   showPostTypePicker = false,
   pageId,
-  onConfigLoaded,
+  inlinePreview = false,
 }) => {
   const postType = useMetaPublishStore((s) => s.postType);
-  const message = useMetaPublishStore((s) => s.message);
+  const photoPostMode = useMetaPublishStore((s) => s.photoPostMode);
   const filePath = useMetaPublishStore((s) => s.filePath);
+  const videoThumbnailPath = useMetaPublishStore((s) => s.videoThumbnailPath);
+  const config = useMetaPublishStore((s) => s.config);
   const setPostType = useMetaPublishStore((s) => s.setPostType);
-  const setMessage = useMetaPublishStore((s) => s.setMessage);
   const setFilePath = useMetaPublishStore((s) => s.setFilePath);
-  const link = useMetaPublishStore((s) => s.link);
-  const setLink = useMetaPublishStore((s) => s.setLink);
+  const setVideoThumbnailPath = useMetaPublishStore((s) => s.setVideoThumbnailPath);
 
-  const [config, setConfig] = useState<MetaPublishPublic | null>(null);
   const [pageVideos, setPageVideos] = useState<MetaPageVideoSummary[]>([]);
   const [loadingVideos, setLoadingVideos] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    void api
-      .getMetaPublish()
-      .then((next) => {
-        if (!alive) return;
-        setConfig(next);
-        onConfigLoaded?.(next);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setConfig(null);
-        onConfigLoaded?.(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [onConfigLoaded]);
+  const [sourceModalOpen, setSourceModalOpen] = useState(false);
 
   const loadPageVideos = useCallback(async () => {
     setLoadingVideos(true);
@@ -64,29 +54,34 @@ const MetaPublishComposeFields: React.FC<MetaPublishComposeFieldsProps> = ({
   }, []);
 
   const isCarousel = postType === "video_carousel";
-  const needsFile = postType === "photo" || postType === "video";
+  const isVideoPost = postType === "video";
+  const isPhotoPost = postType === "photo";
+  const isTextPost = postType === "text";
+  const isSinglePhoto = isPhotoPost && photoPostMode === "single";
   const carouselPageId = pageId ?? config?.pageId;
 
   useEffect(() => {
-    if (!isCarousel || !config?.connected) return;
-    void loadPageVideos();
-  }, [isCarousel, config?.connected, loadPageVideos]);
+    if (!config?.connected) return;
+    if (isCarousel || isVideoPost) void loadPageVideos();
+  }, [isCarousel, isVideoPost, config?.connected, loadPageVideos]);
 
-  useEffect(() => {
-    if (!isCarousel || !carouselPageId || link.trim()) return;
-    setLink(`https://www.facebook.com/${carouselPageId}`);
-  }, [isCarousel, carouselPageId, link, setLink]);
+  const composeMediaSlide = useMemo((): CarouselSlideDraft | null => {
+    if (!isSinglePhoto && !isVideoPost) return null;
+    return {
+      id: COMPOSE_MEDIA_SLIDE_ID,
+      kind: isVideoPost ? "video" : "photo",
+      filePath: filePath.trim() || undefined,
+      videoThumbnailPath: videoThumbnailPath.trim() || undefined,
+      previewUrl: filePath.trim() ? pathToPreview(filePath.trim()) : undefined,
+    };
+  }, [isSinglePhoto, isVideoPost, filePath, videoThumbnailPath]);
 
-  const pickMedia = async () => {
-    const path = await api.pickMediaFile();
-    if (path) setFilePath(path);
-  };
+  const showMediaPreview = isVideoPost || isSinglePhoto;
 
   return (
-    <div className="flex flex-col gap-14px">
+    <div className="post-builder flex flex-col gap-18px">
       {showPostTypePicker ? (
         <div className="flex flex-col gap-6px">
-          <div className="text-13px text-t-primary">Post type</div>
           <Select
             value={postType}
             onChange={(v) => setPostType(v as MetaPostType)}
@@ -105,42 +100,58 @@ const MetaPublishComposeFields: React.FC<MetaPublishComposeFieldsProps> = ({
       {isCarousel ? (
         <PeCarouselBuilder
           pageId={carouselPageId}
+          pageName={config?.pageName}
+          inlinePreview={inlinePreview}
           pageVideos={pageVideos}
           loadingVideos={loadingVideos}
           onRefreshVideos={() => void loadPageVideos()}
         />
       ) : (
-        <div className="flex flex-col gap-6px">
-          <div className="text-13px text-t-primary">
-            {postType === "text" ? "Message" : "Caption"}
-          </div>
-          <Input.TextArea
-            value={message}
-            onChange={setMessage}
+        <>
+          {isPhotoPost ? <PhotoPostBuilder metaConnected={Boolean(config?.connected)} /> : null}
+          <PublishCaptionSection
             placeholder={
-              postType === "text" ? "Write your Page post…" : "Optional caption for your media…"
+              isTextPost ? "Write your Page post…" : "Optional caption for your media…"
             }
-            autoSize={{ minRows: 3, maxRows: 8 }}
           />
-        </div>
+          <PublishHashtagSection />
+          {showMediaPreview || isPhotoPost ? (
+            <PublishPostPreview
+              postType={postType}
+              pageId={carouselPageId}
+              pageName={config?.pageName}
+              inlinePreview={inlinePreview}
+              slide={composeMediaSlide}
+              videoThumbnailPath={videoThumbnailPath}
+              onOpenSource={() => setSourceModalOpen(true)}
+              onThumbnailPathChange={setVideoThumbnailPath}
+            />
+          ) : isTextPost ? (
+            <PublishPostPreview
+              postType={postType}
+              pageId={carouselPageId}
+              pageName={config?.pageName}
+              inlinePreview={inlinePreview}
+              slide={null}
+              videoThumbnailPath=""
+              onOpenSource={() => setSourceModalOpen(true)}
+              onThumbnailPathChange={setVideoThumbnailPath}
+            />
+          ) : null}
+        </>
       )}
 
-      {needsFile ? (
-        <div className="flex flex-col gap-6px">
-          <div className="text-13px text-t-primary">
-            {postType === "photo" ? "Photo file" : "Video file"}
-          </div>
-          <div className="flex gap-8px">
-            <Input
-              value={filePath}
-              onChange={setFilePath}
-              placeholder={postType === "photo" ? "Path to image" : "Path to video"}
-              className="flex-1"
-            />
-            <Button onClick={() => void pickMedia()}>Browse</Button>
-          </div>
-        </div>
-      ) : null}
+      <CarouselSourceModal
+        visible={sourceModalOpen}
+        slide={composeMediaSlide}
+        pageVideos={pageVideos}
+        variant="post"
+        onClose={() => setSourceModalOpen(false)}
+        onApply={(patch) => {
+          if (patch.filePath?.trim()) setFilePath(patch.filePath.trim());
+          setSourceModalOpen(false);
+        }}
+      />
     </div>
   );
 };

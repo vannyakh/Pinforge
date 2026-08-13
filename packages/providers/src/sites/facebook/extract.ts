@@ -3,6 +3,8 @@ import { fetchBinary, metaContent, toResolved } from "@pinforge/download";
 import { fetchHtmlOrPlaywrightMeta } from "../../extractors/playwrightMeta";
 import type { MediaInfo } from "../../registry/plugin";
 import { cleanUrl, uniqHttpUrls } from "@pinforge/common";
+import { resolveYtdlpMedia } from "../ytdlp/resolve";
+import { requireYtdlpMessage, resolveYtdlp } from "@pinforge/tools";
 
 /** Pull common Facebook video URL keys from page HTML / JSON blobs. */
 export function extractFacebookMediaUrls(html: string): {
@@ -50,7 +52,30 @@ export function extractFacebookMediaUrls(html: string): {
 export function isFacebookUrl(url: string): boolean {
   try {
     const host = new URL(url.trim()).hostname.replace(/^www\./, "");
-    return /^(facebook\.com|fb\.watch|fb\.com|m\.facebook\.com)$/i.test(host);
+    return /^(?:web\.|m\.|mbasic\.|mobile\.)?(facebook\.com|fb\.watch|fb\.com)$/i.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** Profile / user page (not a single watch/reel/photo post). */
+export function isFacebookProfileUrl(url: string): boolean {
+  if (!isFacebookUrl(url)) return false;
+  try {
+    const u = new URL(url.trim());
+    const path = u.pathname.replace(/\/+$/, "") || "/";
+    if (/\/profile\.php$/i.test(path) && u.searchParams.has("id")) return true;
+    if (/^\/people\//i.test(path)) return true;
+    if (
+      /^\/(?:watch|reel|reels|videos?|photo(?:s)?|posts?|permalink\.php|share|stories|story|groups|events|marketplace|login|home)(?:\/|$)/i.test(
+        path
+      )
+    ) {
+      return false;
+    }
+    // /username or /numeric_id
+    const parts = path.split("/").filter(Boolean);
+    return parts.length === 1;
   } catch {
     return false;
   }
@@ -127,10 +152,60 @@ export async function extractFacebookInfo(
 
 /**
  * Public Facebook video / photo extractor (no login).
+ * Profiles and hard posts fall back to yt-dlp (same tool as desktop System settings).
  */
 export async function extractFacebook(
   url: string,
   format: FormatPreset = "best",
+  opts?: { fragmentConcurrency?: number; signal?: AbortSignal }
+): Promise<ResolvedMedia | ResolvedMedia[]> {
+  const pageUrl = url.trim();
+  const profile = isFacebookProfileUrl(pageUrl);
+
+  if (!profile) {
+    try {
+      return await extractFacebookNative(pageUrl, format, opts);
+    } catch (nativeErr) {
+      const ytdlp = await resolveYtdlp();
+      if (!ytdlp) throw nativeErr;
+      try {
+        return await resolveYtdlpMedia(pageUrl, {
+          format,
+          signal: opts?.signal,
+          noPlaylist: true,
+        });
+      } catch (ytdlpErr) {
+        const nativeMsg = nativeErr instanceof Error ? nativeErr.message : String(nativeErr);
+        const ytdlpMsg = ytdlpErr instanceof Error ? ytdlpErr.message : String(ytdlpErr);
+        throw new Error(`${nativeMsg} yt-dlp fallback also failed: ${sanitizeYtdlpError(ytdlpMsg)}`);
+      }
+    }
+  }
+
+  const ytdlp = await resolveYtdlp();
+  if (!ytdlp) {
+    throw new Error(
+      `Facebook profile downloads need yt-dlp. ${requireYtdlpMessage()}`
+    );
+  }
+  try {
+    return await resolveYtdlpMedia(pageUrl, {
+      format,
+      signal: opts?.signal,
+      // Profile tabs can resolve to a list; keep first/playlist item behavior via yt-dlp.
+      noPlaylist: false,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Facebook profile download failed: ${sanitizeYtdlpError(msg)}`
+    );
+  }
+}
+
+async function extractFacebookNative(
+  url: string,
+  format: FormatPreset,
   opts?: { fragmentConcurrency?: number; signal?: AbortSignal }
 ): Promise<ResolvedMedia | ResolvedMedia[]> {
   const info = await extractFacebookInfo(url, { signal: opts?.signal });
@@ -159,4 +234,14 @@ export async function extractFacebook(
   }
 
   return results.length === 1 ? results[0]! : results;
+}
+
+function sanitizeYtdlpError(message: string): string {
+  if (/bad local file header/i.test(message) || /zipimport|EOFError/i.test(message)) {
+    return "yt-dlp binary is corrupted. Reinstall yt-dlp in Settings → System.";
+  }
+  if (/ffmpeg-location .+ does not exist/i.test(message)) {
+    return "ffmpeg path is invalid. Install/enable ffmpeg in Settings → System.";
+  }
+  return message.replace(/\s+/g, " ").trim().slice(0, 400);
 }

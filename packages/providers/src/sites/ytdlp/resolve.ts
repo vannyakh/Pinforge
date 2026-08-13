@@ -14,6 +14,8 @@ export type YtdlpResolveOpts = {
   quality?: YoutubeQuality;
   outDir?: string;
   signal?: AbortSignal;
+  /** When false, allow playlists / channel / profile tabs (default true = single item). */
+  noPlaylist?: boolean;
   onByteProgress?: (info: { downloaded: number; total: number | null; phase?: string }) => void;
 };
 
@@ -183,7 +185,8 @@ export async function resolveYtdlpMedia(
     outTemplate,
     format,
     quality: opts.quality,
-    ffmpegPath: ff,
+    ffmpegPath: ff && (ff.includes("/") || ff.includes("\\")) ? ff : null,
+    noPlaylist: opts.noPlaylist,
   });
 
   const { stdout, stderr, code } = await runYtdlp(bin, args, {
@@ -199,6 +202,11 @@ export async function resolveYtdlpMedia(
 
   if (code !== 0) {
     const tip = stderr.trim().split(/\r?\n/).slice(-4).join(" ");
+    if (/bad local file header/i.test(tip) || /bad local file header/i.test(stderr)) {
+      throw new Error(
+        "yt-dlp binary is corrupted. Reinstall yt-dlp in Settings → System, then retry."
+      );
+    }
     throw new Error(tip || `yt-dlp failed (exit ${code})`);
   }
 

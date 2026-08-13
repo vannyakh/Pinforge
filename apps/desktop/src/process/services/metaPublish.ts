@@ -1,26 +1,42 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { readFile, stat } from "node:fs/promises";
-import { basename, extname } from "node:path";
-import { randomBytes } from "node:crypto";
-import { shell } from "electron";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
+import { createHash, randomBytes } from "node:crypto";
+import { app, shell } from "electron";
 import { getStore } from "../store";
 import type {
   MetaCarouselSlide,
+  MetaClonePostMode,
   MetaPageSummary,
+  MetaPageAlbumSummary,
   MetaPageVideoSummary,
   MetaPagePostSummary,
   MetaPagePostsPage,
+  MetaClonePagePostsResult,
+  MetaPagePostCloneDetail,
   MetaPostInsight,
   MetaPostInsightMetrics,
   MetaSharePostsResult,
   MetaDeletePostsResult,
   MetaPostResult,
   MetaPostType,
+  MetaPhotoPostMode,
+  MetaPhotoAlbumDestination,
   MetaPublishConfig,
   MetaPublishPublic,
   MetaPublishTiming,
 } from "../../common/publish/types";
 import { DEFAULT_META_REDIRECT_URI } from "../../common/publish/types";
+import {
+  CAROUSEL_LANDING_LINK_INELIGIBLE_MESSAGE,
+  CAROUSEL_LANDING_LINK_REQUIRED_MESSAGE,
+  normalizeCarouselLandingLink,
+} from "../../common/publish/carouselLinks";
+import {
+  createMetaMediaPublicUrl,
+  revokeMetaMediaToken,
+  verifyHostedMediaUrl,
+} from "./metaMediaHost";
 
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -31,15 +47,39 @@ const META_SCOPES = [
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
+  "pages_read_user_content",
+  "pages_manage_engagement",
   "public_profile",
 ].join(",");
 
 const VIDEO_EXT = new Set([".mp4", ".mov", ".mkv", ".webm", ".m4v"]);
-const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
+const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"]);
+/** Formats accepted by Meta Page Photos API (Graph API v26). */
+const META_PHOTO_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff"]);
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const MIN_CAROUSEL_VIDEOS = 2;
 const MAX_CAROUSEL_VIDEOS = 5;
+const MIN_PHOTO_ALBUM = 2;
+const MAX_PHOTO_ALBUM = 10;
 const MIN_SCHEDULE_LEAD_SEC = 10 * 60;
 const MAX_SCHEDULE_LEAD_SEC = 75 * 24 * 60 * 60;
+
+function carouselLinkCaption(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "").toUpperCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function buildOrganicCarouselChildAttachment(
+  attachment: CarouselChildAttachment
+): CarouselChildAttachment {
+  const { call_to_action: _cta, ...rest } = attachment;
+  return rest;
+}
+
+type CarouselChildAttachment = Record<string, unknown>;
 
 function resolvePublishTimingFields(timing?: MetaPublishTiming): Record<string, string> {
   if (!timing || timing.mode !== "schedule") {
@@ -60,6 +100,7 @@ function resolvePublishTimingFields(timing?: MetaPublishTiming): Record<string, 
   return {
     published: "false",
     scheduled_publish_time: String(scheduled),
+    unpublished_content_type: "SCHEDULED",
   };
 }
 
@@ -70,8 +111,31 @@ function publishResultMessage(scheduled: boolean, label: string): string {
 }
 
 type GraphErrorBody = {
-  error?: { message?: string; type?: string; code?: number };
+  error?: {
+    message?: string;
+    error_user_msg?: string;
+    error_user_title?: string;
+    type?: string;
+    code?: number;
+    error_subcode?: number;
+    fbtrace_id?: string;
+    error_data?: { blurb_field?: string; [key: string]: unknown };
+  };
 };
+
+function formatGraphError(err: GraphErrorBody["error"], fallback: string): string {
+  if (!err) return fallback;
+  if (err.error_subcode === 1609011) {
+    return CAROUSEL_LANDING_LINK_INELIGIBLE_MESSAGE;
+  }
+  const parts: string[] = [];
+  const detail = err.error_user_msg?.trim() || err.message?.trim();
+  if (detail) parts.push(detail);
+  const field = err.error_data?.blurb_field?.trim();
+  if (field) parts.push(`Field: ${field}`);
+  if (err.code != null) parts.push(`Code ${err.code}${err.error_subcode != null ? ` (${err.error_subcode})` : ""}`);
+  return parts.length > 0 ? parts.join(" · ") : fallback;
+}
 
 type TokenResponse = {
   access_token?: string;
@@ -110,6 +174,15 @@ type PageVideosResponse = {
     permalink_url?: string;
     picture?: string | { data?: { url?: string } };
     thumbnails?: { data?: Array<{ uri?: string }> };
+  }>;
+};
+
+type PageAlbumsResponse = {
+  data?: Array<{
+    id: string;
+    name?: string;
+    count?: number;
+    cover_photo?: { source?: string; picture?: string };
   }>;
 };
 
@@ -167,8 +240,9 @@ function getMetaConfig(): MetaPublishConfig {
 
 function setMetaConfig(partial: Partial<MetaPublishConfig>): MetaPublishConfig {
   const store = getStore();
-  const next = { ...getMetaConfig(), ...partial };
-  store.set("publish", { meta: next });
+  const publish = store.get("publish");
+  const next = { ...publish.meta, ...partial };
+  store.set("publish", { ...publish, meta: next });
   return next;
 }
 
@@ -210,7 +284,7 @@ async function graphGet<T>(path: string, params: Record<string, string>): Promis
   const body = (await res.json()) as T & GraphErrorBody;
   const err = (body as GraphErrorBody).error;
   if (!res.ok || err) {
-    throw new Error(err?.message ?? `Graph API request failed (${res.status}).`);
+    throw new Error(formatGraphError(err, `Graph API request failed (${res.status}).`));
   }
   return body;
 }
@@ -232,7 +306,7 @@ async function graphPostJson<T>(
   const json = (await res.json()) as T & GraphErrorBody;
   const err = (json as GraphErrorBody).error;
   if (!res.ok || err) {
-    throw new Error(err?.message ?? `Graph API request failed (${res.status}).`);
+    throw new Error(formatGraphError(err, `Graph API request failed (${res.status}).`));
   }
   return json;
 }
@@ -365,6 +439,9 @@ export function toMetaPublishPublic(config: MetaPublishConfig): MetaPublishPubli
     pageId: config.pageId,
     pageName: config.pageName,
     hasPageToken: Boolean(config.pageAccessToken?.trim()),
+    clonePageUrl: config.clonePageUrl?.trim() || undefined,
+    clonePostLimit: config.clonePostLimit ?? 10,
+    clonePostMode: config.clonePostMode ?? "all",
   };
 }
 
@@ -390,6 +467,142 @@ export function setMetaAppConfig(partial: {
   };
   setMetaConfig(next);
   return toMetaPublishPublic(next);
+}
+
+export function setMetaCloneConfig(partial: {
+  clonePageUrl?: string;
+  clonePostLimit?: number;
+  clonePostMode?: MetaClonePostMode;
+}): MetaPublishPublic {
+  const prev = getMetaConfig();
+  const next: MetaPublishConfig = { ...prev };
+  if (partial.clonePageUrl !== undefined) {
+    next.clonePageUrl = partial.clonePageUrl.trim();
+  }
+  if (partial.clonePostLimit !== undefined) {
+    next.clonePostLimit = Math.max(1, Math.min(25, Math.floor(partial.clonePostLimit) || 10));
+  }
+  if (partial.clonePostMode !== undefined) {
+    const mode = partial.clonePostMode;
+    next.clonePostMode = mode === "single" || mode === "carousel" ? mode : "all";
+  }
+  setMetaConfig(next);
+  return toMetaPublishPublic(next);
+}
+
+const FB_PAGE_PATH_SKIP = new Set([
+  "posts",
+  "photos",
+  "videos",
+  "watch",
+  "reels",
+  "events",
+  "reviews",
+  "about",
+  "community",
+  "mentions",
+  "live",
+  "stories",
+  "shop",
+  "groups",
+  "share",
+  "sharer",
+  "dialog",
+  "login",
+  "help",
+  "gaming",
+  "marketplace",
+  "notes",
+  "l",
+]);
+
+/** Extract a Page username or numeric id from a Facebook URL or raw input. */
+export function parseFacebookPageRef(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  if (/^\d+$/.test(trimmed)) return trimmed;
+
+  if (/^[a-zA-Z0-9._-]+$/.test(trimmed) && trimmed.length >= 2) return trimmed;
+
+  try {
+    const url = trimmed.startsWith("http") ? new URL(trimmed) : new URL(`https://${trimmed}`);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (!host.endsWith("facebook.com") && host !== "fb.com" && host !== "fb.me") {
+      return null;
+    }
+
+    if (url.pathname.includes("/profile.php")) {
+      const id = url.searchParams.get("id")?.trim();
+      return id || null;
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (segments.length === 0) return null;
+
+    const first = segments[0]!.toLowerCase();
+    if (FB_PAGE_PATH_SKIP.has(first) || first.endsWith(".php")) return null;
+    if (first === "pages" && segments[1]) return segments[1]!;
+    return segments[0]!;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveMetaPageFromRef(
+  ref: string,
+  accessToken: string
+): Promise<MetaPageSummary> {
+  const body = await graphGet<{ id?: string; name?: string; category?: string }>(
+    `/${encodeURIComponent(ref)}`,
+    {
+      fields: "id,name,category",
+      access_token: accessToken,
+    }
+  );
+  if (!body.id?.trim() || !body.name?.trim()) {
+    throw new Error("Could not resolve Facebook Page from URL.");
+  }
+  return { id: body.id.trim(), name: body.name.trim(), category: body.category };
+}
+
+/**
+ * Page feed listing requires a Page access token (not a user token).
+ * Look up any managed Page from /me/accounts — not only the currently selected one.
+ */
+async function resolveListingTokenForPage(pageId: string): Promise<string> {
+  const config = getMetaConfig();
+  if (!config.userAccessToken?.trim()) {
+    throw new Error("Connect your Facebook account in Publishing settings first.");
+  }
+  if (config.pageId === pageId && config.pageAccessToken?.trim()) {
+    return config.pageAccessToken.trim();
+  }
+
+  const pages = await listMetaPagesInternal();
+  const managed = pages.find((p) => p.id === pageId);
+  const pageToken = managed?.accessToken?.trim();
+  if (pageToken) return pageToken;
+
+  throw new Error(
+    "This Page isn't among the Pages you manage. Facebook only allows loading posts for Pages where your account has a role. Open Publishing settings → reconnect Facebook if you recently gained access, then try again."
+  );
+}
+
+function rewritePagePostsPermissionError(err: unknown): Error {
+  const message = err instanceof Error ? err.message : String(err);
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("pages_read_engagement") ||
+    lower.includes("page public content access") ||
+    lower.includes("page public metadata access") ||
+    (lower.includes("missing permission") && lower.includes("#100"))
+  ) {
+    return new Error(
+      "Facebook denied access to this Page's posts. Use a Page you manage, and reconnect Facebook in Publishing settings so pages_read_engagement is granted. Reading arbitrary public Pages requires Meta App Review (Page Public Content Access)."
+    );
+  }
+  return err instanceof Error ? err : new Error(message);
 }
 
 export async function startMetaConnect(): Promise<{ ok: boolean; message: string; userName?: string }> {
@@ -516,6 +729,364 @@ function mediaKind(filePath: string): "image" | "video" | "unknown" {
   return "unknown";
 }
 
+async function validatePhotoForMeta(
+  filePath: string
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const info = await stat(filePath);
+  if (!info.isFile()) {
+    return { ok: false, message: `Not a file: ${basename(filePath)}` };
+  }
+  const ext = extname(filePath).toLowerCase();
+  if (!META_PHOTO_EXT.has(ext)) {
+    return {
+      ok: false,
+      message: `Unsupported image format (${ext || "unknown"}): ${basename(filePath)}. Meta accepts JPEG, PNG, GIF, BMP, or TIFF.`,
+    };
+  }
+  if (info.size > MAX_PHOTO_BYTES) {
+    return {
+      ok: false,
+      message: `${basename(filePath)} exceeds Meta's 10MB photo limit (${Math.ceil(info.size / (1024 * 1024))}MB).`,
+    };
+  }
+  return { ok: true };
+}
+
+function tunnelUploadEnabled(): boolean {
+  return Boolean(getStore().get("remote").tunnel.enabled);
+}
+
+type MetaUploadMode = "tunnel" | "direct";
+
+function metaUploadModes(media: "video" | "photo"): MetaUploadMode[] {
+  // Meta's servers often cannot fetch video from ephemeral Cloudflare URLs — upload directly.
+  if (media === "video") return ["direct"];
+  return tunnelUploadEnabled() ? ["tunnel", "direct"] : ["direct"];
+}
+
+function metaHostedUrlFetchFailed(message: string): boolean {
+  return /unable to fetch .*url/i.test(message);
+}
+
+async function appendVideoUpload(
+  form: FormData,
+  filePath: string,
+  mode: MetaUploadMode
+): Promise<string | undefined> {
+  if (mode === "tunnel") {
+    const hosted = await createMetaMediaPublicUrl(filePath);
+    await verifyHostedMediaUrl(hosted.url);
+    form.append("file_url", hosted.url);
+    return hosted.token;
+  }
+  form.append("source", new Blob([new Uint8Array(await readFile(filePath))]), basename(filePath));
+  return undefined;
+}
+
+async function appendPhotoUpload(
+  form: FormData,
+  filePath: string,
+  mode: MetaUploadMode
+): Promise<string | undefined> {
+  if (mode === "tunnel") {
+    const hosted = await createMetaMediaPublicUrl(filePath);
+    await verifyHostedMediaUrl(hosted.url);
+    form.append("url", hosted.url);
+    return hosted.token;
+  }
+  form.append("source", new Blob([new Uint8Array(await readFile(filePath))]), basename(filePath));
+  return undefined;
+}
+
+async function postGraphMultipart(
+  endpoint: string,
+  media: "video" | "photo",
+  fillForm: (form: FormData, mode: MetaUploadMode) => Promise<string | undefined>
+): Promise<{ ok: boolean; body: PostResponse; status: number; usedMode?: MetaUploadMode }> {
+  const modes = metaUploadModes(media);
+  let lastBody: PostResponse = {};
+  let lastStatus = 500;
+  let lastMode: MetaUploadMode | undefined;
+
+  for (let i = 0; i < modes.length; i++) {
+    const mode = modes[i]!;
+    lastMode = mode;
+    const form = new FormData();
+    let mediaToken: string | undefined;
+    try {
+      mediaToken = await fillForm(form, mode);
+      const res = await fetch(endpoint, { method: "POST", body: form });
+      const body = (await res.json()) as PostResponse;
+      lastBody = body;
+      lastStatus = res.status;
+
+      if (res.ok && !body.error) {
+        if (mediaToken) revokeMetaMediaToken(mediaToken);
+        return { ok: true, body, status: res.status, usedMode: mode };
+      }
+
+      if (mediaToken) revokeMetaMediaToken(mediaToken);
+
+      const msg = body.error?.message ?? "";
+      const canRetry = i < modes.length - 1;
+      if (canRetry && (mode === "tunnel" || metaHostedUrlFetchFailed(msg))) {
+        continue;
+      }
+      break;
+    } catch (err) {
+      if (mediaToken) revokeMetaMediaToken(mediaToken);
+      if (mode === "tunnel" && i < modes.length - 1) continue;
+      throw err;
+    }
+  }
+
+  return { ok: false, body: lastBody, status: lastStatus, usedMode: lastMode };
+}
+
+async function uploadUnpublishedPhoto(
+  pageId: string,
+  pageToken: string,
+  filePath: string,
+  options?: { scheduled?: boolean; resolvePicture?: boolean }
+): Promise<{ photoId: string; pictureUrl?: string }> {
+  const scheduled = options?.scheduled ?? false;
+  const resolvePicture = options?.resolvePicture ?? true;
+
+  const upload = await postGraphMultipart(`${GRAPH_BASE}/${pageId}/photos`, "photo", async (form, mode) => {
+    form.append("access_token", pageToken);
+    form.append("published", "false");
+    if (scheduled) form.append("temporary", "true");
+    return appendPhotoUpload(form, filePath, mode);
+  });
+
+  if (!upload.ok || !upload.body.id) {
+    throw new Error(upload.body.error?.message ?? `Photo upload failed (${upload.status}).`);
+  }
+
+  if (!resolvePicture) {
+    return { photoId: upload.body.id };
+  }
+
+  const images = await graphGet<PhotoImagesResponse>(`/${upload.body.id}`, {
+    fields: "images",
+    access_token: pageToken,
+  });
+  const pictureUrl = images.images?.[0]?.source;
+  if (!pictureUrl) throw new Error("Could not resolve uploaded photo URL.");
+  return { photoId: upload.body.id, pictureUrl };
+}
+
+async function postPhotoAlbum(
+  pageId: string,
+  pageToken: string,
+  message: string,
+  filePaths: string[],
+  timing?: MetaPublishTiming
+): Promise<MetaPostResult> {
+  if (filePaths.length < MIN_PHOTO_ALBUM) {
+    return {
+      ok: false,
+      message: `Album posts need at least ${MIN_PHOTO_ALBUM} photos.`,
+    };
+  }
+  if (filePaths.length > MAX_PHOTO_ALBUM) {
+    return {
+      ok: false,
+      message: `Maximum ${MAX_PHOTO_ALBUM} photos per album post.`,
+    };
+  }
+
+  for (const filePath of filePaths) {
+    const validation = await validatePhotoForMeta(filePath);
+    if (!validation.ok) return { ok: false, message: validation.message };
+  }
+
+  const scheduled = timing?.mode === "schedule";
+  let attachedMedia: Array<{ media_fbid: string }>;
+  try {
+    attachedMedia = await Promise.all(
+      filePaths.map(async (filePath) => {
+        const { photoId } = await uploadUnpublishedPhoto(pageId, pageToken, filePath, {
+          scheduled,
+          resolvePicture: false,
+        });
+        return { media_fbid: photoId };
+      })
+    );
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Photo upload failed.",
+    };
+  }
+
+  const timingFields = resolvePublishTimingFields(timing);
+  const postBody: Record<string, string> = {
+    attached_media: JSON.stringify(attachedMedia),
+    ...timingFields,
+  };
+  const trimmedMessage = message.trim();
+  if (trimmedMessage) postBody.message = trimmedMessage;
+
+  try {
+    const body = await graphPostJson<PostResponse>(
+      `/${pageId}/feed`,
+      { access_token: pageToken },
+      postBody
+    );
+    return {
+      ok: true,
+      postId: body.id ?? body.post_id,
+      message: publishResultMessage(scheduled, "Photo album"),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Album post failed.",
+    };
+  }
+}
+
+function mapPageAlbum(
+  raw: NonNullable<PageAlbumsResponse["data"]>[number]
+): MetaPageAlbumSummary {
+  return {
+    id: raw.id,
+    name: raw.name?.trim() || "Untitled album",
+    photoCount: raw.count,
+    coverPhotoUrl: raw.cover_photo?.source ?? raw.cover_photo?.picture,
+  };
+}
+
+export async function listMetaPageAlbums(limit = 50): Promise<MetaPageAlbumSummary[]> {
+  const config = getMetaConfig();
+  const pageId = config.pageId?.trim();
+  const pageToken = config.pageAccessToken?.trim();
+  if (!pageId || !pageToken) {
+    throw new Error("Select a Facebook Page before listing albums.");
+  }
+
+  const capped = Math.max(1, Math.min(100, Math.floor(limit) || 50));
+  const body = await graphGet<PageAlbumsResponse>(`/${pageId}/albums`, {
+    fields: "id,name,count,cover_photo{source,picture}",
+    limit: String(capped),
+    access_token: pageToken,
+  });
+
+  return (body.data ?? []).map(mapPageAlbum);
+}
+
+export async function createMetaPageAlbum(name: string): Promise<MetaPageAlbumSummary> {
+  const config = getMetaConfig();
+  const pageId = config.pageId?.trim();
+  const pageToken = config.pageAccessToken?.trim();
+  if (!pageId || !pageToken) {
+    throw new Error("Select a Facebook Page before creating an album.");
+  }
+
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Enter a name for the new album.");
+
+  const body = await graphPostJson<{ id?: string; name?: string }>(
+    `/${pageId}/albums`,
+    { access_token: pageToken },
+    { name: trimmed }
+  );
+  if (!body.id) throw new Error("Album was created but no ID was returned.");
+  return { id: body.id, name: body.name?.trim() || trimmed };
+}
+
+async function uploadPhotoToFacebookAlbum(
+  albumId: string,
+  pageToken: string,
+  filePath: string,
+  options: {
+    caption?: string;
+    noStory?: boolean;
+    timing?: MetaPublishTiming;
+  }
+): Promise<{ photoId: string; postId?: string }> {
+  const scheduled = options.timing?.mode === "schedule";
+  const timingFields = scheduled ? resolvePublishTimingFields(options.timing) : { published: "true" };
+
+  const upload = await postGraphMultipart(
+    `${GRAPH_BASE}/${albumId}/photos`,
+    "photo",
+    async (form, mode) => {
+      form.append("access_token", pageToken);
+      for (const [key, value] of Object.entries(timingFields)) {
+        form.append(key, value);
+      }
+      if (scheduled) form.append("temporary", "true");
+      if (options.noStory) form.append("no_story", "true");
+      if (options.caption?.trim()) form.append("caption", options.caption.trim());
+      return appendPhotoUpload(form, filePath, mode);
+    }
+  );
+
+  if (!upload.ok || !upload.body.id) {
+    throw new Error(upload.body.error?.message ?? `Album photo upload failed (${upload.status}).`);
+  }
+
+  return { photoId: upload.body.id, postId: upload.body.post_id };
+}
+
+async function postPhotosToFacebookAlbum(
+  albumId: string,
+  pageToken: string,
+  message: string,
+  filePaths: string[],
+  timing?: MetaPublishTiming
+): Promise<MetaPostResult> {
+  if (filePaths.length < MIN_PHOTO_ALBUM) {
+    return {
+      ok: false,
+      message: `Album uploads need at least ${MIN_PHOTO_ALBUM} photos.`,
+    };
+  }
+  if (filePaths.length > MAX_PHOTO_ALBUM) {
+    return {
+      ok: false,
+      message: `Maximum ${MAX_PHOTO_ALBUM} photos per album upload.`,
+    };
+  }
+
+  for (const filePath of filePaths) {
+    const validation = await validatePhotoForMeta(filePath);
+    if (!validation.ok) return { ok: false, message: validation.message };
+  }
+
+  const scheduled = timing?.mode === "schedule";
+  const trimmedMessage = message.trim();
+  const photoIds: string[] = [];
+  let firstPostId: string | undefined;
+
+  try {
+    for (let index = 0; index < filePaths.length; index++) {
+      const filePath = filePaths[index]!;
+      const result = await uploadPhotoToFacebookAlbum(albumId, pageToken, filePath, {
+        caption: index === 0 ? trimmedMessage : undefined,
+        noStory: index > 0,
+        timing,
+      });
+      photoIds.push(result.photoId);
+      if (index === 0) firstPostId = result.postId;
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Album photo upload failed.",
+    };
+  }
+
+  const label = scheduled ? "Photos scheduled to Facebook Album" : "Photos added to Facebook Album";
+  return {
+    ok: true,
+    postId: firstPostId ?? photoIds[0],
+    message: `${label} (${photoIds.length} photo${photoIds.length === 1 ? "" : "s"}).`,
+  };
+}
+
 async function postPhoto(
   pageId: string,
   pageToken: string,
@@ -523,24 +1094,31 @@ async function postPhoto(
   filePath: string,
   timing?: MetaPublishTiming
 ): Promise<MetaPostResult> {
-  const form = new FormData();
-  form.append("access_token", pageToken);
-  const timingFields = resolvePublishTimingFields(timing);
-  for (const [key, value] of Object.entries(timingFields)) {
-    form.append(key, value);
-  }
-  if (message.trim()) form.append("message", message.trim());
-  form.append("source", new Blob([new Uint8Array(await readFile(filePath))]), basename(filePath));
+  const validation = await validatePhotoForMeta(filePath);
+  if (!validation.ok) return { ok: false, message: validation.message };
 
-  const res = await fetch(`${GRAPH_BASE}/${pageId}/photos`, { method: "POST", body: form });
-  const body = (await res.json()) as PostResponse;
-  if (!res.ok || body.error) {
-    return { ok: false, message: body.error?.message ?? `Photo upload failed (${res.status}).` };
-  }
   const scheduled = timing?.mode === "schedule";
+  const timingFields = resolvePublishTimingFields(timing);
+  const upload = await postGraphMultipart(`${GRAPH_BASE}/${pageId}/photos`, "photo", async (form, mode) => {
+    form.append("access_token", pageToken);
+    for (const [key, value] of Object.entries(timingFields)) {
+      form.append(key, value);
+    }
+    if (scheduled) form.append("temporary", "true");
+    if (message.trim()) form.append("caption", message.trim());
+    return appendPhotoUpload(form, filePath, mode);
+  });
+
+  if (!upload.ok) {
+    return {
+      ok: false,
+      message: upload.body.error?.message ?? `Photo upload failed (${upload.status}).`,
+    };
+  }
+
   return {
     ok: true,
-    postId: body.id ?? body.post_id,
+    postId: upload.body.id ?? upload.body.post_id,
     message: publishResultMessage(scheduled, "Photo"),
   };
 }
@@ -550,29 +1128,47 @@ async function postVideo(
   pageToken: string,
   message: string,
   filePath: string,
-  timing?: MetaPublishTiming
+  timing?: MetaPublishTiming,
+  videoThumbnailPath?: string
 ): Promise<MetaPostResult> {
-  const form = new FormData();
-  form.append("access_token", pageToken);
   const timingFields = resolvePublishTimingFields(timing);
-  for (const [key, value] of Object.entries(timingFields)) {
-    form.append(key, value);
-  }
-  if (message.trim()) form.append("description", message.trim());
-  form.append("source", new Blob([new Uint8Array(await readFile(filePath))]), basename(filePath));
+  const upload = await postGraphMultipart(
+    `https://graph-video.facebook.com/${GRAPH_VERSION}/${pageId}/videos`,
+    "video",
+    async (form, mode) => {
+      form.append("access_token", pageToken);
+      for (const [key, value] of Object.entries(timingFields)) {
+        form.append(key, value);
+      }
+      if (message.trim()) form.append("description", message.trim());
+      return appendVideoUpload(form, filePath, mode);
+    }
+  );
 
-  const res = await fetch(`https://graph-video.facebook.com/${GRAPH_VERSION}/${pageId}/videos`, {
-    method: "POST",
-    body: form,
-  });
-  const body = (await res.json()) as PostResponse;
-  if (!res.ok || body.error) {
-    return { ok: false, message: body.error?.message ?? `Video upload failed (${res.status}).` };
+  if (!upload.ok) {
+    return {
+      ok: false,
+      message: upload.body.error?.message ?? `Video upload failed (${upload.status}).`,
+    };
   }
+
+  const videoId = upload.body.id?.trim();
+  const thumbPath = videoThumbnailPath?.trim();
+  if (videoId && thumbPath) {
+    try {
+      await uploadVideoThumbnail(videoId, pageToken, thumbPath);
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const scheduled = timing?.mode === "schedule";
   return {
     ok: true,
-    postId: body.id ?? body.post_id,
+    postId: upload.body.id ?? upload.body.post_id,
     message: publishResultMessage(scheduled, "Video"),
   };
 }
@@ -678,6 +1274,14 @@ export async function listMetaPagePosts(opts?: {
     throw new Error("Select a Facebook Page before listing posts.");
   }
 
+  return listMetaPagePostsForPageId(pageId, pageToken, opts);
+}
+
+async function listMetaPagePostsForPageId(
+  pageId: string,
+  accessToken: string,
+  opts?: { limit?: number; after?: string; mode?: MetaClonePostMode }
+): Promise<MetaPagePostsPage> {
   const requested = Math.max(1, Math.min(25, Math.floor(opts?.limit ?? 10) || 10));
   const attempts: Array<{ limit: number; fields: string }> = [
     { limit: requested, fields: PAGE_POSTS_LIST_FIELDS },
@@ -697,14 +1301,14 @@ export async function listMetaPagePosts(opts?: {
     const params: Record<string, string> = {
       fields: attempt.fields,
       limit: String(attempt.limit),
-      access_token: pageToken,
+      access_token: accessToken,
     };
     if (opts?.after?.trim()) params.after = opts.after.trim();
 
     try {
       const body = await graphGet<PagePostsResponse>(`/${pageId}/posts`, params);
       return {
-        posts: (body.data ?? []).map(mapPagePost),
+        posts: filterPostsByCloneMode((body.data ?? []).map(mapPagePost), opts?.mode),
         nextCursor: body.paging?.cursors?.after,
       };
     } catch (err) {
@@ -714,6 +1318,272 @@ export async function listMetaPagePosts(opts?: {
   }
 
   throw lastErr ?? new Error("Failed to list Page posts.");
+}
+
+export async function listMetaPagePostsFromUrl(opts: {
+  pageUrl: string;
+  limit?: number;
+  after?: string;
+  mode?: MetaClonePostMode;
+}): Promise<MetaClonePagePostsResult> {
+  const ref = parseFacebookPageRef(opts.pageUrl);
+  if (!ref) {
+    throw new Error("Enter a valid Facebook Page URL, username, or Page ID.");
+  }
+
+  const userToken = getMetaConfig().userAccessToken?.trim();
+  if (!userToken) {
+    throw new Error("Connect your Facebook account in Publishing settings first.");
+  }
+
+  const page = await resolveMetaPageFromRef(ref, userToken);
+  let token: string;
+  try {
+    token = await resolveListingTokenForPage(page.id);
+  } catch (err) {
+    throw rewritePagePostsPermissionError(err);
+  }
+
+  try {
+    const postsPage = await listMetaPagePostsForPageId(page.id, token, {
+      limit: opts.limit,
+      after: opts.after,
+      mode: opts.mode,
+    });
+    return { ...postsPage, page };
+  } catch (err) {
+    throw rewritePagePostsPermissionError(err);
+  }
+}
+
+type StoryAttachmentNode = {
+  media_type?: string;
+  type?: string;
+  title?: string;
+  description?: string;
+  url?: string;
+  unshimmed_url?: string;
+  target?: { id?: string; url?: string };
+  media?: { image?: { src?: string }; source?: string };
+  subattachments?: { data?: StoryAttachmentNode[]; summary?: { total_count?: number } };
+};
+
+type PagePostDetailResponse = {
+  id?: string;
+  message?: string;
+  permalink_url?: string;
+  full_picture?: string;
+  status_type?: string;
+  attachments?: { data?: StoryAttachmentNode[] };
+};
+
+const PAGE_POST_CLONE_FIELDS =
+  "id,message,permalink_url,full_picture,status_type,attachments{media_type,type,title,description,url,unshimmed_url,target{id},media{image{src},source},subattachments.limit(10){data{media_type,type,title,description,url,unshimmed_url,target{id},media{image{src},source}}}}";
+
+function filterPostsByCloneMode(
+  posts: MetaPagePostSummary[],
+  mode?: MetaClonePostMode
+): MetaPagePostSummary[] {
+  if (!mode || mode === "all") return posts;
+  if (mode === "carousel") return posts.filter((post) => post.isCarousel);
+  return posts.filter((post) => !post.isCarousel);
+}
+
+function inferPostTypeFromSummary(post: MetaPagePostSummary): MetaPostType {
+  if (post.isCarousel) return "video_carousel";
+  const media = (post.mediaType ?? post.statusType ?? "").toLowerCase();
+  if (media.includes("video")) return "video";
+  if (media.includes("photo") || media.includes("image") || post.pictureUrl) return "photo";
+  return "text";
+}
+
+function isVideoAttachment(node: StoryAttachmentNode): boolean {
+  const t = (node.media_type ?? node.type ?? "").toLowerCase();
+  return t.includes("video");
+}
+
+function attachmentCardLink(node: StoryAttachmentNode, fallback: string): string {
+  return node.unshimmed_url?.trim() || node.url?.trim() || node.target?.url?.trim() || fallback;
+}
+
+function flattenAttachmentCards(raw: PagePostDetailResponse): StoryAttachmentNode[] {
+  const root = raw.attachments?.data?.[0];
+  if (!root) return [];
+  const subs = root.subattachments?.data ?? [];
+  if (subs.length > 0) return subs;
+  return [root];
+}
+
+async function ensureCloneCacheDir(): Promise<string> {
+  const dir = join(app.getPath("userData"), "publish-clone");
+  await mkdir(dir, { recursive: true });
+  return dir;
+}
+
+async function downloadCloneMedia(url: string, ext: string): Promise<string> {
+  const trimmed = url.trim();
+  if (!trimmed) throw new Error("Missing media URL for clone download.");
+
+  const dir = await ensureCloneCacheDir();
+  const hash = createHash("sha256").update(trimmed).digest("hex").slice(0, 20);
+  const safeExt = ext.startsWith(".") ? ext : `.${ext}`;
+  const filePath = join(dir, `${hash}${safeExt}`);
+
+  try {
+    await access(filePath);
+    return filePath;
+  } catch {
+    /* cache miss */
+  }
+
+  const res = await fetch(trimmed);
+  if (!res.ok) {
+    throw new Error(`Failed to download media (${res.status}).`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length === 0) throw new Error("Downloaded media file is empty.");
+  await writeFile(filePath, buf);
+  return filePath;
+}
+
+async function resolveVideoDownloadUrl(
+  node: StoryAttachmentNode,
+  accessToken: string
+): Promise<string | undefined> {
+  const direct = node.media?.source?.trim();
+  if (direct) return direct;
+
+  const videoId = node.target?.id?.trim();
+  if (!videoId) return undefined;
+
+  try {
+    const body = await graphGet<{ source?: string }>(`/${videoId}`, {
+      fields: "source",
+      access_token: accessToken,
+    });
+    return body.source?.trim();
+  } catch {
+    return undefined;
+  }
+}
+
+async function downloadPhotoAttachment(
+  node: StoryAttachmentNode,
+  fallbackPicture?: string
+): Promise<string> {
+  const imageUrl = node.media?.image?.src?.trim() || fallbackPicture?.trim();
+  if (!imageUrl) throw new Error("Could not resolve photo URL for this post.");
+  return downloadCloneMedia(imageUrl, ".jpg");
+}
+
+async function downloadVideoAttachment(
+  node: StoryAttachmentNode,
+  accessToken: string
+): Promise<string> {
+  const sourceUrl = await resolveVideoDownloadUrl(node, accessToken);
+  if (!sourceUrl) {
+    throw new Error("Could not resolve video source for this post. Re-add the video manually.");
+  }
+  return downloadCloneMedia(sourceUrl, ".mp4");
+}
+
+async function mapAttachmentToCarouselSlide(
+  node: StoryAttachmentNode,
+  landingLink: string,
+  accessToken: string,
+  fallbackPicture?: string
+): Promise<MetaCarouselSlide> {
+  const link = attachmentCardLink(node, landingLink);
+  const slide: MetaCarouselSlide = {
+    kind: isVideoAttachment(node) ? "video" : "photo",
+    name: node.title?.trim(),
+    description: node.description?.trim(),
+    link,
+  };
+
+  if (slide.kind === "video") {
+    slide.filePath = await downloadVideoAttachment(node, accessToken);
+    const thumb = node.media?.image?.src?.trim();
+    if (thumb) {
+      try {
+        slide.videoThumbnailPath = await downloadCloneMedia(thumb, ".jpg");
+      } catch {
+        /* optional thumbnail */
+      }
+    }
+  } else {
+    slide.filePath = await downloadPhotoAttachment(node, fallbackPicture);
+  }
+
+  return slide;
+}
+
+export async function getMetaPagePostCloneDetail(opts: {
+  postId: string;
+  sourcePageId: string;
+}): Promise<MetaPagePostCloneDetail> {
+  const postId = opts.postId?.trim();
+  const sourcePageId = opts.sourcePageId?.trim();
+  if (!postId) throw new Error("Post id is required.");
+  if (!sourcePageId) throw new Error("Source Page id is required.");
+
+  let token: string;
+  try {
+    token = await resolveListingTokenForPage(sourcePageId);
+  } catch (err) {
+    throw rewritePagePostsPermissionError(err);
+  }
+  const raw = await graphGet<PagePostDetailResponse>(`/${postId}`, {
+    fields: PAGE_POST_CLONE_FIELDS,
+    access_token: token,
+  });
+
+  if (!raw.id?.trim()) throw new Error("Could not load post details from Facebook.");
+
+  const summary = mapPagePost({
+    id: raw.id,
+    message: raw.message,
+    permalink_url: raw.permalink_url,
+    full_picture: raw.full_picture,
+    status_type: raw.status_type,
+    attachments: raw.attachments,
+  });
+
+  const postType = inferPostTypeFromSummary(summary);
+  const message = raw.message?.trim() ?? "";
+  const link = raw.permalink_url?.trim() ?? `https://www.facebook.com/${sourcePageId}`;
+  const cards = flattenAttachmentCards(raw);
+
+  if (postType === "video_carousel") {
+    if (cards.length === 0) {
+      throw new Error("Carousel post has no attachment cards to clone.");
+    }
+    const carouselSlides: MetaCarouselSlide[] = [];
+    for (const card of cards) {
+      carouselSlides.push(await mapAttachmentToCarouselSlide(card, link, token, raw.full_picture));
+    }
+    return { postId: raw.id, postType, message, link, carouselSlides };
+  }
+
+  if (postType === "photo") {
+    const card = cards[0];
+    const filePath = card
+      ? await downloadPhotoAttachment(card, raw.full_picture)
+      : raw.full_picture
+        ? await downloadCloneMedia(raw.full_picture, ".jpg")
+        : undefined;
+    if (!filePath) throw new Error("Could not resolve photo for this post.");
+    return { postId: raw.id, postType, message, link, filePath };
+  }
+
+  if (postType === "video") {
+    const card = cards.find((c) => isVideoAttachment(c)) ?? cards[0];
+    if (!card) throw new Error("Could not resolve video attachment for this post.");
+    const filePath = await downloadVideoAttachment(card, token);
+    return { postId: raw.id, postType, message, link, filePath };
+  }
+
+  return { postId: raw.id, postType: "text", message, link };
 }
 
 const POST_INSIGHT_METRICS = [
@@ -983,22 +1853,53 @@ async function uploadPageVideo(
   filePath: string,
   opts?: { published?: boolean; title?: string; description?: string }
 ): Promise<string> {
+  const upload = await postGraphMultipart(
+    `https://graph-video.facebook.com/${GRAPH_VERSION}/${pageId}/videos`,
+    "video",
+    async (form, mode) => {
+      form.append("access_token", pageToken);
+      form.append("published", opts?.published === false ? "false" : "true");
+      if (opts?.title?.trim()) form.append("title", opts.title.trim());
+      if (opts?.description?.trim()) form.append("description", opts.description.trim());
+      return appendVideoUpload(form, filePath, mode);
+    }
+  );
+
+  if (!upload.ok || !upload.body.id) {
+    throw new Error(upload.body.error?.message ?? `Video upload failed (${upload.status}).`);
+  }
+  return upload.body.id;
+}
+
+/** POST /{video-id}/thumbnails — set preferred cover image on a Page video. */
+async function uploadVideoThumbnail(
+  videoId: string,
+  pageToken: string,
+  thumbnailPath: string
+): Promise<void> {
+  const info = await stat(thumbnailPath);
+  if (!info.isFile()) throw new Error(`Not a file: ${basename(thumbnailPath)}`);
+  if (mediaKind(thumbnailPath) !== "image") {
+    throw new Error("Video thumbnail must be an image file.");
+  }
+
   const form = new FormData();
   form.append("access_token", pageToken);
-  form.append("published", opts?.published === false ? "false" : "true");
-  if (opts?.title?.trim()) form.append("title", opts.title.trim());
-  if (opts?.description?.trim()) form.append("description", opts.description.trim());
-  form.append("source", new Blob([new Uint8Array(await readFile(filePath))]), basename(filePath));
+  form.append("is_preferred", "true");
+  form.append(
+    "source",
+    new Blob([new Uint8Array(await readFile(thumbnailPath))]),
+    basename(thumbnailPath)
+  );
 
-  const res = await fetch(`https://graph-video.facebook.com/${GRAPH_VERSION}/${pageId}/videos`, {
+  const res = await fetch(`${GRAPH_BASE}/${videoId}/thumbnails`, {
     method: "POST",
     body: form,
   });
-  const body = (await res.json()) as PostResponse;
-  if (!res.ok || body.error || !body.id) {
-    throw new Error(body.error?.message ?? `Video upload failed (${res.status}).`);
+  const body = (await res.json()) as { success?: boolean } & GraphErrorBody;
+  if (!res.ok || body.error || body.success === false) {
+    throw new Error(body.error?.message ?? `Video thumbnail upload failed (${res.status}).`);
   }
-  return body.id;
 }
 
 async function uploadPagePhotoPicture(
@@ -1006,46 +1907,45 @@ async function uploadPagePhotoPicture(
   pageToken: string,
   filePath: string
 ): Promise<string> {
-  const form = new FormData();
-  form.append("access_token", pageToken);
-  form.append("published", "false");
-  form.append("source", new Blob([new Uint8Array(await readFile(filePath))]), basename(filePath));
-
-  const res = await fetch(`${GRAPH_BASE}/${pageId}/photos`, { method: "POST", body: form });
-  const body = (await res.json()) as PostResponse;
-  if (!res.ok || body.error || !body.id) {
-    throw new Error(body.error?.message ?? `Photo upload failed (${res.status}).`);
-  }
-
-  const images = await graphGet<PhotoImagesResponse>(`/${body.id}`, {
-    fields: "images",
-    access_token: pageToken,
+  const { pictureUrl } = await uploadUnpublishedPhoto(pageId, pageToken, filePath, {
+    resolvePicture: true,
   });
-  const pictureUrl = images.images?.[0]?.source;
-  if (!pictureUrl) throw new Error("Could not resolve uploaded photo URL for carousel.");
-  return pictureUrl;
+  return pictureUrl!;
 }
 
 async function buildVideoCarouselAttachment(
+  pageId: string,
   pageToken: string,
   videoId: string,
   link: string,
   name?: string,
-  description?: string
-): Promise<Record<string, string>> {
+  description?: string,
+  thumbnailPath?: string
+): Promise<CarouselChildAttachment> {
   const video = await graphGet<VideoDetailResponse>(`/${videoId}`, {
     fields: "title,description,picture",
     access_token: pageToken,
   });
-  const attachment: Record<string, string> = {
+  const attachment: CarouselChildAttachment = {
     link,
     video_id: videoId,
     name: name?.trim() || video.title?.trim() || "Video",
   };
   const cardDescription = description?.trim() || video.description?.trim();
   if (cardDescription) attachment.description = cardDescription;
-  const picture = resolvePictureUrl(video.picture);
-  if (picture) attachment.picture = picture;
+
+  if (thumbnailPath?.trim()) {
+    attachment.picture = await uploadPagePhotoPicture(pageId, pageToken, thumbnailPath.trim());
+  } else {
+    const picture = resolvePictureUrl(video.picture);
+    if (picture) attachment.picture = picture;
+  }
+  if (!attachment.picture) {
+    throw new Error(
+      "Video carousel cards require a thumbnail image when using video_id."
+    );
+  }
+
   return attachment;
 }
 
@@ -1054,8 +1954,9 @@ async function resolveCarouselSlideAttachment(
   pageToken: string,
   slide: MetaCarouselSlide,
   defaultLink: string
-): Promise<Record<string, string>> {
-  const cardLink = slide.link?.trim() || defaultLink;
+): Promise<CarouselChildAttachment> {
+  const cardLink = defaultLink.trim();
+  if (!cardLink) throw new Error("Carousel card link is missing.");
 
   if (slide.kind === "video") {
     let videoId = slide.pageVideoId?.trim();
@@ -1073,25 +1974,30 @@ async function resolveCarouselSlideAttachment(
       });
     }
     if (!videoId) throw new Error("Video card needs a Page video or local file.");
+
+    const thumbPath = slide.videoThumbnailPath?.trim();
+    if (thumbPath) {
+      await uploadVideoThumbnail(videoId, pageToken, thumbPath);
+    }
+
     return buildVideoCarouselAttachment(
+      pageId,
       pageToken,
       videoId,
       cardLink,
       slide.name,
-      slide.description
+      slide.description,
+      thumbPath
     );
   }
 
   const filePath = slide.filePath?.trim();
   if (!filePath) throw new Error("Photo card needs an image file.");
-  const info = await stat(filePath);
-  if (!info.isFile()) throw new Error(`Not a file: ${basename(filePath)}`);
-  if (mediaKind(filePath) !== "image") {
-    throw new Error(`Photo card requires an image file: ${basename(filePath)}`);
-  }
+  const validation = await validatePhotoForMeta(filePath);
+  if (!validation.ok) throw new Error(validation.message);
 
   const picture = await uploadPagePhotoPicture(pageId, pageToken, filePath);
-  const attachment: Record<string, string> = {
+  const attachment: CarouselChildAttachment = {
     link: cardLink,
     picture,
     name: slide.name?.trim() || basename(filePath, extname(filePath)),
@@ -1140,24 +2046,48 @@ async function postPeCarousel(
     };
   }
 
-  const landingLink = link.trim() || `https://www.facebook.com/${pageId}`;
+  const landingLink = normalizeCarouselLandingLink(link);
+  if (!landingLink) {
+    return {
+      ok: false,
+      message: CAROUSEL_LANDING_LINK_REQUIRED_MESSAGE,
+    };
+  }
+
   const childAttachments = [];
   for (const slide of slides) {
     childAttachments.push(
-      await resolveCarouselSlideAttachment(pageId, pageToken, slide, landingLink)
+      buildOrganicCarouselChildAttachment(
+        await resolveCarouselSlideAttachment(pageId, pageToken, slide, landingLink)
+      )
     );
   }
 
+  for (const attachment of childAttachments) {
+    const cardLink = attachment.link;
+    if (typeof cardLink !== "string" || !cardLink.trim()) {
+      return {
+        ok: false,
+        message: "Each carousel card needs a destination link URL.",
+      };
+    }
+  }
+
   const timingFields = resolvePublishTimingFields(timing);
+  const postBody: Record<string, string> = {
+    message: message.trim(),
+    link: landingLink,
+    ...timingFields,
+    multi_share_end_card: "false",
+    child_attachments: JSON.stringify(childAttachments),
+  };
+  const caption = carouselLinkCaption(landingLink);
+  if (caption) postBody.caption = caption;
+
   const body = await graphPostJson<PostResponse>(
     `/${pageId}/feed`,
     { access_token: pageToken },
-    {
-      message: message.trim(),
-      ...timingFields,
-      multi_share_end_card: "false",
-      child_attachments: JSON.stringify(childAttachments),
-    }
+    postBody
   );
 
   const scheduled = timing?.mode === "schedule";
@@ -1193,9 +2123,14 @@ export async function postToMetaPage(payload: {
   filePath?: string;
   filePaths?: string[];
   postType?: MetaPostType;
+  photoPostMode?: MetaPhotoPostMode;
+  photoAlbumDestination?: MetaPhotoAlbumDestination;
+  photoAlbumFacebookId?: string;
+  photoAlbumNewName?: string;
   link?: string;
   videoIds?: string[];
   carouselSlides?: MetaCarouselSlide[];
+  videoThumbnailPath?: string;
   timing?: MetaPublishTiming;
 }): Promise<MetaPostResult> {
   const config = getMetaConfig();
@@ -1208,7 +2143,7 @@ export async function postToMetaPage(payload: {
   const message = payload.message?.trim() ?? "";
   const filePath = payload.filePath?.trim();
   const postType = payload.postType;
-  const landingLink = payload.link?.trim() ?? `https://www.facebook.com/${pageId}`;
+  const carouselLink = payload.link ?? "";
   const timing = payload.timing;
 
   if (postType === "video_carousel") {
@@ -1217,7 +2152,7 @@ export async function postToMetaPage(payload: {
         payload.carouselSlides && payload.carouselSlides.length > 0
           ? payload.carouselSlides
           : legacySlidesFromPayload(payload);
-      return await postPeCarousel(pageId, pageToken, message, landingLink, slides, timing);
+      return await postPeCarousel(pageId, pageToken, message, carouselLink, slides, timing);
     } catch (err) {
       return {
         ok: false,
@@ -1239,26 +2174,79 @@ export async function postToMetaPage(payload: {
   }
 
   if (postType === "photo" || postType === "video") {
+    if (postType === "photo") {
+      const photoMode = payload.photoPostMode ?? "single";
+      try {
+        if (photoMode === "album") {
+          const paths = (payload.filePaths ?? [])
+            .map((p) => p.trim())
+            .filter(Boolean);
+          if (paths.length === 0) {
+            return { ok: false, message: "Add at least 2 photos for an album post." };
+          }
+          const destination = payload.photoAlbumDestination ?? "feed";
+          if (destination === "facebook_album") {
+            let albumId = payload.photoAlbumFacebookId?.trim();
+            if (!albumId) {
+              const newName = payload.photoAlbumNewName?.trim();
+              if (!newName) {
+                return {
+                  ok: false,
+                  message: "Select an existing Facebook Album or enter a name for a new one.",
+                };
+              }
+              try {
+                const created = await createMetaPageAlbum(newName);
+                albumId = created.id;
+              } catch (err) {
+                return {
+                  ok: false,
+                  message: err instanceof Error ? err.message : "Could not create Facebook Album.",
+                };
+              }
+            }
+            return postPhotosToFacebookAlbum(albumId, pageToken, message, paths, timing);
+          }
+          return await postPhotoAlbum(pageId, pageToken, message, paths, timing);
+        }
+        if (photoMode === "carousel") {
+          const slides = payload.carouselSlides ?? [];
+          if (slides.some((slide) => slide.kind !== "photo")) {
+            return { ok: false, message: "Photo carousel posts require image cards only." };
+          }
+          return await postPeCarousel(pageId, pageToken, message, carouselLink, slides, timing);
+        }
+        if (!filePath) {
+          return { ok: false, message: "Choose a photo file." };
+        }
+        const info = await stat(filePath);
+        if (!info.isFile()) return { ok: false, message: "Media path is not a file." };
+        if (mediaKind(filePath) !== "image") {
+          return { ok: false, message: "Photo posts require an image file." };
+        }
+        return postPhoto(pageId, pageToken, message, filePath, timing);
+      } catch (err) {
+        return {
+          ok: false,
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+
     if (!filePath) {
       return {
         ok: false,
-        message: postType === "photo" ? "Choose a photo file." : "Choose a video file.",
+        message: "Choose a video file.",
       };
     }
     try {
       const info = await stat(filePath);
       if (!info.isFile()) return { ok: false, message: "Media path is not a file." };
       const kind = mediaKind(filePath);
-      if (postType === "photo") {
-        if (kind !== "image") {
-          return { ok: false, message: "Photo posts require an image file." };
-        }
-        return postPhoto(pageId, pageToken, message, filePath, timing);
-      }
       if (kind !== "video") {
         return { ok: false, message: "Video posts require a video file." };
       }
-      return postVideo(pageId, pageToken, message, filePath, timing);
+      return postVideo(pageId, pageToken, message, filePath, timing, payload.videoThumbnailPath);
     } catch (err) {
       return {
         ok: false,
@@ -1278,7 +2266,9 @@ export async function postToMetaPage(payload: {
 
       const kind = mediaKind(filePath);
       if (kind === "image") return postPhoto(pageId, pageToken, message, filePath, timing);
-      if (kind === "video") return postVideo(pageId, pageToken, message, filePath, timing);
+      if (kind === "video") {
+        return postVideo(pageId, pageToken, message, filePath, timing, payload.videoThumbnailPath);
+      }
       return { ok: false, message: "Unsupported media type. Use a common image or video file." };
     }
 

@@ -73,14 +73,28 @@ import {
   getMetaPostInsights,
   listMetaPages,
   listMetaPageVideos,
+  listMetaPageAlbums,
+  createMetaPageAlbum,
   listMetaPagePosts,
+  listMetaPagePostsFromUrl,
+  getMetaPagePostCloneDetail,
   postToMetaPage,
   selectMetaPage,
   setMetaAppConfig,
+  setMetaCloneConfig,
   shareMetaPostsToPages,
   startMetaConnect,
   deleteMetaPagePosts,
 } from "./services/metaPublish";
+import {
+  disconnectYouTubePublish,
+  getYouTubePublishPublic,
+  listYouTubeChannels,
+  selectYouTubeChannel,
+  setYouTubeAppConfig,
+  startYouTubeConnect,
+  uploadToYouTube,
+} from "./services/youtubePublish";
 
 type ActiveRun = { abort: AbortController; jobId: string; packId: string };
 const activeRuns = new Map<string, ActiveRun>();
@@ -1072,6 +1086,21 @@ export function registerIpc(): void {
     return res.filePaths;
   });
 
+  ipcMain.handle("dialog:pickImageFiles", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile", "multiSelections"],
+      filters: [
+        {
+          name: "Images",
+          extensions: ["jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff"],
+        },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (res.canceled || res.filePaths.length === 0) return [];
+    return res.filePaths;
+  });
+
   ipcMain.handle("dialog:pickFormatPlugin", async () => {
     const res = await dialog.showOpenDialog({
       properties: ["openFile"],
@@ -1448,9 +1477,43 @@ export function registerIpc(): void {
     listMetaPageVideos(typeof limit === "number" ? limit : 25)
   );
 
+  ipcMain.handle("publish:meta:listPageAlbums", async (_e, limit?: number) =>
+    listMetaPageAlbums(typeof limit === "number" ? limit : 50)
+  );
+
+  ipcMain.handle("publish:meta:createPageAlbum", async (_e, name: string) =>
+    createMetaPageAlbum(typeof name === "string" ? name : "")
+  );
+
   ipcMain.handle(
     "publish:meta:listPagePosts",
     async (_e, opts?: { limit?: number; after?: string }) => listMetaPagePosts(opts)
+  );
+
+  ipcMain.handle(
+    "publish:meta:listPagePostsFromUrl",
+    async (
+      _e,
+      opts: { pageUrl: string; limit?: number; after?: string; mode?: "single" | "carousel" | "all" }
+    ) => listMetaPagePostsFromUrl(opts)
+  );
+
+  ipcMain.handle(
+    "publish:meta:getPagePostCloneDetail",
+    async (_e, payload: { postId: string; sourcePageId: string }) =>
+      getMetaPagePostCloneDetail(payload)
+  );
+
+  ipcMain.handle(
+    "publish:meta:setCloneConfig",
+    async (
+      _e,
+      partial: {
+        clonePageUrl?: string;
+        clonePostLimit?: number;
+        clonePostMode?: "single" | "carousel" | "all";
+      }
+    ) => setMetaCloneConfig(partial)
   );
 
   ipcMain.handle("publish:meta:getPostInsights", async (_e, postIds: string[]) =>
@@ -1483,13 +1546,104 @@ export function registerIpc(): void {
         filePath?: string;
         filePaths?: string[];
         postType?: import("../common/publish/types").MetaPostType;
+        photoPostMode?: import("../common/publish/types").MetaPhotoPostMode;
+        photoAlbumDestination?: import("../common/publish/types").MetaPhotoAlbumDestination;
+        photoAlbumFacebookId?: string;
+        photoAlbumNewName?: string;
         link?: string;
         videoIds?: string[];
         carouselSlides?: import("../common/publish/types").MetaCarouselSlide[];
+        videoThumbnailPath?: string;
         timing?: import("../common/publish/types").MetaPublishTiming;
       }
     ) => postToMetaPage(payload)
   );
+
+  ipcMain.handle("publish:youtube:get", async () => getYouTubePublishPublic());
+
+  ipcMain.handle(
+    "publish:youtube:setApp",
+    async (
+      _e,
+      partial: { clientId?: string; clientSecret?: string; redirectUri?: string }
+    ) => setYouTubeAppConfig(partial)
+  );
+
+  ipcMain.handle("publish:youtube:startConnect", async () => startYouTubeConnect());
+
+  ipcMain.handle("publish:youtube:disconnect", async () => disconnectYouTubePublish());
+
+  ipcMain.handle("publish:youtube:listChannels", async () => listYouTubeChannels());
+
+  ipcMain.handle(
+    "publish:youtube:selectChannel",
+    async (_e, payload: { channelId: string; channelTitle?: string; channelThumbnailUrl?: string }) =>
+      selectYouTubeChannel(payload)
+  );
+
+  ipcMain.handle(
+    "publish:youtube:upload",
+    async (
+      _e,
+      payload: {
+        title: string;
+        description?: string;
+        tags?: string[];
+        privacyStatus?: import("../common/publish/types").YouTubePrivacyStatus;
+        filePath: string;
+        timing?: import("../common/publish/types").YouTubePublishTiming;
+      }
+    ) => uploadToYouTube(payload)
+  );
+
+  ipcMain.handle("publish:resolveThumbnailPath", async (_e, fileName: string) => {
+    const { resolveThumbnailPath } = await import("./services/thumbnailAssets");
+    return resolveThumbnailPath(typeof fileName === "string" ? fileName : "");
+  });
+
+  ipcMain.handle("publish:generateVideoThumbnails", async (_e, videoPath: unknown) => {
+    const { generateVideoThumbnailCandidates } = await import("./services/videoThumbnail");
+    const path = typeof videoPath === "string" ? videoPath.trim() : "";
+    if (!path) throw new Error("Video path is required.");
+    return generateVideoThumbnailCandidates(path);
+  });
+
+  ipcMain.handle(
+    "publish:listLocalMediaInFolder",
+    async (_e, dirPath: unknown, kind: unknown) => {
+      const { listLocalMediaInFolder } = await import("./services/localMediaBrowse");
+      const folder = typeof dirPath === "string" ? dirPath.trim() : "";
+      const mediaKind = kind === "photo" ? "photo" : "video";
+      if (!folder) return [];
+      try {
+        return await listLocalMediaInFolder(folder, mediaKind);
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  ipcMain.handle("publish:captionSuggestions:get", async () => {
+    const { getCaptionTitleSuggestions } = await import("./services/captionSuggestions");
+    return getCaptionTitleSuggestions();
+  });
+
+  ipcMain.handle("publish:captionSuggestions:set", async (_e, titles: unknown) => {
+    const { setCaptionTitleSuggestions } = await import("./services/captionSuggestions");
+    const list = Array.isArray(titles) ? titles.filter((t): t is string => typeof t === "string") : [];
+    return setCaptionTitleSuggestions(list);
+  });
+
+  ipcMain.handle("publish:hashtagSuggestions:get", async () => {
+    const { getHashtagSuggestions } = await import("./services/hashtagSuggestions");
+    return getHashtagSuggestions();
+  });
+
+  ipcMain.handle("publish:hashtagSuggestions:set", async (_e, tags: unknown) => {
+    const { setHashtagSuggestions } = await import("./services/hashtagSuggestions");
+    const list = Array.isArray(tags) ? tags.filter((t): t is string => typeof t === "string") : [];
+    return setHashtagSuggestions(list);
+  });
 
   ipcMain.handle("providers:listCustom", async () => getStore().get("customProviders") ?? []);
 

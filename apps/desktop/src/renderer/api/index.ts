@@ -44,6 +44,9 @@ import type {
   PendingQueueJob,
   MetaPostResult,
   MetaPostType,
+  MetaPhotoPostMode,
+  MetaPhotoAlbumDestination,
+  MetaPageAlbumSummary,
   MetaPublishTiming,
   MetaPublishTimingMode,
   MetaCarouselSlide,
@@ -56,6 +59,12 @@ import type {
   MetaDeletePostsResult,
   MetaPublishPublic,
   MetaPageSummary,
+  YouTubePublishPublic,
+  YouTubeChannelSummary,
+  YouTubePostResult,
+  YouTubePrivacyStatus,
+  YouTubePublishTiming,
+  YouTubePublishTimingMode,
 } from "../../preload/index";
 
 export type {
@@ -104,6 +113,9 @@ export type {
   PendingQueueJob,
   MetaPostResult,
   MetaPostType,
+  MetaPhotoPostMode,
+  MetaPhotoAlbumDestination,
+  MetaPageAlbumSummary,
   MetaPublishTiming,
   MetaPublishTimingMode,
   MetaCarouselSlide,
@@ -116,6 +128,12 @@ export type {
   MetaDeletePostsResult,
   MetaPublishPublic,
   MetaPageSummary,
+  YouTubePublishPublic,
+  YouTubeChannelSummary,
+  YouTubePostResult,
+  YouTubePrivacyStatus,
+  YouTubePublishTiming,
+  YouTubePublishTimingMode,
 } from "../../preload/index";
 
 export const api = {
@@ -195,8 +213,23 @@ export const api = {
   disconnectMetaPublish: () => window.api.disconnectMetaPublish(),
   listMetaPages: () => window.api.listMetaPages(),
   listMetaPageVideos: (limit?: number) => window.api.listMetaPageVideos(limit),
+  listMetaPageAlbums: (limit?: number) => window.api.listMetaPageAlbums(limit),
+  createMetaPageAlbum: (name: string) => window.api.createMetaPageAlbum(name),
   listMetaPagePosts: (opts?: { limit?: number; after?: string }) =>
     window.api.listMetaPagePosts(opts),
+  listMetaPagePostsFromUrl: (opts: {
+    pageUrl: string;
+    limit?: number;
+    after?: string;
+    mode?: "single" | "carousel" | "all";
+  }) => window.api.listMetaPagePostsFromUrl(opts),
+  getMetaPagePostCloneDetail: (payload: { postId: string; sourcePageId: string }) =>
+    window.api.getMetaPagePostCloneDetail(payload),
+  setMetaCloneConfig: (partial: {
+    clonePageUrl?: string;
+    clonePostLimit?: number;
+    clonePostMode?: "single" | "carousel" | "all";
+  }) => window.api.setMetaCloneConfig(partial),
   getMetaPostInsights: (postIds: string[]) => window.api.getMetaPostInsights(postIds),
   shareMetaPostsToPages: (payload: {
     postIds: string[];
@@ -212,13 +245,46 @@ export const api = {
     filePath?: string;
     filePaths?: string[];
     postType?: MetaPostType;
+    photoPostMode?: MetaPhotoPostMode;
+    photoAlbumDestination?: MetaPhotoAlbumDestination;
+    photoAlbumFacebookId?: string;
+    photoAlbumNewName?: string;
     link?: string;
     videoIds?: string[];
     carouselSlides?: MetaCarouselSlide[];
+    videoThumbnailPath?: string;
     timing?: MetaPublishTiming;
   }) => window.api.postToMetaPage(payload),
+  getYouTubePublish: () => window.api.getYouTubePublish(),
+  setYouTubeApp: (partial: { clientId?: string; clientSecret?: string; redirectUri?: string }) =>
+    window.api.setYouTubeApp(partial),
+  startYouTubeConnect: () => window.api.startYouTubeConnect(),
+  disconnectYouTubePublish: () => window.api.disconnectYouTubePublish(),
+  listYouTubeChannels: () => window.api.listYouTubeChannels(),
+  selectYouTubeChannel: (payload: {
+    channelId: string;
+    channelTitle?: string;
+    channelThumbnailUrl?: string;
+  }) => window.api.selectYouTubeChannel(payload),
+  uploadToYouTube: (payload: {
+    title: string;
+    description?: string;
+    tags?: string[];
+    privacyStatus?: YouTubePrivacyStatus;
+    filePath: string;
+    timing?: YouTubePublishTiming;
+  }) => window.api.uploadToYouTube(payload),
   pickMediaFile: () => window.api.pickMediaFile(),
   pickMediaFiles: () => window.api.pickMediaFiles(),
+  pickImageFiles: () => window.api.pickImageFiles(),
+  resolveThumbnailPath: (fileName: string) => window.api.resolveThumbnailPath(fileName),
+  generateVideoThumbnails: (videoPath: string) => window.api.generateVideoThumbnails(videoPath),
+  listLocalMediaInFolder: (dirPath: string, kind: "video" | "photo") =>
+    window.api.listLocalMediaInFolder(dirPath, kind),
+  getCaptionTitleSuggestions: () => window.api.getCaptionTitleSuggestions(),
+  setCaptionTitleSuggestions: (titles: string[]) => window.api.setCaptionTitleSuggestions(titles),
+  getHashtagSuggestions: () => window.api.getHashtagSuggestions(),
+  setHashtagSuggestions: (tags: string[]) => window.api.setHashtagSuggestions(tags),
   showItemInFolder: (filePath: string) => window.api.showItemInFolder(filePath),
   openPath: (filePath: string) => window.api.openPath(filePath),
   openExternal: (url: string) => window.api.openExternal(url),
