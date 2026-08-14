@@ -52,15 +52,15 @@ const CarouselThumbnailModal: React.FC<CarouselThumbnailModalProps> = ({
 
   const uploadLabel = isVideo
     ? hasSource
-      ? "Upload thumbnail"
-      : "Upload video"
-    : "Upload photo";
+      ? "Upload thumbnail (JPEG/PNG/GIF/BMP/TIFF)"
+      : "Upload video first"
+    : "Upload photo (JPEG/PNG/GIF/BMP/TIFF)";
 
   const subtitle = isVideo
     ? hasSource
-      ? "Pick a JPEG cover for the video card — suitable for public Page posts."
-      : "Add a video first, or upload one here."
-    : "Pick an image for the photo card.";
+      ? "Video card cover image — Meta accepts JPEG, PNG, GIF, BMP, or TIFF."
+      : "Add a video source first, then pick a cover thumbnail."
+    : "Right carousel card — JPEG, PNG, GIF, BMP, or TIFF.";
 
   const showGenerated = isVideo && generatedThumbnails.length > 0;
 

@@ -25,18 +25,24 @@ import type {
   MetaPublishConfig,
   MetaPublishPublic,
   MetaPublishTiming,
+  MetaPublishProgressEvent,
+  MetaPublishProgressHandler,
+  MetaPublishProgressPhase,
 } from "../../common/publish/types";
 import { DEFAULT_META_REDIRECT_URI } from "../../common/publish/types";
 import {
   CAROUSEL_LANDING_LINK_INELIGIBLE_MESSAGE,
   CAROUSEL_LANDING_LINK_REQUIRED_MESSAGE,
-  normalizeCarouselLandingLink,
+  carouselCaptionLinkIssue,
+  carouselLandingLinkIssue,
+  resolveCarouselLandingLink,
 } from "../../common/publish/carouselLinks";
 import {
   createMetaMediaPublicUrl,
   revokeMetaMediaToken,
   verifyHostedMediaUrl,
 } from "./metaMediaHost";
+import { oauthErrorPage, oauthSuccessPage, renderOAuthCallbackPage } from "../oauthCallbackPage";
 
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -110,6 +116,20 @@ function publishResultMessage(scheduled: boolean, label: string): string {
     : `${label} published to the Page feed.`;
 }
 
+function emitPublishProgress(
+  onProgress: MetaPublishProgressHandler | undefined,
+  pageId: string,
+  phase: MetaPublishProgressPhase,
+  message: string,
+  extra?: Pick<MetaPublishProgressEvent, "videoId" | "postId">
+): void {
+  onProgress?.({ pageId, phase, message, ...extra });
+}
+
+function feedPostProgressMessage(scheduled: boolean): string {
+  return scheduled ? "Scheduling post…" : "Posting to feed…";
+}
+
 type GraphErrorBody = {
   error?: {
     message?: string;
@@ -126,7 +146,12 @@ type GraphErrorBody = {
 function formatGraphError(err: GraphErrorBody["error"], fallback: string): string {
   if (!err) return fallback;
   if (err.error_subcode === 1609011) {
-    return CAROUSEL_LANDING_LINK_INELIGIBLE_MESSAGE;
+    const metaMsg = err.error_user_msg?.trim() || err.message?.trim();
+    const parts = [metaMsg || CAROUSEL_LANDING_LINK_INELIGIBLE_MESSAGE];
+    parts.push(
+      "Use an external https landing link (not facebook.com or instagram.com) and remove those URLs from your caption."
+    );
+    return parts.join(" ");
   }
   const parts: string[] = [];
   const detail = err.error_user_msg?.trim() || err.message?.trim();
@@ -155,6 +180,7 @@ type AccountsResponse = {
     access_token?: string;
     category?: string;
     tasks?: string[];
+    picture?: string | { data?: { url?: string } };
   }>;
   error?: GraphErrorBody["error"];
 };
@@ -335,7 +361,15 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
         try {
           const reqUrl = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
           if (reqUrl.pathname !== pathname) {
-            sendHtml(res, 404, "<h1>Not found</h1>");
+            sendHtml(
+              res,
+              404,
+              renderOAuthCallbackPage({
+                variant: "not_found",
+                title: "Not found",
+                message: "This OAuth callback URL is not valid.",
+              })
+            );
             return;
           }
 
@@ -345,7 +379,7 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
             sendHtml(
               res,
               400,
-              `<h1>Facebook login failed</h1><p>${errorDescription ?? error}</p><p>You can close this tab.</p>`
+              oauthErrorPage("Facebook login failed", errorDescription ?? error)
             );
             cancelActiveOAuth(errorDescription ?? error);
             return;
@@ -354,16 +388,20 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
           const returnedState = reqUrl.searchParams.get("state") ?? "";
           const code = reqUrl.searchParams.get("code") ?? "";
           if (!code || returnedState !== state) {
-            sendHtml(res, 400, "<h1>Invalid OAuth response</h1><p>You can close this tab.</p>");
+            sendHtml(
+              res,
+              400,
+              renderOAuthCallbackPage({
+                variant: "invalid",
+                title: "Invalid response",
+                message: "The authorization response could not be verified. Try connecting again from Pinforge.",
+              })
+            );
             cancelActiveOAuth("Invalid OAuth state or missing authorization code.");
             return;
           }
 
-          sendHtml(
-            res,
-            200,
-            "<h1>Connected</h1><p>Pinforge received authorization. You can close this tab and return to the app.</p>"
-          );
+          sendHtml(res, 200, oauthSuccessPage("Facebook"));
 
           if (activeOAuth) {
             clearTimeout(activeOAuth.timeout);
@@ -372,7 +410,15 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
           }
           server.close();
         } catch (err) {
-          sendHtml(res, 500, "<h1>Server error</h1>");
+          sendHtml(
+            res,
+            500,
+            renderOAuthCallbackPage({
+              variant: "server_error",
+              title: "Something went wrong",
+              message: "The local callback server hit an error. Close this tab and try again.",
+            })
+          );
           cancelActiveOAuth(err instanceof Error ? err.message : String(err));
         }
       })();
@@ -688,7 +734,7 @@ async function listMetaPagesInternal(): Promise<MetaPageInternal[]> {
   if (!token) throw new Error("Connect your Facebook account first.");
 
   const body = await graphGet<AccountsResponse>("/me/accounts", {
-    fields: "id,name,access_token,category,tasks",
+    fields: "id,name,access_token,category,tasks,picture{url}",
     access_token: token,
   });
 
@@ -697,6 +743,7 @@ async function listMetaPagesInternal(): Promise<MetaPageInternal[]> {
     name: page.name,
     category: page.category,
     tasks: page.tasks,
+    pictureUrl: resolvePictureUrl(page.picture),
     accessToken: page.access_token,
   }));
 }
@@ -1092,12 +1139,19 @@ async function postPhoto(
   pageToken: string,
   message: string,
   filePath: string,
-  timing?: MetaPublishTiming
+  timing?: MetaPublishTiming,
+  onProgress?: MetaPublishProgressHandler
 ): Promise<MetaPostResult> {
   const validation = await validatePhotoForMeta(filePath);
   if (!validation.ok) return { ok: false, message: validation.message };
 
   const scheduled = timing?.mode === "schedule";
+  emitPublishProgress(
+    onProgress,
+    pageId,
+    "upload_photo",
+    scheduled ? "Uploading & scheduling photo…" : "Uploading photo…"
+  );
   const timingFields = resolvePublishTimingFields(timing);
   const upload = await postGraphMultipart(`${GRAPH_BASE}/${pageId}/photos`, "photo", async (form, mode) => {
     form.append("access_token", pageToken);
@@ -1116,9 +1170,14 @@ async function postPhoto(
     };
   }
 
+  const postId = upload.body.id ?? upload.body.post_id;
+  emitPublishProgress(onProgress, pageId, "publish", scheduled ? "Scheduled" : "Published", {
+    postId,
+  });
+
   return {
     ok: true,
-    postId: upload.body.id ?? upload.body.post_id,
+    postId,
     message: publishResultMessage(scheduled, "Photo"),
   };
 }
@@ -1129,8 +1188,16 @@ async function postVideo(
   message: string,
   filePath: string,
   timing?: MetaPublishTiming,
-  videoThumbnailPath?: string
+  videoThumbnailPath?: string,
+  onProgress?: MetaPublishProgressHandler
 ): Promise<MetaPostResult> {
+  const scheduled = timing?.mode === "schedule";
+  emitPublishProgress(
+    onProgress,
+    pageId,
+    "create_video",
+    scheduled ? "Uploading & scheduling video…" : "Uploading & publishing video…"
+  );
   const timingFields = resolvePublishTimingFields(timing);
   const upload = await postGraphMultipart(
     `https://graph-video.facebook.com/${GRAPH_VERSION}/${pageId}/videos`,
@@ -1156,6 +1223,7 @@ async function postVideo(
   const thumbPath = videoThumbnailPath?.trim();
   if (videoId && thumbPath) {
     try {
+      emitPublishProgress(onProgress, pageId, "video_thumbnail", "Setting thumbnail…");
       await uploadVideoThumbnail(videoId, pageToken, thumbPath);
     } catch (err) {
       return {
@@ -1165,10 +1233,15 @@ async function postVideo(
     }
   }
 
-  const scheduled = timing?.mode === "schedule";
+  const postId = upload.body.id ?? upload.body.post_id;
+  emitPublishProgress(onProgress, pageId, "publish", scheduled ? "Scheduled" : "Published", {
+    postId,
+    videoId,
+  });
+
   return {
     ok: true,
-    postId: upload.body.id ?? upload.body.post_id,
+    postId,
     message: publishResultMessage(scheduled, "Video"),
   };
 }
@@ -1847,6 +1920,40 @@ export async function deleteMetaPagePosts(postIds: string[]): Promise<MetaDelete
   };
 }
 
+/** Upload a local video as an unpublished Page video during PE carousel compose (step 2). */
+export async function uploadCarouselDraftVideo(payload: {
+  filePath: string;
+  title?: string;
+  description?: string;
+}): Promise<MetaPostResult & { videoId?: string }> {
+  const config = getMetaConfig();
+  const pageId = config.pageId?.trim();
+  const pageToken = config.pageAccessToken?.trim();
+  if (!pageId || !pageToken) {
+    return { ok: false, message: "Select a Facebook Page before uploading video." };
+  }
+
+  const path = payload.filePath?.trim();
+  if (!path) return { ok: false, message: "No video file selected." };
+  try {
+    const info = await stat(path);
+    if (!info.isFile()) {
+      return { ok: false, message: `Not a file: ${basename(path)}` };
+    }
+    if (mediaKind(path) !== "video") {
+      return { ok: false, message: `Video card requires a video file: ${basename(path)}` };
+    }
+    const videoId = await uploadPageVideo(pageId, pageToken, path, {
+      published: false,
+      title: payload.title?.trim() || basename(path, extname(path)),
+      description: payload.description,
+    });
+    return { ok: true, videoId, message: "Video uploaded to Page." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 async function uploadPageVideo(
   pageId: string,
   pageToken: string,
@@ -1953,7 +2060,8 @@ async function resolveCarouselSlideAttachment(
   pageId: string,
   pageToken: string,
   slide: MetaCarouselSlide,
-  defaultLink: string
+  defaultLink: string,
+  onProgress?: MetaPublishProgressHandler
 ): Promise<CarouselChildAttachment> {
   const cardLink = defaultLink.trim();
   if (!cardLink) throw new Error("Carousel card link is missing.");
@@ -2031,7 +2139,8 @@ async function postPeCarousel(
   message: string,
   link: string,
   slides: MetaCarouselSlide[],
-  timing?: MetaPublishTiming
+  timing?: MetaPublishTiming,
+  onProgress?: MetaPublishProgressHandler
 ): Promise<MetaPostResult> {
   if (slides.length < MIN_CAROUSEL_VIDEOS) {
     return {
@@ -2046,19 +2155,24 @@ async function postPeCarousel(
     };
   }
 
-  const landingLink = normalizeCarouselLandingLink(link);
+  const landingLink = resolveCarouselLandingLink(pageId, link);
   if (!landingLink) {
     return {
       ok: false,
-      message: CAROUSEL_LANDING_LINK_REQUIRED_MESSAGE,
+      message: carouselLandingLinkIssue(link) ?? CAROUSEL_LANDING_LINK_INELIGIBLE_MESSAGE,
     };
+  }
+
+  const captionIssue = carouselCaptionLinkIssue(message, "");
+  if (captionIssue) {
+    return { ok: false, message: captionIssue };
   }
 
   const childAttachments = [];
   for (const slide of slides) {
     childAttachments.push(
       buildOrganicCarouselChildAttachment(
-        await resolveCarouselSlideAttachment(pageId, pageToken, slide, landingLink)
+        await resolveCarouselSlideAttachment(pageId, pageToken, slide, landingLink, onProgress)
       )
     );
   }
@@ -2072,6 +2186,9 @@ async function postPeCarousel(
       };
     }
   }
+
+  const scheduled = timing?.mode === "schedule";
+  emitPublishProgress(onProgress, pageId, "create_post", scheduled ? "Scheduling…" : "Posting…");
 
   const timingFields = resolvePublishTimingFields(timing);
   const postBody: Record<string, string> = {
@@ -2090,10 +2207,18 @@ async function postPeCarousel(
     postBody
   );
 
-  const scheduled = timing?.mode === "schedule";
+  const postId = body.id ?? body.post_id;
+  emitPublishProgress(
+    onProgress,
+    pageId,
+    "publish",
+    scheduled ? "Scheduled" : postId ? `Published · ${postId}` : "Published",
+    { postId }
+  );
+
   return {
     ok: true,
-    postId: body.id ?? body.post_id,
+    postId,
     message: publishResultMessage(scheduled, "PE media carousel"),
   };
 }
@@ -2118,21 +2243,24 @@ async function postText(
   };
 }
 
-export async function postToMetaPage(payload: {
-  message: string;
-  filePath?: string;
-  filePaths?: string[];
-  postType?: MetaPostType;
-  photoPostMode?: MetaPhotoPostMode;
-  photoAlbumDestination?: MetaPhotoAlbumDestination;
-  photoAlbumFacebookId?: string;
-  photoAlbumNewName?: string;
-  link?: string;
-  videoIds?: string[];
-  carouselSlides?: MetaCarouselSlide[];
-  videoThumbnailPath?: string;
-  timing?: MetaPublishTiming;
-}): Promise<MetaPostResult> {
+export async function postToMetaPage(
+  payload: {
+    message: string;
+    filePath?: string;
+    filePaths?: string[];
+    postType?: MetaPostType;
+    photoPostMode?: MetaPhotoPostMode;
+    photoAlbumDestination?: MetaPhotoAlbumDestination;
+    photoAlbumFacebookId?: string;
+    photoAlbumNewName?: string;
+    link?: string;
+    videoIds?: string[];
+    carouselSlides?: MetaCarouselSlide[];
+    videoThumbnailPath?: string;
+    timing?: MetaPublishTiming;
+  },
+  onProgress?: MetaPublishProgressHandler
+): Promise<MetaPostResult> {
   const config = getMetaConfig();
   const pageId = config.pageId?.trim();
   const pageToken = config.pageAccessToken?.trim();
@@ -2152,7 +2280,7 @@ export async function postToMetaPage(payload: {
         payload.carouselSlides && payload.carouselSlides.length > 0
           ? payload.carouselSlides
           : legacySlidesFromPayload(payload);
-      return await postPeCarousel(pageId, pageToken, message, carouselLink, slides, timing);
+      return await postPeCarousel(pageId, pageToken, message, carouselLink, slides, timing, onProgress);
     } catch (err) {
       return {
         ok: false,
@@ -2214,7 +2342,7 @@ export async function postToMetaPage(payload: {
           if (slides.some((slide) => slide.kind !== "photo")) {
             return { ok: false, message: "Photo carousel posts require image cards only." };
           }
-          return await postPeCarousel(pageId, pageToken, message, carouselLink, slides, timing);
+          return await postPeCarousel(pageId, pageToken, message, carouselLink, slides, timing, onProgress);
         }
         if (!filePath) {
           return { ok: false, message: "Choose a photo file." };
@@ -2224,7 +2352,7 @@ export async function postToMetaPage(payload: {
         if (mediaKind(filePath) !== "image") {
           return { ok: false, message: "Photo posts require an image file." };
         }
-        return postPhoto(pageId, pageToken, message, filePath, timing);
+        return postPhoto(pageId, pageToken, message, filePath, timing, onProgress);
       } catch (err) {
         return {
           ok: false,
@@ -2246,7 +2374,15 @@ export async function postToMetaPage(payload: {
       if (kind !== "video") {
         return { ok: false, message: "Video posts require a video file." };
       }
-      return postVideo(pageId, pageToken, message, filePath, timing, payload.videoThumbnailPath);
+      return postVideo(
+        pageId,
+        pageToken,
+        message,
+        filePath,
+        timing,
+        payload.videoThumbnailPath,
+        onProgress
+      );
     } catch (err) {
       return {
         ok: false,
@@ -2265,9 +2401,17 @@ export async function postToMetaPage(payload: {
       if (!info.isFile()) return { ok: false, message: "Media path is not a file." };
 
       const kind = mediaKind(filePath);
-      if (kind === "image") return postPhoto(pageId, pageToken, message, filePath, timing);
+      if (kind === "image") return postPhoto(pageId, pageToken, message, filePath, timing, onProgress);
       if (kind === "video") {
-        return postVideo(pageId, pageToken, message, filePath, timing, payload.videoThumbnailPath);
+        return postVideo(
+        pageId,
+        pageToken,
+        message,
+        filePath,
+        timing,
+        payload.videoThumbnailPath,
+        onProgress
+      );
       }
       return { ok: false, message: "Unsupported media type. Use a common image or video file." };
     }

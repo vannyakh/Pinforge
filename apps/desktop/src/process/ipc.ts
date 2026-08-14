@@ -85,6 +85,7 @@ import {
   shareMetaPostsToPages,
   startMetaConnect,
   deleteMetaPagePosts,
+  uploadCarouselDraftVideo,
 } from "./services/metaPublish";
 import {
   disconnectYouTubePublish,
@@ -1540,7 +1541,7 @@ export function registerIpc(): void {
   ipcMain.handle(
     "publish:meta:post",
     async (
-      _e,
+      e,
       payload: {
         message: string;
         filePath?: string;
@@ -1556,7 +1557,18 @@ export function registerIpc(): void {
         videoThumbnailPath?: string;
         timing?: import("../common/publish/types").MetaPublishTiming;
       }
-    ) => postToMetaPage(payload)
+    ) =>
+      postToMetaPage(payload, (ev) => {
+        e.sender.send("publish:meta:progress", ev);
+      })
+  );
+
+  ipcMain.handle(
+    "publish:meta:uploadCarouselVideo",
+    async (
+      _e,
+      payload: { filePath: string; title?: string; description?: string }
+    ) => uploadCarouselDraftVideo(payload)
   );
 
   ipcMain.handle("publish:youtube:get", async () => getYouTubePublishPublic());

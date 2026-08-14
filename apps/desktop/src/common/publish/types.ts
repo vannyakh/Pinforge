@@ -60,6 +60,8 @@ export interface MetaPageSummary {
   name: string;
   category?: string;
   tasks?: string[];
+  /** Page profile picture from Graph API `picture`. */
+  pictureUrl?: string;
 }
 
 export interface MetaPostResult {
@@ -67,6 +69,24 @@ export interface MetaPostResult {
   postId?: string;
   message: string;
 }
+
+/** Granular Meta Page publish steps streamed to the renderer during `postToMetaPage`. */
+export type MetaPublishProgressPhase =
+  | "create_video"
+  | "video_thumbnail"
+  | "upload_photo"
+  | "create_post"
+  | "publish";
+
+export interface MetaPublishProgressEvent {
+  pageId: string;
+  phase: MetaPublishProgressPhase;
+  message: string;
+  videoId?: string;
+  postId?: string;
+}
+
+export type MetaPublishProgressHandler = (event: MetaPublishProgressEvent) => void;
 
 export type MetaPublishTimingMode = "now" | "schedule";
 

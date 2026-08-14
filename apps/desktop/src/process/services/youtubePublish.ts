@@ -14,6 +14,7 @@ import type {
   YouTubePublishTiming,
 } from "../../common/publish/types";
 import { DEFAULT_YOUTUBE_REDIRECT_URI } from "../../common/publish/types";
+import { oauthErrorPage, oauthSuccessPage, renderOAuthCallbackPage } from "../oauthCallbackPage";
 
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
@@ -125,7 +126,15 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
         try {
           const reqUrl = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
           if (reqUrl.pathname !== pathname) {
-            sendHtml(res, 404, "<h1>Not found</h1>");
+            sendHtml(
+              res,
+              404,
+              renderOAuthCallbackPage({
+                variant: "not_found",
+                title: "Not found",
+                message: "This OAuth callback URL is not valid.",
+              })
+            );
             return;
           }
 
@@ -135,7 +144,7 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
             sendHtml(
               res,
               400,
-              `<h1>Google sign-in failed</h1><p>${errorDescription ?? error}</p><p>You can close this tab.</p>`
+              oauthErrorPage("Google sign-in failed", errorDescription ?? error)
             );
             cancelActiveOAuth(errorDescription ?? error);
             return;
@@ -144,16 +153,20 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
           const returnedState = reqUrl.searchParams.get("state") ?? "";
           const code = reqUrl.searchParams.get("code") ?? "";
           if (!code || returnedState !== state) {
-            sendHtml(res, 400, "<h1>Invalid OAuth response</h1><p>You can close this tab.</p>");
+            sendHtml(
+              res,
+              400,
+              renderOAuthCallbackPage({
+                variant: "invalid",
+                title: "Invalid response",
+                message: "The authorization response could not be verified. Try connecting again from Pinforge.",
+              })
+            );
             cancelActiveOAuth("Invalid OAuth state or missing authorization code.");
             return;
           }
 
-          sendHtml(
-            res,
-            200,
-            "<h1>Connected</h1><p>Pinforge received authorization. You can close this tab and return to the app.</p>"
-          );
+          sendHtml(res, 200, oauthSuccessPage("YouTube"));
 
           if (activeOAuth) {
             clearTimeout(activeOAuth.timeout);
@@ -162,7 +175,15 @@ function waitForOAuthCallback(redirectUri: string, state: string): Promise<strin
           }
           server.close();
         } catch (err) {
-          sendHtml(res, 500, "<h1>Server error</h1>");
+          sendHtml(
+            res,
+            500,
+            renderOAuthCallbackPage({
+              variant: "server_error",
+              title: "Something went wrong",
+              message: "The local callback server hit an error. Close this tab and try again.",
+            })
+          );
           cancelActiveOAuth(err instanceof Error ? err.message : String(err));
         }
       })();

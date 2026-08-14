@@ -5,6 +5,7 @@ import MetaPhotoAlbumTarget from "@renderer/components/publish/MetaPhotoAlbumTar
 import PostBuilderLabelHelp from "@renderer/components/publish/PostBuilderLabelHelp";
 import CarouselSourceModal from "@renderer/components/publish/CarouselSourceModal";
 import { pathToPreview } from "@renderer/components/publish/carouselPreview";
+import { carouselLandingLinkIssue } from "@common/publish/carouselLinks";
 import type { MetaPhotoPostMode } from "@common/publish/types";
 import {
   CAROUSEL_BUTTON_ACTIONS,
@@ -34,6 +35,7 @@ const PhotoPostBuilder: React.FC<PhotoPostBuilderProps> = ({ metaConnected = fal
   const setLink = useMetaPublishStore((s) => s.setLink);
   const carouselCtaOption = useMetaPublishStore((s) => s.carouselCtaOption);
   const setCarouselCtaOption = useMetaPublishStore((s) => s.setCarouselCtaOption);
+  const landingLinkIssue = carouselLandingLinkIssue(link);
 
   const [sourceModalOpen, setSourceModalOpen] = useState(false);
 
@@ -74,15 +76,21 @@ const PhotoPostBuilder: React.FC<PhotoPostBuilderProps> = ({ metaConnected = fal
         <>
           <section className="post-builder__section">
             <PostBuilderLabelHelp
-              label="Landing link"
-              hint="Required external URL for all carousel cards. Facebook and Instagram links are rejected by Meta (error 1609011)."
+              label="Landing link (optional)"
+              hint="Leave empty to use your Page URL. External https URLs only — Facebook and Instagram links are rejected by Meta."
             />
             <Input
               value={link}
               onChange={setLink}
               allowClear
-              placeholder="https://your-website.com (required)"
+              status={landingLinkIssue ? "error" : undefined}
+              placeholder="Leave empty for Page URL, or https://your-website.com"
             />
+            {landingLinkIssue ? (
+              <div className="post-builder__field-error text-12px text-[rgb(var(--danger-6))] mt-6px">
+                {landingLinkIssue}
+              </div>
+            ) : null}
           </section>
           <section className="post-builder__section">
             <PostBuilderLabelHelp

@@ -69,6 +69,7 @@ const MetaPublishModal: React.FC = () => {
       isPublishDraftReady({
         postType,
         message,
+        hashtags,
         filePath,
         link,
         photoPostMode,
@@ -82,6 +83,7 @@ const MetaPublishModal: React.FC = () => {
     [
       postType,
       message,
+      hashtags,
       filePath,
       link,
       photoPostMode,
@@ -169,8 +171,15 @@ const MetaPublishModal: React.FC = () => {
     }
 
     setPublishing(true);
+    const unsub = api.onMetaPublishProgress((ev) => {
+      if (ev.pageId === config.pageId) {
+        Message.loading({ content: ev.message, duration: 0, id: "meta-publish-progress" });
+      }
+    });
+
     try {
       const result: MetaPostResult = await api.postToMetaPage(publishPayload);
+      Message.clear();
       if (!result.ok) {
         Message.error(result.message);
         return;
@@ -178,8 +187,10 @@ const MetaPublishModal: React.FC = () => {
       Message.success(result.postId ? `${result.message} (ID: ${result.postId})` : result.message);
       closePublish();
     } catch (err) {
+      Message.clear();
       Message.error(err instanceof Error ? err.message : String(err));
     } finally {
+      unsub();
       setPublishing(false);
     }
   };

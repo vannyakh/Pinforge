@@ -13,6 +13,14 @@ import {
   pathToPreview,
 } from "@renderer/components/publish/carouselPreview";
 import {
+  carouselSlotHasSource,
+  peCarouselMediaSetupReady,
+  validateCarouselImagePick,
+  validateCarouselThumbnailPick,
+  validateCarouselVideoPick,
+  videoCardNeedsThumbnail,
+} from "@renderer/components/publish/carouselMediaTypes";
+import {
   customThumbnailFromPath,
   DEFAULT_PHOTO_CARD_FILE,
   generatedVideoThumbnailAssets,
@@ -20,6 +28,10 @@ import {
   thumbnailMatchesSlide,
   type CarouselThumbnailAsset,
 } from "@renderer/components/publish/carouselThumbnailAssets";
+import {
+  carouselLandingLinkIssue,
+  carouselCaptionLinkIssue,
+} from "@common/publish/carouselLinks";
 import {
   CAROUSEL_BUTTON_ACTIONS,
   DEFAULT_PE_CARD_FOOTER,
@@ -33,12 +45,9 @@ function fileBaseName(filePath: string): string {
   return parts[parts.length - 1] ?? filePath;
 }
 
-const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif|bmp)$/i;
-
 type PeCarouselBuilderProps = {
   pageId?: string;
   pageName?: string;
-  /** Flat layout on the publish page (no boxed modal-style shell). */
   inlinePreview?: boolean;
   pageVideos: MetaPageVideoSummary[];
   loadingVideos: boolean;
@@ -46,15 +55,18 @@ type PeCarouselBuilderProps = {
 };
 
 const PE_CTA_HINT =
-  "Required external landing link for all carousel cards (https://your-site.com). Facebook and Instagram URLs are not eligible.";
+  "Optional landing link for carousel cards. Leave empty to use your Page URL. Facebook and Instagram URLs are not eligible when set manually.";
+
+const PE_POST_HINT =
+  "Step 2 — select video source, upload as Page video, then ffmpeg generates thumbnails. Caption and CTA unlock when both cards are ready.";
 
 const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
   pageId,
   pageName,
   inlinePreview = false,
   pageVideos,
-  loadingVideos: _loadingVideos,
-  onRefreshVideos: _onRefreshVideos,
+  loadingVideos,
+  onRefreshVideos,
 }) => {
   const message = useMetaPublishStore((s) => s.message);
   const hashtags = useMetaPublishStore((s) => s.hashtags);
@@ -66,6 +78,8 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
   const setCarouselCtaOption = useMetaPublishStore((s) => s.setCarouselCtaOption);
   const setSelectedSlideId = useMetaPublishStore((s) => s.setSelectedSlideId);
   const updateCarouselSlide = useMetaPublishStore((s) => s.updateCarouselSlide);
+  const setCarouselCreatingAdIds = useMetaPublishStore((s) => s.setCarouselCreatingAdIds);
+  const setCarouselGeneratingThumbIds = useMetaPublishStore((s) => s.setCarouselGeneratingThumbIds);
 
   const [sourceModalOpen, setSourceModalOpen] = useState(false);
   const [thumbnailModalOpen, setThumbnailModalOpen] = useState(false);
@@ -75,7 +89,9 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
     Record<string, CarouselThumbnailAsset[]>
   >({});
   const [generatingSlideIds, setGeneratingSlideIds] = useState<Record<string, boolean>>({});
+  const [creatingAdSlideIds, setCreatingAdSlideIds] = useState<Record<string, boolean>>({});
   const thumbQueueRef = useRef(new Set<string>());
+  const adQueueRef = useRef(new Set<string>());
 
   const selectedSlide = useMemo(
     () => carouselSlides.find((s) => s.id === selectedSlideId) ?? null,
@@ -93,6 +109,37 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
   const pageLabel = pageName?.trim() || (pageId ? `Page ${pageId}` : "Your Page");
   const pageInitial = pageLabel.charAt(0).toUpperCase();
   const previewMessage = buildPublishMessage(message, hashtags);
+  const landingLinkIssue = carouselLandingLinkIssue(link);
+  const captionLinkIssue = carouselCaptionLinkIssue(message, hashtags);
+
+  const mediaSetupReady = useMemo(
+    () =>
+      peCarouselMediaSetupReady(
+        carouselSlides,
+        pageVideos,
+        generatingSlideIds,
+        creatingAdSlideIds
+      ),
+    [carouselSlides, pageVideos, generatingSlideIds, creatingAdSlideIds]
+  );
+
+  const videoReadyForPhoto = useMemo(() => {
+    const video = carouselSlides.find((s) => s.kind === "video");
+    if (!video) return false;
+    if (generatingSlideIds[video.id]) return false;
+    if (creatingAdSlideIds[video.id]) return false;
+    if (!carouselSlotHasSource(video)) return false;
+    if (video.filePath?.trim() && !video.pageVideoId?.trim()) return false;
+    return !videoCardNeedsThumbnail(video, pageVideos);
+  }, [carouselSlides, creatingAdSlideIds, generatingSlideIds, pageVideos]);
+
+  useEffect(() => {
+    setCarouselCreatingAdIds(creatingAdSlideIds);
+  }, [creatingAdSlideIds, setCarouselCreatingAdIds]);
+
+  useEffect(() => {
+    setCarouselGeneratingThumbIds(generatingSlideIds);
+  }, [generatingSlideIds, setCarouselGeneratingThumbIds]);
 
   const libraryThumbnails = useMemo(
     () => [...PRESET_CAROUSEL_THUMBNAILS, ...customThumbnails],
@@ -161,11 +208,59 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
     [carouselSlides, updateCarouselSlide]
   );
 
+  const prepareLocalVideoSlide = useCallback(
+    async (slideId: string, filePath: string, name?: string) => {
+      if (!pageId) {
+        Message.warning("Select a Facebook Page before uploading video.");
+        return;
+      }
+      setCreatingAdSlideIds((prev) => ({ ...prev, [slideId]: true }));
+      try {
+        const result = await api.uploadCarouselDraftVideo({
+          filePath,
+          title: name?.trim() || fileBaseName(filePath).replace(/\.[^.]+$/, ""),
+        });
+        if (!result.ok || !result.videoId) {
+          Message.error(result.message);
+          return;
+        }
+        updateCarouselSlide(slideId, { pageVideoId: result.videoId });
+        onRefreshVideos();
+      } catch (err) {
+        Message.error(err instanceof Error ? err.message : String(err));
+      } finally {
+        setCreatingAdSlideIds((prev) => {
+          const next = { ...prev };
+          delete next[slideId];
+          return next;
+        });
+      }
+    },
+    [onRefreshVideos, pageId, updateCarouselSlide]
+  );
+
   useEffect(() => {
     for (const slide of carouselSlides) {
       if (slide.kind !== "video") continue;
       const filePath = slide.filePath?.trim();
       if (!filePath) continue;
+      if (slide.pageVideoId?.trim()) continue;
+      if (creatingAdSlideIds[slide.id]) continue;
+      if (adQueueRef.current.has(slide.id)) continue;
+
+      adQueueRef.current.add(slide.id);
+      void prepareLocalVideoSlide(slide.id, filePath, slide.name).finally(() => {
+        adQueueRef.current.delete(slide.id);
+      });
+    }
+  }, [carouselSlides, creatingAdSlideIds, prepareLocalVideoSlide]);
+
+  useEffect(() => {
+    for (const slide of carouselSlides) {
+      if (slide.kind !== "video") continue;
+      const filePath = slide.filePath?.trim();
+      if (!filePath) continue;
+      if (slide.filePath?.trim() && !slide.pageVideoId?.trim()) continue;
       if (slide.videoThumbnailPath?.trim()) continue;
       if (generatedThumbsBySlide[slide.id]?.length) continue;
       if (generatingSlideIds[slide.id]) continue;
@@ -179,6 +274,7 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
   }, [autoGenerateVideoThumbnails, carouselSlides, generatedThumbsBySlide, generatingSlideIds]);
 
   useEffect(() => {
+    if (!videoReadyForPhoto) return;
     const photoSlide = carouselSlides.find((s) => s.kind === "photo");
     if (!photoSlide || photoSlide.filePath?.trim()) return;
 
@@ -194,7 +290,40 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [carouselSlides, updateCarouselSlide]);
+  }, [carouselSlides, updateCarouselSlide, videoReadyForPhoto]);
+
+  const resetSlideSource = useCallback(
+    (slide: CarouselSlideDraft) => {
+      updateCarouselSlide(slide.id, {
+        pageVideoId: undefined,
+        filePath: undefined,
+        previewUrl: undefined,
+        videoThumbnailPath: undefined,
+        name: undefined,
+      });
+      setGeneratedThumbsBySlide((prev) => {
+        const next = { ...prev };
+        delete next[slide.id];
+        return next;
+      });
+      setGeneratingSlideIds((prev) => {
+        if (!prev[slide.id]) return prev;
+        const next = { ...prev };
+        delete next[slide.id];
+        return next;
+      });
+      setCreatingAdSlideIds((prev) => {
+        if (!prev[slide.id]) return prev;
+        const next = { ...prev };
+        delete next[slide.id];
+        return next;
+      });
+      thumbQueueRef.current.delete(slide.id);
+      adQueueRef.current.delete(slide.id);
+      setSelectedSlideId(slide.id);
+    },
+    [setSelectedSlideId, updateCarouselSlide]
+  );
 
   const openSourceModal = (slide: CarouselSlideDraft) => {
     if (modalClosingRef.current) return;
@@ -216,6 +345,53 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
     [updateCarouselSlide]
   );
 
+  const applyVideoToSlide = useCallback(
+    (slideId: string, filePath: string) => {
+      updateCarouselSlide(slideId, {
+        kind: "video",
+        filePath,
+        previewUrl: pathToPreview(filePath),
+        pageVideoId: undefined,
+        videoThumbnailPath: undefined,
+      });
+    },
+    [updateCarouselSlide]
+  );
+
+  const quickUploadForSlide = useCallback(
+    async (slide: CarouselSlideDraft) => {
+      setSelectedSlideId(slide.id);
+
+      if (slide.kind === "video") {
+        const paths = await api.pickMediaFiles();
+        const path = paths[0];
+        if (!path) return;
+        const err = validateCarouselVideoPick(path);
+        if (err) {
+          Message.warning(err);
+          return;
+        }
+        applyVideoToSlide(slide.id, path);
+        return;
+      }
+
+      const paths = await api.pickImageFiles();
+      const path = paths[0];
+      if (!path) return;
+      const err = validateCarouselImagePick(path);
+      if (err) {
+        Message.warning(err);
+        return;
+      }
+      applyImageToSlide(
+        slide.id,
+        path,
+        previewUrlForLocalPath(path, "photo") ?? pathToPreview(path)
+      );
+    },
+    [applyImageToSlide, applyVideoToSlide, setSelectedSlideId]
+  );
+
   const applyThumbnailToSlide = useCallback(
     async (slide: CarouselSlideDraft, thumb: CarouselThumbnailAsset) => {
       let filePath = thumb.id.startsWith("custom:") ? thumb.id.slice("custom:".length) : null;
@@ -224,6 +400,12 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
       }
       if (!filePath) {
         Message.error(`Could not resolve thumbnail: ${thumb.fileName}`);
+        return;
+      }
+
+      const thumbErr = validateCarouselThumbnailPick(filePath);
+      if (thumbErr) {
+        Message.warning(thumbErr);
         return;
       }
 
@@ -252,6 +434,18 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
   );
 
   const openThumbnailModal = (slide: CarouselSlideDraft) => {
+    if (creatingAdSlideIds[slide.id]) {
+      Message.info("Wait for the Page video upload to finish.");
+      return;
+    }
+    if (generatingSlideIds[slide.id]) {
+      Message.info("Wait for thumbnail generation to finish.");
+      return;
+    }
+    if (slide.kind === "video" && !slotHasSource(slide)) {
+      openSourceModal(slide);
+      return;
+    }
     setSelectedSlideId(slide.id);
     setThumbnailModalSlideId(slide.id);
     setThumbnailModalOpen(true);
@@ -264,15 +458,12 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
 
   const handleUploadForSlide = async (slide: CarouselSlideDraft) => {
     if (slide.kind === "video") {
-      if (!slotHasSource(slide)) {
-        closeThumbnailModal();
-        openSourceModal(slide);
-        return;
-      }
-
-      const path = await api.pickMediaFile();
-      if (!path || !IMAGE_EXT.test(path)) {
-        if (path) Message.warning("Choose an image file for the video thumbnail.");
+      const paths = await api.pickImageFiles();
+      const path = paths[0];
+      if (!path) return;
+      const err = validateCarouselThumbnailPick(path);
+      if (err) {
+        Message.warning(err);
         return;
       }
 
@@ -289,9 +480,12 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
       return;
     }
 
-    const path = await api.pickMediaFile();
-    if (!path || !IMAGE_EXT.test(path)) {
-      if (path) Message.warning("Choose an image file for the photo card.");
+    const paths = await api.pickImageFiles();
+    const path = paths[0];
+    if (!path) return;
+    const err = validateCarouselImagePick(path);
+    if (err) {
+      Message.warning(err);
       return;
     }
 
@@ -310,32 +504,8 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
 
   return (
     <div className="post-builder flex flex-col gap-18px">
-      <PublishCaptionSection placeholder="Write the main caption above your carousel…" />
-      <PublishHashtagSection />
-
-      <section className="post-builder__section">
-        <PostBuilderLabelHelp label="CTA option" hint={PE_CTA_HINT} />
-        <div className="post-builder__cta-grid flex flex-col gap-8px">
-          <Select
-            value={carouselCtaOption}
-            options={CAROUSEL_BUTTON_ACTIONS.map((a) => ({ label: a.label, value: a.value }))}
-            onChange={onCtaOptionChange}
-          />
-          <Input
-            value={link}
-            onChange={setLink}
-            allowClear
-            placeholder="https://your-website.com (required for carousel)"
-          />
-          <Input
-            value={ctaText}
-            onChange={(v) => applyCtaText(v)}
-            placeholder={DEFAULT_PE_CARD_FOOTER}
-          />
-        </div>
-      </section>
-
       <section className="post-builder__section post-builder__section--flush">
+        <PostBuilderLabelHelp label="Post" hint={PE_POST_HINT} />
         <PeCarouselPreview
           pageLabel={pageLabel}
           pageInitial={pageInitial}
@@ -346,20 +516,91 @@ const PeCarouselBuilder: React.FC<PeCarouselBuilderProps> = ({
           ctaButtonLabel={ctaButtonLabel}
           ctaOption={carouselCtaOption}
           inlinePreview={inlinePreview}
+          badgeLabel="Post"
           generatingSlideIds={generatingSlideIds}
+          creatingAdSlideIds={creatingAdSlideIds}
           onCardMediaClick={openSourceModal}
           onChangeSourceClick={openSourceModal}
+          onQuickUpload={(slide) => void quickUploadForSlide(slide)}
+          onPickThumbnailClick={openThumbnailModal}
+          onClearSourceClick={resetSlideSource}
         />
       </section>
+
+      <fieldset
+        disabled={!mediaSetupReady}
+        className={`post-builder__setup-fieldset ${mediaSetupReady ? "" : "post-builder__setup-fieldset--locked"}`.trim()}
+      >
+        <PublishCaptionSection placeholder="Write the main caption above your carousel…" />
+        {captionLinkIssue ? (
+          <div className="post-builder__field-error text-12px text-[rgb(var(--danger-6))] -mt-10px">
+            {captionLinkIssue}
+          </div>
+        ) : null}
+        <PublishHashtagSection />
+
+        <section className="post-builder__section">
+          <PostBuilderLabelHelp label="Carousel options" hint={PE_CTA_HINT} />
+          <div className="post-builder__cta-grid flex flex-col gap-10px">
+            <div className="post-builder__field">
+              <div className="post-builder__field-label">Button type</div>
+              <Select
+                value={carouselCtaOption}
+                options={CAROUSEL_BUTTON_ACTIONS.map((a) => ({ label: a.label, value: a.value }))}
+                onChange={onCtaOptionChange}
+              />
+            </div>
+            <div className="post-builder__field">
+              <div className="post-builder__field-label">Landing link (optional)</div>
+              <Input
+                value={link}
+                onChange={setLink}
+                allowClear
+                status={landingLinkIssue ? "error" : undefined}
+                placeholder="Leave empty for Page URL, or https://your-website.com"
+              />
+              {landingLinkIssue ? (
+                <div className="post-builder__field-error text-12px text-[rgb(var(--danger-6))]">
+                  {landingLinkIssue}
+                </div>
+              ) : null}
+            </div>
+            <div className="post-builder__field">
+              <div className="post-builder__field-label">Card footer text</div>
+              <Input
+                value={ctaText}
+                onChange={(v) => applyCtaText(v)}
+                placeholder={DEFAULT_PE_CARD_FOOTER}
+              />
+            </div>
+          </div>
+        </section>
+      </fieldset>
 
       <CarouselSourceModal
         visible={sourceModalOpen}
         slide={selectedSlide}
         pageVideos={pageVideos}
+        loadingPageVideos={loadingVideos}
         onClose={closeSourceModal}
         onApply={(patch) => {
           if (!selectedSlide) return;
+          if (selectedSlide.kind === "video" && patch.filePath?.trim()) {
+            const err = validateCarouselVideoPick(patch.filePath);
+            if (err) {
+              Message.warning(err);
+              return;
+            }
+          }
+          if (selectedSlide.kind === "photo" && patch.filePath?.trim()) {
+            const err = validateCarouselImagePick(patch.filePath);
+            if (err) {
+              Message.warning(err);
+              return;
+            }
+          }
           updateCarouselSlide(selectedSlide.id, patch);
+          closeSourceModal();
         }}
       />
 

@@ -49,6 +49,7 @@ import type {
   MetaPageAlbumSummary,
   MetaPublishTiming,
   MetaPublishTimingMode,
+  MetaPublishProgressEvent,
   MetaCarouselSlide,
   MetaPageVideoSummary,
   MetaPagePostSummary,
@@ -118,6 +119,7 @@ export type {
   MetaPageAlbumSummary,
   MetaPublishTiming,
   MetaPublishTimingMode,
+  MetaPublishProgressEvent,
   MetaCarouselSlide,
   MetaPageVideoSummary,
   MetaPagePostSummary,
@@ -255,6 +257,13 @@ export const api = {
     videoThumbnailPath?: string;
     timing?: MetaPublishTiming;
   }) => window.api.postToMetaPage(payload),
+  uploadCarouselDraftVideo: (payload: {
+    filePath: string;
+    title?: string;
+    description?: string;
+  }) => window.api.uploadCarouselDraftVideo(payload),
+  onMetaPublishProgress: (cb: (event: MetaPublishProgressEvent) => void) =>
+    window.api.onMetaPublishProgress(cb),
   getYouTubePublish: () => window.api.getYouTubePublish(),
   setYouTubeApp: (partial: { clientId?: string; clientSecret?: string; redirectUri?: string }) =>
     window.api.setYouTubeApp(partial),

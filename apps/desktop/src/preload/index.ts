@@ -439,12 +439,28 @@ export interface MetaPageSummary {
   name: string;
   category?: string;
   tasks?: string[];
+  pictureUrl?: string;
 }
 
 export interface MetaPostResult {
   ok: boolean;
   postId?: string;
   message: string;
+}
+
+export type MetaPublishProgressPhase =
+  | "create_video"
+  | "video_thumbnail"
+  | "upload_photo"
+  | "create_post"
+  | "publish";
+
+export interface MetaPublishProgressEvent {
+  pageId: string;
+  phase: MetaPublishProgressPhase;
+  message: string;
+  videoId?: string;
+  postId?: string;
 }
 
 export type MetaPostType = "text" | "photo" | "video" | "video_carousel";
@@ -888,6 +904,18 @@ const api = {
     videoThumbnailPath?: string;
     timing?: MetaPublishTiming;
   }): Promise<MetaPostResult> => ipcRenderer.invoke("publish:meta:post", payload),
+  uploadCarouselDraftVideo: (payload: {
+    filePath: string;
+    title?: string;
+    description?: string;
+  }): Promise<MetaPostResult & { videoId?: string }> =>
+    ipcRenderer.invoke("publish:meta:uploadCarouselVideo", payload),
+  onMetaPublishProgress: (cb: (event: MetaPublishProgressEvent) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: MetaPublishProgressEvent) =>
+      cb(payload);
+    ipcRenderer.on("publish:meta:progress", listener);
+    return () => ipcRenderer.removeListener("publish:meta:progress", listener);
+  },
   getYouTubePublish: (): Promise<YouTubePublishPublic> => ipcRenderer.invoke("publish:youtube:get"),
   setYouTubeApp: (partial: {
     clientId?: string;

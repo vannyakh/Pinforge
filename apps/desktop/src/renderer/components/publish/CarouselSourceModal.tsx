@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Empty, Input, Message, Spin, Tabs } from "@arco-design/web-react";
-import { FolderOpen, Like, LinkCloud, Pic, PlayOne, Plus, VideoOne } from "@icon-park/react";
+import { FolderOpen, Like, LinkCloud, Pic, PlayOne, Plus, UploadOne, VideoOne } from "@icon-park/react";
 import AionModal from "@renderer/components/base/AionModal";
 import {
   pathToPreview,
   previewUrlForLocalPath,
   slidePreviewUrl,
 } from "@renderer/components/publish/carouselPreview";
+import {
+  validateCarouselImagePick,
+  validateCarouselVideoPick,
+} from "@renderer/components/publish/carouselMediaTypes";
 import {
   buildProcessMediaRequest,
   extractTitleFromProcess,
@@ -36,6 +40,7 @@ type CarouselSourceModalProps = {
   visible: boolean;
   slide: CarouselSlideDraft | null;
   pageVideos: MetaPageVideoSummary[];
+  loadingPageVideos?: boolean;
   onClose: () => void;
   onApply: (patch: Partial<CarouselSlideDraft>) => void;
   /** Carousel card picker vs single photo/video post source. */
@@ -199,6 +204,7 @@ const CarouselSourceModal: React.FC<CarouselSourceModalProps> = ({
   visible,
   slide,
   pageVideos,
+  loadingPageVideos = false,
   onClose,
   onApply,
   variant = "carousel",
@@ -268,9 +274,9 @@ const CarouselSourceModal: React.FC<CarouselSourceModalProps> = ({
   const fileLabel = draft.filePath?.split(/[/\\]/).pop() ?? draft.name;
 
   const handleClose = useCallback(() => {
-    if (fetchingUrl || loadingLocalFolder) return;
+    if (fetchingUrl || loadingLocalFolder || loadingPageVideos) return;
     onClose();
-  }, [onClose, fetchingUrl, loadingLocalFolder]);
+  }, [onClose, fetchingUrl, loadingLocalFolder, loadingPageVideos]);
 
   const selectLocalFile = (filePath: string, name?: string) => {
     if (!slide) return;
@@ -289,6 +295,33 @@ const CarouselSourceModal: React.FC<CarouselSourceModalProps> = ({
     setLocalFolder(folder);
     if (isVideo) setVideoTab("file");
     await loadLocalFolder(folder);
+  };
+
+  const pickFileFromComputer = async () => {
+    if (fetchingUrl || loadingLocalFolder) return;
+    if (isVideo) {
+      const paths = await api.pickMediaFiles();
+      const path = paths[0];
+      if (!path) return;
+      const err = validateCarouselVideoPick(path);
+      if (err) {
+        Message.warning(err);
+        return;
+      }
+      selectLocalFile(path);
+      setVideoTab("file");
+      return;
+    }
+
+    const paths = await api.pickImageFiles();
+    const path = paths[0];
+    if (!path) return;
+    const err = validateCarouselImagePick(path);
+    if (err) {
+      Message.warning(err);
+      return;
+    }
+    selectLocalFile(path);
   };
 
   const fetchFromUrl = async () => {
@@ -404,6 +437,15 @@ const CarouselSourceModal: React.FC<CarouselSourceModalProps> = ({
           type="button"
           className="carousel-source-modal__browse-btn"
           disabled={loadingLocalFolder}
+          onClick={() => void pickFileFromComputer()}
+        >
+          <UploadOne theme="outline" size="16" fill="currentColor" />
+          <span>{isVideo ? "Upload video" : "Upload image"}</span>
+        </button>
+        <button
+          type="button"
+          className="carousel-source-modal__browse-btn"
+          disabled={loadingLocalFolder}
           onClick={() => void pickLocalFolder()}
         >
           {loadingLocalFolder ? (
@@ -411,16 +453,15 @@ const CarouselSourceModal: React.FC<CarouselSourceModalProps> = ({
           ) : (
             <FolderOpen theme="outline" size="16" fill="currentColor" />
           )}
-          <span>Browse</span>
+          <span>Browse folder</span>
         </button>
-        <span
-          className="carousel-source-modal__folder-path truncate"
-          title={localFolder ?? undefined}
-        >
-          {localFolder ?? "Choose a folder to list media files"}
-        </span>
       </div>
-
+      <div
+        className="carousel-source-modal__folder-path truncate mb-8px"
+        title={localFolder ?? undefined}
+      >
+        {localFolder ?? "Optional — pick a folder to list media files"}
+      </div>
       <div className="carousel-source-modal__sources-head">
         <span>File sources</span>
         {localFiles.length > 0 ? (
@@ -487,8 +528,8 @@ const CarouselSourceModal: React.FC<CarouselSourceModalProps> = ({
       autoFocus={false}
       focusLock={false}
       unmountOnExit
-      maskClosable={!fetchingUrl}
-      escToExit={!fetchingUrl}
+      maskClosable={!fetchingUrl && !loadingPageVideos}
+      escToExit={!fetchingUrl && !loadingPageVideos}
       header={{
         title: isVideo ? "Select video" : "Select photo",
         subtitle: isVideo
@@ -503,7 +544,11 @@ const CarouselSourceModal: React.FC<CarouselSourceModalProps> = ({
     >
       <div ref={bodyRef} className="carousel-source-modal">
         <section className="carousel-source-modal__source">
-          {isVideo ? (
+          {loadingPageVideos ? (
+            <div className="carousel-source-modal__tab-empty">
+              <Spin />
+            </div>
+          ) : isVideo ? (
             <Tabs activeTab={videoTab} onChange={(v) => setVideoTab(v as VideoSourceTab)} type="line">
               <Tabs.TabPane key="url" title="URL">
                 {renderUrlTab()}

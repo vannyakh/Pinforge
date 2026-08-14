@@ -3,12 +3,14 @@ import { Button, Message } from "@arco-design/web-react";
 import { ArrowLeft, Copy, LinkCloud, Pic, Right, Share, VideoOne } from "@icon-park/react";
 import { useNavigate } from "react-router-dom";
 import type { MetaPostType } from "@common/publish/types";
+import { api, type MetaPageVideoSummary } from "@renderer/api";
 import ClonePagePostPanel from "@renderer/components/publish/ClonePagePostPanel";
 import MetaPublishComposeFields from "@renderer/components/publish/MetaPublishComposeFields";
 import MetaPublishPagePicker from "@renderer/components/publish/MetaPublishPagePicker";
 import {
   META_POST_TYPE_LABELS,
   isPublishDraftReady,
+  publishDraftBlocker,
   useMetaPublishStore,
 } from "@renderer/pages/publish/metaPublishStore";
 import {
@@ -82,10 +84,19 @@ const CloneTypeOption: React.FC<{ onSelect: () => void }> = ({ onSelect }) => (
   </button>
 );
 
-const PublishSteps: React.FC<{ step: PublishStep; viaClone: boolean }> = ({ step, viaClone }) => {
+const PublishSteps: React.FC<{ step: PublishStep; viaClone: boolean; postType?: MetaPostType }> = ({
+  step,
+  viaClone,
+  postType,
+}) => {
   const step1Class =
     step === "type" ? "publish-steps__item is-active" : "publish-steps__item is-done";
-  const step2Label = viaClone && step === "clone" ? "Clone source" : "Compose";
+  const step2Label =
+    viaClone && step === "clone"
+      ? "Clone source"
+      : postType === "video_carousel"
+        ? "Build post"
+        : "Compose";
   const step2Class =
     step === "clone"
       ? "publish-steps__item is-active"
@@ -112,6 +123,7 @@ const PublishPage: React.FC = () => {
   const closePublish = useMetaPublishStore((s) => s.closePublish);
   const postType = useMetaPublishStore((s) => s.postType);
   const message = useMetaPublishStore((s) => s.message);
+  const hashtags = useMetaPublishStore((s) => s.hashtags);
   const filePath = useMetaPublishStore((s) => s.filePath);
   const photoPostMode = useMetaPublishStore((s) => s.photoPostMode);
   const photoAlbumPaths = useMetaPublishStore((s) => s.photoAlbumPaths);
@@ -120,6 +132,8 @@ const PublishPage: React.FC = () => {
   const photoAlbumNewName = useMetaPublishStore((s) => s.photoAlbumNewName);
   const photoCarouselSlides = useMetaPublishStore((s) => s.photoCarouselSlides);
   const carouselSlides = useMetaPublishStore((s) => s.carouselSlides);
+  const carouselCreatingAdIds = useMetaPublishStore((s) => s.carouselCreatingAdIds);
+  const carouselGeneratingThumbIds = useMetaPublishStore((s) => s.carouselGeneratingThumbIds);
   const link = useMetaPublishStore((s) => s.link);
   const config = useMetaPublishStore((s) => s.config);
   const loadingConfig = useMetaPublishStore((s) => s.loadingConfig);
@@ -127,17 +141,30 @@ const PublishPage: React.FC = () => {
 
   const [step, setStep] = useState<PublishStep>("type");
   const [viaClone, setViaClone] = useState(false);
+  const [pageVideos, setPageVideos] = useState<MetaPageVideoSummary[]>([]);
 
   useEffect(() => {
     if (step === "type") return;
     void refreshConfig();
   }, [step, refreshConfig]);
 
+  useEffect(() => {
+    if (step !== "compose" || postType !== "video_carousel" || !config?.connected) return;
+    let alive = true;
+    void api.listMetaPageVideos(30).then((videos) => {
+      if (alive) setPageVideos(videos);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [step, postType, config?.connected]);
+
   const contentReady = useMemo(
     () =>
       isPublishDraftReady({
         postType,
         message,
+        hashtags,
         filePath,
         link,
         photoPostMode,
@@ -147,10 +174,16 @@ const PublishPage: React.FC = () => {
         photoAlbumNewName,
         photoCarouselSlides,
         carouselSlides,
+        pageVideos: postType === "video_carousel" ? pageVideos : undefined,
+        carouselCreatingAdIds:
+          postType === "video_carousel" ? carouselCreatingAdIds : undefined,
+        carouselGeneratingThumbIds:
+          postType === "video_carousel" ? carouselGeneratingThumbIds : undefined,
       }),
     [
       postType,
       message,
+      hashtags,
       filePath,
       link,
       photoPostMode,
@@ -160,6 +193,49 @@ const PublishPage: React.FC = () => {
       photoAlbumNewName,
       photoCarouselSlides,
       carouselSlides,
+      pageVideos,
+      carouselCreatingAdIds,
+      carouselGeneratingThumbIds,
+    ]
+  );
+
+  const draftBlocker = useMemo(
+    () =>
+      publishDraftBlocker({
+        postType,
+        message,
+        hashtags,
+        filePath,
+        link,
+        photoPostMode,
+        photoAlbumPaths,
+        photoAlbumDestination,
+        photoAlbumFacebookId,
+        photoAlbumNewName,
+        photoCarouselSlides,
+        carouselSlides,
+        pageVideos: postType === "video_carousel" ? pageVideos : undefined,
+        carouselCreatingAdIds:
+          postType === "video_carousel" ? carouselCreatingAdIds : undefined,
+        carouselGeneratingThumbIds:
+          postType === "video_carousel" ? carouselGeneratingThumbIds : undefined,
+      }),
+    [
+      postType,
+      message,
+      hashtags,
+      filePath,
+      link,
+      photoPostMode,
+      photoAlbumPaths,
+      photoAlbumDestination,
+      photoAlbumFacebookId,
+      photoAlbumNewName,
+      photoCarouselSlides,
+      carouselSlides,
+      pageVideos,
+      carouselCreatingAdIds,
+      carouselGeneratingThumbIds,
     ]
   );
 
@@ -185,7 +261,7 @@ const PublishPage: React.FC = () => {
 
   const continueToPages = () => {
     if (!contentReady) {
-      Message.warning("Complete the post content before continuing.");
+      Message.warning(draftBlocker ?? "Complete the post content before continuing.");
       return;
     }
     if (!config?.connected) {
@@ -210,7 +286,7 @@ const PublishPage: React.FC = () => {
   return (
     <SettingsScrollShell className="publish-page">
       <SettingsPage width="wide">
-        <PublishSteps step={step} viaClone={viaClone} />
+        <PublishSteps step={step} viaClone={viaClone} postType={postType} />
 
         {step === "type" ? (
           <>
@@ -261,10 +337,10 @@ const PublishPage: React.FC = () => {
         {step === "compose" ? (
           <>
             <SettingsHeader
-              title={postType === "video_carousel" ? "Post Builder" : "Compose post"}
+              title={postType === "video_carousel" ? "Build post" : "Compose post"}
               description={
                 postType === "video_carousel"
-                  ? "Review the imported media, write your caption, pick CTA details, choose thumbnails, then continue to page selection."
+                  ? "Step 2 — set up Post cards."
                   : viaClone
                     ? "Step 2 — caption copied from the source post. Add your media, then choose Pages to publish to."
                     : "Step 2 — add your caption and media, then choose Pages to publish to."
@@ -302,8 +378,15 @@ const PublishPage: React.FC = () => {
                 Back
               </Button>
               <div className="flex-1 min-w-0" />
-              <Button type="primary" disabled={!contentReady || !config?.connected} onClick={continueToPages}>
-                {postType === "video_carousel" ? "Next step · Select Pages" : "Continue · Select Pages"}
+              <Button
+                type="primary"
+                disabled={!contentReady || !config?.connected}
+                title={draftBlocker ?? undefined}
+                onClick={continueToPages}
+              >
+                {postType === "video_carousel"
+                  ? "Select Pages to publish"
+                  : "Continue · Select Pages"}
               </Button>
             </div>
           </>

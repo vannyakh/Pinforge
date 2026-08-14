@@ -6,7 +6,14 @@ import type {
   MetaPostType,
 } from "@common/publish/types";
 import { pathToPreview } from "@renderer/components/publish/carouselPreview";
-import { normalizeCarouselLandingLink } from "@common/publish/carouselLinks";
+import {
+  carouselLandingLinkIssue,
+  carouselCaptionLinkIssue,
+} from "@common/publish/carouselLinks";
+import {
+  peCarouselMediaSetupReady,
+  videoCardNeedsThumbnail,
+} from "@renderer/components/publish/carouselMediaTypes";
 import { api, type MetaPageSummary, type MetaPublishPublic } from "@renderer/api";
 
 export type CarouselSlideDraft = MetaCarouselSlide & {
@@ -86,6 +93,7 @@ export const META_PHOTO_POST_MODE_LABELS: Record<MetaPhotoPostMode, string> = {
 export function isPublishDraftReady(state: {
   postType: MetaPostType;
   message: string;
+  hashtags: string;
   filePath: string;
   link: string;
   photoPostMode: MetaPhotoPostMode;
@@ -95,10 +103,16 @@ export function isPublishDraftReady(state: {
   photoAlbumNewName: string;
   photoCarouselSlides: CarouselSlideDraft[];
   carouselSlides: CarouselSlideDraft[];
+  /** When true, video card thumbnail generation is in progress (PE carousel compose). */
+  carouselGeneratingThumbIds?: Record<string, boolean>;
+  /** When true, local video is uploading as unpublished Page video (PE carousel compose). */
+  carouselCreatingAdIds?: Record<string, boolean>;
+  pageVideos?: Array<{ id: string; thumbnailUrl?: string }>;
 }): boolean {
   const {
     postType,
     message,
+    hashtags,
     filePath,
     link,
     photoPostMode,
@@ -108,15 +122,26 @@ export function isPublishDraftReady(state: {
     photoAlbumNewName,
     photoCarouselSlides,
     carouselSlides,
+    carouselGeneratingThumbIds = {},
+    carouselCreatingAdIds = {},
+    pageVideos = [],
   } = state;
-  const carouselLinkReady = Boolean(normalizeCarouselLandingLink(link));
+  const landingLinkIssue = carouselLandingLinkIssue(link);
+  const carouselCaptionReady = !carouselCaptionLinkIssue(message, hashtags);
   if (postType === "video_carousel") {
-    if (!carouselLinkReady) return false;
-    if (carouselSlides.length !== FIXED_CAROUSEL_SLOTS) return false;
-    return carouselSlides.every((slide) => {
-      if (slide.kind === "video") return Boolean(slide.pageVideoId?.trim() || slide.filePath?.trim());
-      return Boolean(slide.filePath?.trim());
-    });
+    if (
+      !peCarouselMediaSetupReady(
+        carouselSlides,
+        pageVideos,
+        carouselGeneratingThumbIds,
+        carouselCreatingAdIds
+      )
+    ) {
+      return false;
+    }
+    if (landingLinkIssue) return false;
+    if (!carouselCaptionReady) return false;
+    return true;
   }
   if (postType === "text") return Boolean(message.trim());
   if (postType === "photo") {
@@ -128,7 +153,8 @@ export function isPublishDraftReady(state: {
       return true;
     }
     if (photoPostMode === "carousel") {
-      if (!carouselLinkReady) return false;
+      if (landingLinkIssue) return false;
+      if (!carouselCaptionReady) return false;
       if (photoCarouselSlides.length < MIN_PHOTO_CAROUSEL) return false;
       return photoCarouselSlides.every((slide) => Boolean(slide.filePath?.trim()));
     }
@@ -136,6 +162,115 @@ export function isPublishDraftReady(state: {
   }
   if (postType === "video") return Boolean(filePath.trim());
   return false;
+}
+
+/** First blocking issue for the publish draft, for UI hints when Continue is disabled. */
+export function publishDraftBlocker(state: {
+  postType: MetaPostType;
+  message: string;
+  hashtags: string;
+  filePath: string;
+  link: string;
+  photoPostMode: MetaPhotoPostMode;
+  photoAlbumPaths: string[];
+  photoAlbumDestination: MetaPhotoAlbumDestination;
+  photoAlbumFacebookId: string;
+  photoAlbumNewName: string;
+  photoCarouselSlides: CarouselSlideDraft[];
+  carouselSlides: CarouselSlideDraft[];
+  carouselGeneratingThumbIds?: Record<string, boolean>;
+  carouselCreatingAdIds?: Record<string, boolean>;
+  pageVideos?: Array<{ id: string; thumbnailUrl?: string }>;
+}): string | null {
+  const {
+    postType,
+    message,
+    hashtags,
+    filePath,
+    link,
+    photoPostMode,
+    photoAlbumPaths,
+    photoAlbumDestination,
+    photoAlbumFacebookId,
+    photoAlbumNewName,
+    photoCarouselSlides,
+    carouselSlides,
+    carouselGeneratingThumbIds = {},
+    carouselCreatingAdIds = {},
+    pageVideos = [],
+  } = state;
+
+  if (postType === "video_carousel") {
+    const video = carouselSlides.find((s) => s.kind === "video");
+    if (carouselCreatingAdIds[video?.id ?? ""]) {
+      return "Uploading video to Facebook Page…";
+    }
+    if (carouselGeneratingThumbIds[video?.id ?? ""]) {
+      return "Generating video thumbnails (ffmpeg)…";
+    }
+    if (
+      !peCarouselMediaSetupReady(
+        carouselSlides,
+        pageVideos,
+        carouselGeneratingThumbIds,
+        carouselCreatingAdIds
+      )
+    ) {
+      if (!video?.pageVideoId?.trim() && !video?.filePath?.trim()) {
+        return "Add a video source on the left card first.";
+      }
+      if (video?.filePath?.trim() && !video.pageVideoId?.trim()) {
+        return "Wait for the Page video upload to finish.";
+      }
+      if (video && videoCardNeedsThumbnail(video, pageVideos)) {
+        return "Pick a video thumbnail or wait for ffmpeg generation to finish.";
+      }
+      const photo = carouselSlides.find((s) => s.kind === "photo");
+      if (!photo?.filePath?.trim()) {
+        return "Add a photo for the right carousel card.";
+      }
+      return "Finish media setup on the Post cards before continuing.";
+    }
+    const linkIssue = carouselLandingLinkIssue(link);
+    if (linkIssue) return linkIssue;
+    const captionIssue = carouselCaptionLinkIssue(message, hashtags);
+    if (captionIssue) return captionIssue;
+    return null;
+  }
+
+  if (postType === "text" && !message.trim()) return "Enter a caption for the text post.";
+  if (postType === "photo") {
+    if (photoPostMode === "album") {
+      if (photoAlbumPaths.length < MIN_PHOTO_ALBUM) {
+        return `Add at least ${MIN_PHOTO_ALBUM} photos for an album post.`;
+      }
+      if (
+        photoAlbumDestination === "facebook_album" &&
+        !photoAlbumFacebookId.trim() &&
+        !photoAlbumNewName.trim()
+      ) {
+        return "Select a Facebook Album or enter a name for a new one.";
+      }
+      return null;
+    }
+    if (photoPostMode === "carousel") {
+      const linkIssue = carouselLandingLinkIssue(link);
+      if (linkIssue) return linkIssue;
+      const captionIssue = carouselCaptionLinkIssue(message, hashtags);
+      if (captionIssue) return captionIssue;
+      if (photoCarouselSlides.length < MIN_PHOTO_CAROUSEL) {
+        return `Add at least ${MIN_PHOTO_CAROUSEL} photos for the carousel.`;
+      }
+      if (!photoCarouselSlides.every((slide) => Boolean(slide.filePath?.trim()))) {
+        return "Each carousel card needs an image.";
+      }
+      return null;
+    }
+    if (!filePath.trim()) return "Choose a photo file.";
+    return null;
+  }
+  if (postType === "video" && !filePath.trim()) return "Choose a video file.";
+  return null;
 }
 
 function newSlideId(): string {
@@ -197,6 +332,8 @@ type MetaPublishUiState = {
   pages: MetaPageSummary[];
   loadingPages: boolean;
   selectedPageIds: string[];
+  carouselCreatingAdIds: Record<string, boolean>;
+  carouselGeneratingThumbIds: Record<string, boolean>;
   initDraft: (opts?: MetaPublishOpenOptions) => void;
   openPublish: (opts?: MetaPublishOpenOptions) => void;
   openPagePicker: () => void;
@@ -230,6 +367,8 @@ type MetaPublishUiState = {
   updateCarouselSlide: (id: string, patch: Partial<CarouselSlideDraft>) => void;
   removeCarouselSlide: (id: string) => void;
   moveCarouselSlide: (id: string, direction: -1 | 1) => void;
+  setCarouselCreatingAdIds: (ids: Record<string, boolean>) => void;
+  setCarouselGeneratingThumbIds: (ids: Record<string, boolean>) => void;
 };
 
 export const META_POST_TYPE_LABELS: Record<MetaPostType, string> = {
@@ -293,6 +432,8 @@ export const useMetaPublishStore = create<MetaPublishUiState>((set, get) => ({
   pages: [],
   loadingPages: false,
   selectedPageIds: [],
+  carouselCreatingAdIds: {},
+  carouselGeneratingThumbIds: {},
   refreshConfig: async () => {
     if (get().loadingConfig) return;
     set({ loadingConfig: true });
@@ -352,6 +493,8 @@ export const useMetaPublishStore = create<MetaPublishUiState>((set, get) => ({
       hidePostTypePicker: opts?.hidePostTypePicker ?? false,
       modalOpen: false,
       modalMode: "compose",
+      carouselCreatingAdIds: {},
+      carouselGeneratingThumbIds: {},
     });
   },
   openPublish: (opts) => {
@@ -376,6 +519,8 @@ export const useMetaPublishStore = create<MetaPublishUiState>((set, get) => ({
       selectedSlideId: slides[0]?.id ?? null,
       sourceLabel: opts?.sourceLabel,
       hidePostTypePicker: opts?.hidePostTypePicker ?? false,
+      carouselCreatingAdIds: {},
+      carouselGeneratingThumbIds: {},
     });
     void get().refreshConfig();
     if (opts?.pagePicker) {
@@ -541,6 +686,8 @@ export const useMetaPublishStore = create<MetaPublishUiState>((set, get) => ({
     slides.splice(target, 0, item!);
     set({ carouselSlides: slides });
   },
+  setCarouselCreatingAdIds: (ids) => set({ carouselCreatingAdIds: ids }),
+  setCarouselGeneratingThumbIds: (ids) => set({ carouselGeneratingThumbIds: ids }),
 }));
 
 export function carouselSlidesForPublish(slides: CarouselSlideDraft[]): MetaCarouselSlide[] {
