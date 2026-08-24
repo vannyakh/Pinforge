@@ -269,6 +269,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             pendingQueue: next.pendingQueue ?? prev.pendingQueue,
             youtube: next.youtube ? { ...prev.youtube, ...next.youtube } : prev.youtube,
             pinterest: next.pinterest ? { ...prev.pinterest, ...next.pinterest } : prev.pinterest,
+            agent: next.agent
+              ? {
+                  ...prev.agent,
+                  ...next.agent,
+                  providers: next.agent.providers ?? prev.agent?.providers,
+                }
+              : prev.agent,
           }
         : prev
     );

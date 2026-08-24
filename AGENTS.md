@@ -18,6 +18,7 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 | `packages/types/`     | Shared domain types + utils                                                          |
 | `packages/tools/`     | ffmpeg / yt-dlp binary resolve                                                       |
 | `packages/worker/`    | Rust worker bridge                                                                   |
+| `packages/agent/`     | Multi-LLM agent core (URL intent, tools, orchestrator)                               |
 | `rust/`               | Optional native worker                                                               |
 
 ## Shared library (`@pinforge/*`)
@@ -38,6 +39,7 @@ Apps prefer façade subpaths; API can also be imported directly:
 | `@pinforge/core/worker`    | `@pinforge/worker`                          |
 | `@pinforge/core/api`       | `@pinforge/api` (alias)                     |
 | `@pinforge/core/common`    | `@pinforge/common`                          |
+| `@pinforge/core/agent`     | `@pinforge/agent`                           |
 | `@pinforge/api/providers`  | provider prefs / resolve                    |
 | `@pinforge/api/download`   | `normalizeDownloadOptions`                  |
 
@@ -73,6 +75,9 @@ pnpm --filter @pinforge/providers exec playwright install chromium
 pnpm --filter desktop run dev
 pnpm typecheck
 pnpm format
+
+# Agent package tests
+pnpm --filter @pinforge/agent test
 
 # Distributables (see scripts/README.md)
 pnpm dist:win

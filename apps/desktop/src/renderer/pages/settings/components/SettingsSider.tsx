@@ -25,6 +25,7 @@ const SECTIONS = [
       { key: "appearance", label: "Appearance", Icon: Platte },
       { key: "publishing", label: "Publishing", Icon: Share },
       { key: "remote", label: "Remote", Icon: LinkCloud },
+      { key: "agent", label: "Agent", Icon: ApplicationOne },
       { key: "system", label: "System", Icon: Computer },
     ],
   },

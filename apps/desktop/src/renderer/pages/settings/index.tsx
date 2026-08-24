@@ -8,6 +8,7 @@ import RemoteSettings from "./Remote";
 import PublishingSettings from "./Publishing";
 import SystemSettings from "./System";
 import DownloadSettings from "./Download";
+import AgentSettings from "./Agent";
 
 const SettingsPage: React.FC = () => {
   return (
@@ -21,6 +22,7 @@ const SettingsPage: React.FC = () => {
             <Route path="remote" element={<RemoteSettings />} />
             <Route path="publishing" element={<PublishingSettings />} />
             <Route path="download" element={<DownloadSettings />} />
+            <Route path="agent" element={<AgentSettings />} />
             <Route path="providers" element={<ProvidersSettings />} />
             <Route path="providers/:providerId" element={<ProviderDetailPage />} />
             <Route path="about" element={<AboutSettings />} />

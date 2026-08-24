@@ -67,6 +67,52 @@ export interface PinterestOptions {
   zipBoards?: boolean;
 }
 
+export type LlmProviderKind = "openai" | "anthropic" | "ollama" | "openclaw";
+
+export interface AgentLlmProviderConfig {
+  id: string;
+  label: string;
+  kind: LlmProviderKind;
+  enabled: boolean;
+  baseUrl?: string;
+  apiKey?: string;
+  model: string;
+  priority: number;
+}
+
+export interface AgentConfig {
+  enabled: boolean;
+  defaultProviderId: string;
+  providers: AgentLlmProviderConfig[];
+  autoAnalyzeUrls: boolean;
+  autoExecuteTasks: boolean;
+}
+
+export interface AgentChatResponse {
+  sessionId: string;
+  reply: string;
+  providerId: string;
+  model: string;
+  intents: Array<{
+    kind: string;
+    url: string;
+    providerId?: string;
+    providerLabel?: string;
+    suggestedAction: string;
+    confidence: string;
+    reason?: string;
+  }>;
+  toolResults: Array<{ name: string; ok: boolean; data?: unknown; error?: string }>;
+  skillId?: string;
+  taskIntent?: string;
+}
+
+export interface AgentAnalyzeUrlResponse {
+  intent: AgentChatResponse["intents"][number];
+  summary?: string;
+  providerId?: string;
+}
+
 export interface NamingTemplates {
   fileName?: string;
   folderName?: string;
@@ -343,6 +389,7 @@ export interface AppSettings {
   history: HistoryItem[];
   packs: DownloadPack[];
   remote: RemoteConfig;
+  agent: AgentConfig;
   system: SystemConfig;
   presets: Record<
     PresetName,
@@ -642,6 +689,7 @@ export type SettingsPartial = Partial<{
   youtube: Partial<YoutubeDownloadOptions>;
   pinterest: Partial<PinterestOptions>;
   extractorUrl: string;
+  agent: Partial<AgentConfig>;
   system: Partial<SystemConfig>;
 }>;
 
@@ -804,6 +852,7 @@ const api = {
       | "youtube"
       | "pinterest"
       | "extractorUrl"
+      | "agent"
       | "system"
     >
   > => ipcRenderer.invoke("settings:set", partial),
@@ -1175,6 +1224,22 @@ const api = {
     ipcRenderer.on("window:maximizedChanged", listener);
     return () => ipcRenderer.removeListener("window:maximizedChanged", listener);
   },
+  getAgentConfig: (): Promise<AgentConfig> => ipcRenderer.invoke("agent:getConfig"),
+  setAgentConfig: (partial: Partial<AgentConfig>): Promise<AgentConfig> =>
+    ipcRenderer.invoke("agent:setConfig", partial),
+  listAgentProviders: (): Promise<AgentLlmProviderConfig[]> =>
+    ipcRenderer.invoke("agent:listProviders"),
+  listAgentSkills: (): Promise<
+    Array<{ id: string; label: string; description: string; taskIntent: string; tools: string[] }>
+  > => ipcRenderer.invoke("agent:listSkills"),
+  agentChat: (payload: {
+    sessionId?: string;
+    message: string;
+    providerId?: string;
+  }): Promise<AgentChatResponse> => ipcRenderer.invoke("agent:chat", payload),
+  agentAnalyzeUrl: (url: string): Promise<AgentAnalyzeUrlResponse> =>
+    ipcRenderer.invoke("agent:analyzeUrl", url),
+  agentCancel: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("agent:cancel"),
 };
 
 contextBridge.exposeInMainWorld("api", api);

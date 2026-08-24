@@ -66,6 +66,11 @@ import type {
   YouTubePrivacyStatus,
   YouTubePublishTiming,
   YouTubePublishTimingMode,
+  AgentConfig,
+  AgentLlmProviderConfig,
+  AgentChatResponse,
+  AgentAnalyzeUrlResponse,
+  LlmProviderKind,
 } from "../../preload/index";
 
 export type {
@@ -136,6 +141,11 @@ export type {
   YouTubePrivacyStatus,
   YouTubePublishTiming,
   YouTubePublishTimingMode,
+  AgentConfig,
+  AgentLlmProviderConfig,
+  AgentChatResponse,
+  AgentAnalyzeUrlResponse,
+  LlmProviderKind,
 } from "../../preload/index";
 
 export const api = {
@@ -208,6 +218,13 @@ export const api = {
     window.api.setRemoteUserStatus(payload),
   removeRemoteUser: (id: string) => window.api.removeRemoteUser(id),
   onRemoteUsersChanged: (cb: (users: RemoteUser[]) => void) => window.api.onRemoteUsersChanged(cb),
+  getAgentConfig: () => window.api.getAgentConfig(),
+  setAgentConfig: (partial: Partial<AgentConfig>) => window.api.setAgentConfig(partial),
+  listAgentProviders: () => window.api.listAgentProviders(),
+  agentChat: (payload: { sessionId?: string; message: string; providerId?: string }) =>
+    window.api.agentChat(payload),
+  agentAnalyzeUrl: (url: string) => window.api.agentAnalyzeUrl(url),
+  agentCancel: () => window.api.agentCancel(),
   getMetaPublish: () => window.api.getMetaPublish(),
   setMetaApp: (partial: { appId?: string; appSecret?: string; redirectUri?: string }) =>
     window.api.setMetaApp(partial),

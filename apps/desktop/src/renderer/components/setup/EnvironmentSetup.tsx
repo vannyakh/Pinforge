@@ -35,6 +35,7 @@ const FEATURES: FeatureSlide[] = [
 const SLIDE_COUNT = FEATURES.length;
 /** Clones at both ends for seamless loop: [last, ...items, first] */
 const LOOP_SLIDES: FeatureSlide[] = [FEATURES[SLIDE_COUNT - 1]!, ...FEATURES, FEATURES[0]!];
+const LOOP_COUNT = LOOP_SLIDES.length;
 const AUTO_MS = 4500;
 const SWIPE_PX = 56;
 
@@ -42,6 +43,10 @@ function realIndexFromTrack(track: number): number {
   if (track <= 0) return SLIDE_COUNT - 1;
   if (track >= SLIDE_COUNT + 1) return 0;
   return track - 1;
+}
+
+function trackOffsetPct(track: number): string {
+  return `calc(-100% * ${track} / ${LOOP_COUNT})`;
 }
 
 const INITIAL_STEPS: StepRow[] = [
@@ -97,39 +102,45 @@ const OnboardCarousel: React.FC = () => {
   const dragging = useRef(false);
   const startX = useRef(0);
   const trackRef = useRef(track);
+  const pausedRef = useRef(paused);
   trackRef.current = track;
-
-  const goToReal = useCallback((real: number) => {
-    setAnimate(true);
-    setTrack(real + 1);
-  }, []);
+  pausedRef.current = paused;
 
   const step = useCallback((delta: number) => {
     setAnimate(true);
     setTrack((t) => t + delta);
   }, []);
 
-  useEffect(() => {
-    if (paused || dragging.current) return;
-    const id = window.setInterval(() => step(1), AUTO_MS);
-    return () => window.clearInterval(id);
-  }, [paused, step, track]);
+  const goToReal = useCallback(
+    (real: number) => {
+      const target = real + 1;
+      const current = trackRef.current;
+      if (target === current) return;
+      setAnimate(true);
+      setTrack(target);
+    },
+    []
+  );
 
-  const onTransitionEnd = () => {
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (pausedRef.current || dragging.current) return;
+      step(1);
+    }, AUTO_MS);
+    return () => window.clearInterval(id);
+  }, [step]);
+
+  const snapLoop = useCallback((nextTrack: number) => {
+    setAnimate(false);
+    setTrack(nextTrack);
+    requestAnimationFrame(() => setAnimate(true));
+  }, []);
+
+  const onTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.propertyName !== "transform" || e.target !== e.currentTarget) return;
     const t = trackRef.current;
-    if (t === SLIDE_COUNT + 1) {
-      setAnimate(false);
-      setTrack(1);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setAnimate(true));
-      });
-    } else if (t === 0) {
-      setAnimate(false);
-      setTrack(SLIDE_COUNT);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setAnimate(true));
-      });
-    }
+    if (t === SLIDE_COUNT + 1) snapLoop(1);
+    else if (t === 0) snapLoop(SLIDE_COUNT);
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -162,15 +173,16 @@ const OnboardCarousel: React.FC = () => {
   };
 
   const real = realIndexFromTrack(track);
-  const offsetPct = -track * 100;
+  const offset = trackOffsetPct(track);
   const dragStyle =
     dragPx !== 0
-      ? { transform: `translate3d(calc(${offsetPct}% + ${dragPx}px), 0, 0)` }
-      : { transform: `translate3d(${offsetPct}%, 0, 0)` };
+      ? { transform: `translate3d(calc(${offset} + ${dragPx}px), 0, 0)` }
+      : { transform: `translate3d(${offset}, 0, 0)` };
 
   return (
     <div
       className="env-setup__swiper"
+      style={{ ["--env-loop-count" as string]: LOOP_COUNT }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => {
         if (!dragging.current) setPaused(false);
@@ -191,7 +203,14 @@ const OnboardCarousel: React.FC = () => {
       >
         {LOOP_SLIDES.map((f, i) => (
           <div key={`${f.id}-${i}`} className="env-setup__slide">
-            <img className="env-setup__banner" src={f.banner} alt={f.alt} draggable={false} />
+            <img
+              className="env-setup__banner"
+              src={f.banner}
+              alt={f.alt}
+              draggable={false}
+              loading="eager"
+              decoding="async"
+            />
           </div>
         ))}
       </div>

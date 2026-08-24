@@ -32,6 +32,7 @@ const MAIN_BUNDLE_DEPS = [
   "@pinforge/enhance",
   "@pinforge/tools",
   "@pinforge/worker",
+  "@pinforge/agent",
   "electron-store",
   "electron-updater",
 ];

@@ -30,6 +30,7 @@
     "@icon-park/react": "^1.4.2",
     "@pinforge/api": "workspace:*",
     "@pinforge/core": "workspace:*",
+    "@pinforge/agent": "workspace:*",
     "@uiw/react-codemirror": "^4.25.2",
     "classnames": "^2.5.1",
     "dayjs": "^1.11.13",

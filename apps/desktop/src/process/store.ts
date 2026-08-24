@@ -24,6 +24,7 @@ import {
   type RemoteChannelConfig,
   type CloudflareTunnelConfig,
 } from "../common/remote/types";
+import { DEFAULT_AGENT_CONFIG, type AgentConfig } from "@pinforge/agent";
 import type { CustomProviderConfig, ProviderPrefs } from "../common/providers/types";
 import { DEFAULT_PROVIDER_PREFS } from "../common/providers/types";
 import {
@@ -35,6 +36,7 @@ import {
 } from "../common/publish/types";
 
 export type { RemoteConfig, RemoteChannelConfig, CloudflareTunnelConfig };
+export type { AgentConfig };
 export type { CustomProviderConfig, ProviderPrefs };
 export type { PublishConfig, MetaPublishConfig, YouTubePublishConfig };
 export type PackStatus = "running" | "done" | "failed" | "partial";
@@ -160,6 +162,7 @@ export interface AppStoreSchema {
   history: HistoryItem[];
   packs: DownloadPack[];
   remote: RemoteConfig;
+  agent: AgentConfig;
   publish: PublishConfig;
   system: SystemConfig;
   customProviders: CustomProviderConfig[];
@@ -193,6 +196,7 @@ export function getStore(): Store<AppStoreSchema> {
         history: [],
         packs: [],
         remote: DEFAULT_REMOTE,
+        agent: { ...DEFAULT_AGENT_CONFIG, providers: DEFAULT_AGENT_CONFIG.providers.map((p) => ({ ...p })) },
         publish: {
           meta: { ...DEFAULT_META_PUBLISH },
           youtube: { ...DEFAULT_YOUTUBE_PUBLISH },

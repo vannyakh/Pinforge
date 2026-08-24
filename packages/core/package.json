@@ -20,6 +20,7 @@
     "./storage": "./src/storage.ts",
     "./tools": "./src/tools.ts",
     "./worker": "./src/worker.ts",
+    "./agent": "./src/agent.ts",
     "./zip": "./src/zip/index.ts",
     "./api": "./src/api.ts",
     "./common": "./src/common.ts"
@@ -39,7 +40,8 @@
     "@pinforge/providers": "workspace:*",
     "@pinforge/tools": "workspace:*",
     "@pinforge/types": "workspace:*",
-    "@pinforge/worker": "workspace:*"
+    "@pinforge/worker": "workspace:*",
+    "@pinforge/agent": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

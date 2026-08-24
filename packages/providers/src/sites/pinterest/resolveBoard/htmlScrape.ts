@@ -56,6 +56,14 @@ function walkPins(node: unknown, map: Map<string, PinListItem>, depth = 0) {
  * BoardFeed / UserPins pages nest related pins inside each item.
  * Only take top-level feed entries so “More like this” is not counted.
  */
+function pinIdFromFeedItem(obj: Record<string, unknown>): string {
+  const seoUrl = obj.seo_url;
+  const seoId =
+    typeof seoUrl === "string" ? seoUrl.match(/\/pin\/(\d{6,})\//)?.[1] : undefined;
+  const rawId = seoId ?? obj.id ?? obj.pin_id ?? obj.pinId;
+  return typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : "";
+}
+
 export function collectFeedPins(data: unknown, map: Map<string, PinListItem>) {
   const items: unknown[] = Array.isArray(data)
     ? data
@@ -76,8 +84,7 @@ export function collectFeedPins(data: unknown, map: Map<string, PinListItem>) {
     ) {
       continue;
     }
-    const rawId = obj.id ?? obj.pin_id ?? obj.pinId;
-    const id = typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : "";
+    const id = pinIdFromFeedItem(obj);
     if (!/^\d{6,}$/.test(id)) continue;
 
     const titleRaw = obj.grid_title ?? obj.title ?? obj.description ?? obj.closeup_description;
@@ -120,8 +127,83 @@ function findFeedNodes(root: unknown): unknown[] {
   return hits;
 }
 
+/** Extract a JSON array value after `"key":[` with bracket-aware parsing. */
+function extractJsonArrayAfterKey(text: string, key: string): unknown[] | null {
+  const marker = `"${key}":[`;
+  const markerIdx = text.indexOf(marker);
+  if (markerIdx < 0) return null;
+  const start = markerIdx + marker.length - 1;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const c = text[i]!;
+    if (inString) {
+      if (escape) escape = false;
+      else if (c === "\\") escape = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      continue;
+    }
+    if (c === "[") depth += 1;
+    else if (c === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(text.slice(start, i + 1)) as unknown;
+          return Array.isArray(parsed) ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Pin ids + meta embedded in relay BoardFeedResource blobs (modern board pages). */
+function extractRelayBoardFeedPins(html: string, map: Map<string, PinListItem>) {
+  let searchFrom = 0;
+  while (searchFrom < html.length) {
+    const anchor = html.indexOf("BoardFeedResource", searchFrom);
+    if (anchor < 0) break;
+    searchFrom = anchor + 1;
+    const chunk = html.slice(anchor, anchor + 120_000);
+    if (!chunk.includes('"data":[')) continue;
+
+    const data = extractJsonArrayAfterKey(chunk, "data");
+    if (data?.length) collectFeedPins(data, map);
+
+    for (const pin of chunk.matchAll(/"seo_url"\s*:\s*"\/pin\/(\d{6,})\/"/g)) {
+      if (pin[1]) upsertPin(map, pin[1], {});
+    }
+    for (const node of chunk.matchAll(/"node_id"\s*:\s*"UGlu:([^"]+)"/g)) {
+      try {
+        const decoded = Buffer.from(node[1]!, "base64").toString("utf8");
+        const id = decoded.match(/^Pin:(\d{6,})$/)?.[1];
+        if (id) upsertPin(map, id, {});
+      } catch {
+        /* ignore bad node_id */
+      }
+    }
+  }
+}
+
+/** Board-scoped pins from embedded BoardFeed only (avoids “related pins” elsewhere on the page). */
+export function extractBoardFeedPinsFromHtml(html: string): PinListItem[] {
+  const map = new Map<string, PinListItem>();
+  extractRelayBoardFeedPins(html, map);
+  return [...map.values()];
+}
+
 export function extractPinsFromHtml(html: string): PinListItem[] {
   const map = new Map<string, PinListItem>();
+
+  extractRelayBoardFeedPins(html, map);
 
   const scopedBlobs: string[] = [];
   for (const m of html.matchAll(
@@ -194,6 +276,8 @@ export function enrichMissingMetaFromHtml(html: string, map: Map<string, PinList
   if (!missing) return;
 
   const temp = new Map<string, PinListItem>();
+
+  extractRelayBoardFeedPins(html, temp);
 
   const jsonBlobs = [
     ...html.matchAll(/<script[^>]*id=["']__PWS_DATA__["'][^>]*>([\s\S]*?)<\/script>/gi),

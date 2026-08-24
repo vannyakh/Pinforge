@@ -10,7 +10,7 @@ import {
   normalizeBoardUrl,
   sourcePathFromUrl,
 } from "./htmlMeta";
-import { extractPinsFromHtml, enrichMissingMetaFromHtml, upsertPin } from "./htmlScrape";
+import { extractPinsFromHtml, enrichMissingMetaFromHtml, extractBoardFeedPinsFromHtml, upsertPin } from "./htmlScrape";
 import { hydrateMissingPinMeta, paginatePins } from "./paginate";
 import { pinterestRequestHeaders } from "../shared/session";
 import { isMultiPinShareUrl, resolveMultiPinShare } from "./multiPinShare";
@@ -111,6 +111,10 @@ export async function resolveBoard(
 
   if (map.size < maxPins) {
     if (kind === "board" && boardId) {
+      // Seed first page from embedded BoardFeed (board-scoped; no “related pins”).
+      for (const p of extractBoardFeedPinsFromHtml(html)) {
+        upsertPin(map, p.pinId, { title: p.title, coverUrl: p.coverUrl });
+      }
       truncated = await paginatePins({
         resource: "BoardFeed",
         sourceUrl,
@@ -120,15 +124,15 @@ export async function resolveBoard(
           field_set_key: "react_grid_pin",
           filter_section_pins: true,
           prepend: false,
-          // true returns id stubs without images/titles
           redux_normalize_feed: false,
+          is_react: true,
         },
         map,
         maxPins,
         appVersion,
         signal: opts.signal,
       });
-      // API empty/failed — scoped HTML fallback (not every /pin/ on the page).
+      // API empty/failed — full HTML fallback (not every /pin/ on the page).
       if (map.size === 0) {
         for (const p of extractPinsFromHtml(html)) {
           upsertPin(map, p.pinId, { title: p.title, coverUrl: p.coverUrl });

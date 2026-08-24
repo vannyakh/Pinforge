@@ -63,8 +63,19 @@ function extractNumericId(html: string, keys: string[]): string | undefined {
   return undefined;
 }
 
+function extractRelayBoardId(html: string): string | undefined {
+  return (
+    html.match(/BoardFeedResource[\s\S]{0,500}?board_id\\",\\"(\d{6,})\\"/)?.[1] ||
+    html.match(/\\"board_id\\",\\"(\d{6,})\\"/)?.[1] ||
+    html.match(/board_id\\",\\"(\d{6,})\\"/)?.[1]
+  );
+}
+
 /** Modern Pinterest HTML often omits board_id; resolve id from the board object for this URL. */
 export function extractBoardId(html: string, boardUrl?: string): string | undefined {
+  const fromRelay = extractRelayBoardId(html);
+  if (fromRelay) return fromRelay;
+
   let path = "";
   try {
     if (boardUrl) {
@@ -114,10 +125,12 @@ export function extractBoardId(html: string, boardUrl?: string): string | undefi
 
   return (
     extractNumericId(html, ["board_id", "boardId"]) ||
+    html.match(
+      /"type"\s*:\s*"board"[\s\S]{0,400}?"description"\s*:\s*"[^"]*"[\s\S]{0,120}?"id"\s*:\s*"(\d{6,})"/i
+    )?.[1] ||
     html.match(/"id"\s*:\s*"(\d{6,})"\s*,\s*"type"\s*:\s*"board"/i)?.[1] ||
     html.match(/"type"\s*:\s*"board"\s*,\s*"id"\s*:\s*"(\d{6,})"/i)?.[1] ||
-    html.match(/"id"\s*:\s*"(\d{6,})"[\s\S]{0,160}"type"\s*:\s*"board"/i)?.[1] ||
-    html.match(/"type"\s*:\s*"board"[\s\S]{0,160}"id"\s*:\s*"(\d{6,})"/i)?.[1]
+    html.match(/"id"\s*:\s*"(\d{6,})"[\s\S]{0,160}"type"\s*:\s*"board"/i)?.[1]
   );
 }
 

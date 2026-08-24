@@ -15,6 +15,7 @@ import {
   type PinterestOptions,
   type NamingTemplates,
 } from "@pinforge/core/types";
+import { DEFAULT_AGENT_CONFIG, type AgentConfig } from "@pinforge/agent";
 import { configureFfmpeg } from "@pinforge/core/tools";
 import { zipFolder } from "@pinforge/core/zip";
 import type { DownloadJob, JobStatus, CancelJobOptions } from "@pinforge/core/jobs";
@@ -59,6 +60,7 @@ import { checkForUpdates, downloadUpdate, getUpdateStatus, quitAndInstall } from
 import { ensureMediaCore } from "./mediacore";
 import { uninstallApp } from "./appUninstall";
 import { isUninstallWindow, registerUninstallWindowIpc } from "./uninstallWindow";
+import { registerAgentBridge } from "./bridge/agentBridge";
 import {
   getRemoteRuntimeStatus,
   notifyRemoteDownloadComplete,
@@ -1150,6 +1152,13 @@ export function registerIpc(): void {
       history: store.get("history"),
       packs: store.get("packs"),
       remote: store.get("remote"),
+      agent: {
+        ...DEFAULT_AGENT_CONFIG,
+        ...store.get("agent"),
+        providers:
+          store.get("agent")?.providers ??
+          DEFAULT_AGENT_CONFIG.providers.map((p) => ({ ...p })),
+      },
       system: resolveSystemPaths(store.get("system")),
       customProviders: store.get("customProviders") ?? [],
       providerPrefs: getProviderPrefs(),
@@ -1179,6 +1188,7 @@ export function registerIpc(): void {
         youtube: Partial<YoutubeDownloadOptions>;
         pinterest: Partial<PinterestOptions>;
         extractorUrl: string;
+        agent: Partial<AgentConfig>;
         system: Partial<SystemConfig>;
       }>
     ) => {
@@ -1233,6 +1243,17 @@ export function registerIpc(): void {
         configurePinterestCookies(next.cookies);
       }
       if (partial.extractorUrl !== undefined) store.set("extractorUrl", partial.extractorUrl);
+      if (partial.agent !== undefined) {
+        store.set("agent", {
+          ...DEFAULT_AGENT_CONFIG,
+          ...store.get("agent"),
+          ...partial.agent,
+          providers:
+            partial.agent.providers ??
+            store.get("agent")?.providers ??
+            DEFAULT_AGENT_CONFIG.providers.map((p) => ({ ...p })),
+        });
+      }
       if (partial.system !== undefined) {
         const next = { ...store.get("system"), ...partial.system };
         store.set("system", next);
@@ -1278,6 +1299,13 @@ export function registerIpc(): void {
           ...store.get("pinterest"),
         },
         extractorUrl: store.get("extractorUrl"),
+        agent: {
+          ...DEFAULT_AGENT_CONFIG,
+          ...store.get("agent"),
+          providers:
+            store.get("agent")?.providers ??
+            DEFAULT_AGENT_CONFIG.providers.map((p) => ({ ...p })),
+        },
         system: resolveSystemPaths(store.get("system")),
       };
     }
@@ -2027,5 +2055,6 @@ export function registerIpc(): void {
   ipcMain.handle("update:quitAndInstall", () => quitAndInstall());
 
   registerUninstallWindowIpc();
+  registerAgentBridge(ipcMain);
   void syncRemoteRuntime().catch(() => undefined);
 }

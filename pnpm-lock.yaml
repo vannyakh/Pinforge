@@ -74,6 +74,9 @@ importers:
       '@icon-park/react':
         specifier: ^1.4.2
         version: 1.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@pinforge/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
       '@pinforge/api':
         specifier: workspace:*
         version: link:../../packages/api
@@ -86,6 +89,9 @@ importers:
       classnames:
         specifier: ^2.5.1
         version: 2.5.1
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.21
       electron-log:
         specifier: ^5.4.4
         version: 5.4.4
@@ -175,6 +181,25 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.1)
 
+  packages/agent:
+    dependencies:
+      '@pinforge/api':
+        specifier: workspace:*
+        version: link:../api
+      '@pinforge/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsx:
+        specifier: ^4.23.11
+        version: 4.23.11
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/api:
     dependencies:
       '@pinforge/providers':
@@ -205,6 +230,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@pinforge/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@pinforge/api':
         specifier: workspace:*
         version: link:../api
@@ -1539,6 +1567,7 @@ packages:
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abbrev@1.1.1:
     resolution: {integrity: sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==}

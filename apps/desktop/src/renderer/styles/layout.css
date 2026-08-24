@@ -7401,6 +7401,7 @@ html.installer-shell #root {
 }
 
 .env-setup__swiper {
+  --env-loop-count: 6;
   position: relative;
   z-index: 0;
   flex: 1;
@@ -7419,7 +7420,7 @@ html.installer-shell #root {
 .env-setup__track {
   display: flex;
   height: 100%;
-  width: 100%;
+  width: calc(var(--env-loop-count) * 100%);
   will-change: transform;
 }
 
@@ -7428,8 +7429,8 @@ html.installer-shell #root {
 }
 
 .env-setup__slide {
-  flex: 0 0 100%;
-  width: 100%;
+  flex: 0 0 calc(100% / var(--env-loop-count));
+  width: calc(100% / var(--env-loop-count));
   height: 100%;
   position: relative;
 }
