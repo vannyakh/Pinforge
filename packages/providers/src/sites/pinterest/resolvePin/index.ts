@@ -21,6 +21,9 @@ export {
   parsePinInput,
 } from "../shared/urls";
 
+const HLS_FFMPEG_HINT =
+  "This Pinterest pin is HLS video-only. Enable ffmpeg in Settings → System (install/enable tools), then try again.";
+
 /**
  * Resolve a pin URL to original image(s) or best video buffer.
  * Accepts full pin URLs, pin.it shorts, and bare pin ids.
@@ -38,8 +41,18 @@ export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
   let title: string | undefined;
   let fallbacks: string[] = [];
   let carouselImages: string[] = [];
+  let videoRequiresHls = false;
   let html = "";
   let appVersion: string | undefined;
+
+  const applyExtract = (extracted: ReturnType<typeof extractFromPinObject>) => {
+    imageUrl = extracted.imageUrl;
+    videoUrl = extracted.videoUrl;
+    title = title || extracted.title;
+    fallbacks = extracted.fallbacks.length ? extracted.fallbacks : fallbacks;
+    if (extracted.carouselImages?.length) carouselImages = extracted.carouselImages;
+    if (extracted.videoRequiresHls) videoRequiresHls = true;
+  };
 
   try {
     const pageRes = await fetch(pinUrl, {
@@ -52,64 +65,46 @@ export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
         html.match(/"app_version"\s*:\s*"([^"]+)"/)?.[1] ||
         html.match(/"appVersion"\s*:\s*"([^"]+)"/)?.[1];
       const pin = findPinInHtml(html, pinId);
-      if (pin) {
-        const extracted = extractFromPinObject(pin, allowHls);
-        imageUrl = extracted.imageUrl;
-        videoUrl = extracted.videoUrl;
-        title = extracted.title;
-        fallbacks = extracted.fallbacks;
-        carouselImages = extracted.carouselImages ?? [];
-      }
+      if (pin) applyExtract(extractFromPinObject(pin, allowHls));
     }
   } catch {
     /* API / playwright below */
   }
 
-  if (!imageUrl && !videoUrl) {
-    try {
-      const pin = await fetchPinResource(pinId, { appVersion });
-      if (pin) {
-        const extracted = extractFromPinObject(pin, allowHls);
-        imageUrl = extracted.imageUrl;
-        videoUrl = extracted.videoUrl;
-        title = title || extracted.title;
-        fallbacks = extracted.fallbacks;
-        if (extracted.carouselImages?.length) carouselImages = extracted.carouselImages;
-      }
-    } catch {
-      /* fall through */
-    }
-  }
-
-  if (imageUrl && !/\/originals\//i.test(imageUrl)) {
+  // Prefer PinResource whenever HTML did not yield a video — story/HLS pins
+  // often only expose cover images in the page bootstrap JSON.
+  if (!videoUrl) {
     try {
       const pin = await fetchPinResource(pinId, { appVersion });
       if (pin) {
         const extracted = extractFromPinObject(pin, allowHls);
         if (
           extracted.videoUrl ||
+          extracted.videoRequiresHls ||
+          !imageUrl ||
           (extracted.imageUrl && /\/originals\//i.test(extracted.imageUrl))
         ) {
-          imageUrl = extracted.imageUrl;
-          videoUrl = extracted.videoUrl;
-          title = title || extracted.title;
-          fallbacks = [...extracted.fallbacks, ...fallbacks];
+          applyExtract(extracted);
         }
-        if (extracted.carouselImages?.length) carouselImages = extracted.carouselImages;
       }
     } catch {
-      /* keep HTML result */
+      /* fall through */
     }
   }
 
-  if (!imageUrl && !videoUrl && html) {
+  if (videoRequiresHls && !videoUrl && !allowHls) {
+    throw new Error(HLS_FFMPEG_HINT);
+  }
+
+  if (!imageUrl && !videoUrl && html && !videoRequiresHls) {
     const og = extractOgFallback(html);
     imageUrl = og.imageUrl;
     videoUrl = og.videoUrl && (allowHls || !/\.m3u8/i.test(og.videoUrl)) ? og.videoUrl : null;
+    if (og.videoUrl && /\.m3u8/i.test(og.videoUrl) && !allowHls) videoRequiresHls = true;
     title = title || og.title;
   }
 
-  if (!imageUrl && !videoUrl) {
+  if (!imageUrl && !videoUrl && !videoRequiresHls) {
     const oe = await fetchOembed(pinId);
     if (oe.imageUrl) {
       imageUrl = oe.imageUrl;
@@ -120,21 +115,15 @@ export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
     }
   }
 
-  if (!imageUrl && !videoUrl) {
+  if (!imageUrl && !videoUrl && !videoRequiresHls) {
     const { scrapePageMeta } = await import("../../../extractors/playwrightMeta");
     const meta = await scrapePageMeta(pinUrl, {
       referer: "https://www.pinterest.com/",
       settleMs: 1200,
     });
     const pin = findPinInHtml(meta.html, pinId);
-    if (pin) {
-      const extracted = extractFromPinObject(pin, allowHls);
-      imageUrl = extracted.imageUrl;
-      videoUrl = extracted.videoUrl;
-      title = title || extracted.title;
-      fallbacks = extracted.fallbacks;
-    }
-    if (!imageUrl && !videoUrl) {
+    if (pin) applyExtract(extractFromPinObject(pin, allowHls));
+    if (!imageUrl && !videoUrl && !videoRequiresHls) {
       const og = extractOgFallback(meta.html);
       imageUrl = og.imageUrl || meta.ogImage || null;
       if (imageUrl) imageUrl = toOriginalsUrl(imageUrl);
@@ -144,12 +133,19 @@ export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
         meta.videos.find((v) => /\.mp4/i.test(v)) ||
         (allowHls ? meta.videos.find((v) => /\.m3u8/i.test(v)) : undefined) ||
         null;
+      if (!videoUrl && (og.videoUrl || meta.ogVideo)?.match(/\.m3u8/i) && !allowHls) {
+        videoRequiresHls = true;
+      }
       title = title || og.title || meta.ogTitle || meta.title;
     }
   }
 
+  if (videoRequiresHls && !videoUrl && !allowHls) {
+    throw new Error(HLS_FFMPEG_HINT);
+  }
+
   if (videoUrl && /\.m3u8(\?|$)/i.test(videoUrl) && !allowHls) {
-    videoUrl = null;
+    throw new Error(HLS_FFMPEG_HINT);
   }
 
   if (videoUrl) {
@@ -168,8 +164,9 @@ export async function resolvePin(url: string): Promise<PinAsset | PinAsset[]> {
         pinId,
       };
     } catch (err) {
-      if (!imageUrl && fallbacks[0]) imageUrl = fallbacks[0];
-      if (!imageUrl) throw err;
+      // Never silently replace a video pin with its cover image.
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to download Pinterest video: ${reason}`);
     }
   }
 

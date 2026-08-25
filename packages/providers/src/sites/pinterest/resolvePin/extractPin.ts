@@ -21,6 +21,24 @@ export interface PinObjectExtract {
   title?: string;
   fallbacks: string[];
   carouselImages?: string[];
+  /**
+   * Pin has video stream metadata, but no selectable URL with current options
+   * (typical: HLS-only story/video pin when ffmpeg is off).
+   */
+  videoRequiresHls?: boolean;
+}
+
+function videoPayloadPresent(videos: unknown): boolean {
+  return extractVideoList(videos, true).length > 0;
+}
+
+function pickVideoOrFlag(
+  videos: unknown,
+  allowHls: boolean
+): { videoUrl: string | null; videoRequiresHls: boolean } {
+  if (!videoPayloadPresent(videos)) return { videoUrl: null, videoRequiresHls: false };
+  const videoUrl = pickPinterestVideoUrl(videos, allowHls);
+  return { videoUrl, videoRequiresHls: !videoUrl };
 }
 
 export function extractFromPinObject(
@@ -29,6 +47,7 @@ export function extractFromPinObject(
 ): PinObjectExtract {
   const title = titleFromPin(pin);
   const fallbacks: string[] = [];
+  let videoRequiresHls = false;
 
   const story = pin.story_pin_data;
   if (story && typeof story === "object") {
@@ -36,26 +55,50 @@ export function extractFromPinObject(
     if (Array.isArray(pages)) {
       for (const page of pages) {
         if (!page || typeof page !== "object") continue;
-        const blocks = (page as { blocks?: unknown[] }).blocks;
+        const p = page as Record<string, unknown>;
+
+        // Page-level video (story pins often put streams here and in blocks).
+        if (p.video && typeof p.video === "object") {
+          const picked = pickVideoOrFlag(p.video, allowHls);
+          if (picked.videoUrl) {
+            const cover = imageUrlFromImagesMap(pin.images);
+            if (cover) fallbacks.push(cover);
+            return { imageUrl: null, videoUrl: picked.videoUrl, title, fallbacks };
+          }
+          if (picked.videoRequiresHls) videoRequiresHls = true;
+        }
+
+        const blocks = p.blocks;
         if (!Array.isArray(blocks)) continue;
         for (const block of blocks) {
           if (!block || typeof block !== "object") continue;
           const b = block as Record<string, unknown>;
-          if (b.video && typeof b.video === "object") {
-            const videoUrl = pickPinterestVideoUrl(b.video, allowHls);
-            if (videoUrl) return { imageUrl: null, videoUrl, title, fallbacks };
-          }
-          if (b.videoDataV2 || b.video_list || b.videos) {
-            const videoUrl = pickPinterestVideoUrl(
-              b.videoDataV2 ?? b.videos ?? { video_list: b.video_list },
-              allowHls
-            );
-            if (videoUrl) return { imageUrl: null, videoUrl, title, fallbacks };
+          const videoBag =
+            b.video && typeof b.video === "object"
+              ? b.video
+              : b.videoDataV2 || b.videos
+                ? (b.videoDataV2 ?? b.videos)
+                : b.video_list
+                  ? { video_list: b.video_list }
+                  : null;
+          if (videoBag) {
+            const picked = pickVideoOrFlag(videoBag, allowHls);
+            if (picked.videoUrl) {
+              const cover = imageUrlFromImagesMap(pin.images);
+              if (cover) fallbacks.push(cover);
+              return { imageUrl: null, videoUrl: picked.videoUrl, title, fallbacks };
+            }
+            if (picked.videoRequiresHls) videoRequiresHls = true;
+            // Do not return cover image from a video block — that silently
+            // replaces HLS video pins with thumbnails when ffmpeg is off.
+            continue;
           }
           const img = imageUrlFromImagesMap(
             (b.image as { images?: unknown } | undefined)?.images ?? b.images
           );
-          if (img) return { imageUrl: img, videoUrl: null, title, fallbacks };
+          if (img && !videoRequiresHls) {
+            return { imageUrl: img, videoUrl: null, title, fallbacks };
+          }
         }
       }
     }
@@ -70,36 +113,53 @@ export function extractFromPinObject(
         if (!raw || typeof raw !== "object") continue;
         const slot = raw as { images?: unknown; videos?: unknown };
         if (slot.videos) {
-          const videoUrl = pickBestVideo(extractVideoList(slot.videos, allowHls), allowHls);
-          if (videoUrl && !carouselImages.length) {
-            return { imageUrl: null, videoUrl, title, fallbacks, carouselImages: [] };
+          const picked = pickVideoOrFlag(slot.videos, allowHls);
+          if (picked.videoUrl && !carouselImages.length) {
+            return {
+              imageUrl: null,
+              videoUrl: picked.videoUrl,
+              title,
+              fallbacks,
+              carouselImages: [],
+            };
           }
+          if (picked.videoRequiresHls) videoRequiresHls = true;
         }
         const img = imageUrlFromImagesMap(slot.images);
         if (img) carouselImages.push(img);
       }
-      if (carouselImages.length === 1) {
-        return { imageUrl: carouselImages[0]!, videoUrl: null, title, fallbacks };
-      }
-      if (carouselImages.length > 1) {
-        return {
-          imageUrl: carouselImages[0]!,
-          videoUrl: null,
-          title,
-          fallbacks,
-          carouselImages,
-        };
+      if (!videoRequiresHls) {
+        if (carouselImages.length === 1) {
+          return { imageUrl: carouselImages[0]!, videoUrl: null, title, fallbacks };
+        }
+        if (carouselImages.length > 1) {
+          return {
+            imageUrl: carouselImages[0]!,
+            videoUrl: null,
+            title,
+            fallbacks,
+            carouselImages,
+          };
+        }
       }
     }
   }
 
   if (pin.videos) {
-    const videoUrl = pickPinterestVideoUrl(pin.videos, allowHls);
-    if (videoUrl) {
+    const picked = pickVideoOrFlag(pin.videos, allowHls);
+    if (picked.videoUrl) {
       const cover = imageUrlFromImagesMap(pin.images);
       if (cover) fallbacks.push(cover);
-      return { imageUrl: null, videoUrl, title, fallbacks };
+      return { imageUrl: null, videoUrl: picked.videoUrl, title, fallbacks };
     }
+    if (picked.videoRequiresHls) videoRequiresHls = true;
+  }
+
+  // Video pin with only HLS streams — never substitute the cover image.
+  if (videoRequiresHls) {
+    const cover = imageUrlFromImagesMap(pin.images);
+    if (cover) fallbacks.push(cover);
+    return { imageUrl: null, videoUrl: null, title, fallbacks, videoRequiresHls: true };
   }
 
   const imageUrl = imageUrlFromImagesMap(pin.images);
