@@ -4,6 +4,11 @@ members = [
   "crates/bridge",
   "crates/enhance",
   "crates/download",
+  "crates/engine",
+  "crates/settings",
+  "crates/providers",
+  "crates/remote",
+  "crates/server",
   "crates/worker",
 ]
 
@@ -17,12 +22,22 @@ authors = ["Pinforge"]
 bridge = { path = "crates/bridge" }
 enhance = { path = "crates/enhance" }
 download = { path = "crates/download" }
+pinforge-engine = { path = "crates/engine" }
+pinforge-settings = { path = "crates/settings" }
+pinforge-providers = { path = "crates/providers" }
+pinforge-remote = { path = "crates/remote" }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "process", "io-std", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 futures = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 bytes = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+tower-http = { version = "0.6", features = ["cors"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+thiserror = "2"
+tracing = "0.1"

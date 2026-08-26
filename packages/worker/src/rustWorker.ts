@@ -1,3 +1,7 @@
+/**
+ * One-shot pinforge-worker CLI helpers + long-lived server routing.
+ */
+
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -7,11 +11,12 @@ import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { writeFile, readFile, unlink } from "node:fs/promises";
 import type { PresetName } from "@pinforge/types";
+import { getServerClient } from "./rustServer";
 
 export interface RustEnhanceResult {
   buffer: Buffer;
   ext: string;
-  via: "rust";
+  via: "rust" | "rust-server";
   width?: number;
   height?: number;
 }
@@ -20,17 +25,27 @@ export interface RustDownloadResult {
   path: string;
   bytes: number;
   usedFragments: boolean;
-  via: "rust";
+  via: "rust" | "rust-server";
+}
+
+function electronResourcesPath(): string | undefined {
+  const p = process as NodeJS.Process & { resourcesPath?: string };
+  return typeof p.resourcesPath === "string" ? p.resourcesPath : undefined;
 }
 
 function candidateBinaries(): string[] {
   const env = process.env.PINFORGE_WORKER?.trim();
   const exe = process.platform === "win32" ? "pinforge-worker.exe" : "pinforge-worker";
   const here = dirname(fileURLToPath(import.meta.url));
-  // packages/worker/src → repo rust/target/...
   const repoRust = join(here, "..", "..", "..", "..", "rust", "target", "release", exe);
   const repoRustDebug = join(here, "..", "..", "..", "..", "rust", "target", "debug", exe);
-  const list = [env, repoRust, repoRustDebug].filter(Boolean) as string[];
+  const resources: string[] = [];
+  const res = electronResourcesPath();
+  if (res) {
+    resources.push(join(res, "bin", exe));
+    resources.push(join(res, exe));
+  }
+  const list = [env, ...resources, repoRust, repoRustDebug].filter(Boolean) as string[];
   return [...new Set(list)];
 }
 
@@ -91,6 +106,15 @@ function parseJsonLine<T>(stdout: string): T {
 }
 
 export async function rustPing(): Promise<boolean> {
+  const server = getServerClient();
+  if (server.isRunning) {
+    try {
+      const r = await server.request<{ enhance?: string }>("ping");
+      return Boolean(r?.enhance);
+    } catch {
+      /* fall through */
+    }
+  }
   const bin = await resolveWorkerBinary();
   if (!bin) return false;
   try {
@@ -102,19 +126,39 @@ export async function rustPing(): Promise<boolean> {
   }
 }
 
-/** Enhance via Rust worker when binary is available. */
+/** Enhance via Rust server when running, else one-shot worker CLI. */
 export async function rustEnhance(
   buffer: Buffer,
   preset: PresetName
 ): Promise<RustEnhanceResult | null> {
-  const bin = await resolveWorkerBinary();
-  if (!bin) return null;
-
   const id = randomBytes(8).toString("hex");
   const input = join(tmpdir(), `pinforge-in-${id}.img`);
   const output = join(tmpdir(), `pinforge-out-${id}.png`);
   try {
     await writeFile(input, buffer);
+
+    const server = getServerClient();
+    if (server.isRunning) {
+      try {
+        const meta = await server.request<{ ext?: string; width?: number; height?: number }>(
+          "enhance.run",
+          { preset, input, output }
+        );
+        const outBuf = await readFile(output);
+        return {
+          buffer: outBuf,
+          ext: meta.ext || "png",
+          via: "rust-server",
+          width: meta.width,
+          height: meta.height,
+        };
+      } catch {
+        /* fall through to CLI */
+      }
+    }
+
+    const bin = await resolveWorkerBinary();
+    if (!bin) return null;
     const { stdout } = await runWorker(bin, [
       "enhance",
       "--preset",
@@ -139,13 +183,38 @@ export async function rustEnhance(
   }
 }
 
-/** Fragment download via Rust worker when binary is available. */
+/** Fragment download via Rust server when running, else one-shot worker CLI. */
 export async function rustDownload(opts: {
   url: string;
   outPath: string;
   concurrency?: number;
   referer?: string;
+  jobId?: string;
 }): Promise<RustDownloadResult | null> {
+  const server = getServerClient();
+  if (server.isRunning) {
+    try {
+      const data = await server.request<{ path: string; bytes: number; used_fragments?: boolean }>(
+        "download.run",
+        {
+          url: opts.url,
+          out: opts.outPath,
+          concurrency: opts.concurrency ?? 4,
+          referer: opts.referer,
+          jobId: opts.jobId,
+        }
+      );
+      return {
+        path: data.path,
+        bytes: data.bytes,
+        usedFragments: Boolean(data.used_fragments),
+        via: "rust-server",
+      };
+    } catch {
+      /* fall through */
+    }
+  }
+
   const bin = await resolveWorkerBinary();
   if (!bin) return null;
   const args = [

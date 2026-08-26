@@ -58,6 +58,10 @@ import {
 import { enterInstallerWindow, exitInstallerWindow } from "./windowInstaller";
 import { checkForUpdates, downloadUpdate, getUpdateStatus, quitAndInstall } from "./autoUpdater";
 import { ensureMediaCore } from "./mediacore";
+import {
+  isPinforgeServerRunning,
+  serverRequest,
+} from "./pinforgeServer";
 import { uninstallApp } from "./appUninstall";
 import { isUninstallWindow, registerUninstallWindowIpc } from "./uninstallWindow";
 import { registerAgentBridge } from "./bridge/agentBridge";
@@ -864,10 +868,18 @@ export function registerIpc(): void {
   });
 
   ipcMain.handle("jobs:list", async (_e, filter?: { status?: JobStatus[]; limit?: number }) => {
+    if (isPinforgeServerRunning()) {
+      const remote = await serverRequest<DownloadJob[]>("jobs.list", filter ?? {});
+      if (remote) return remote;
+    }
     const core = ensureMediaCore();
     return core.listJobs(filter);
   });
   ipcMain.handle("jobs:get", async (_e, id: string) => {
+    if (isPinforgeServerRunning()) {
+      const remote = await serverRequest<DownloadJob | null>("jobs.get", { id });
+      if (remote !== null && remote !== undefined) return remote;
+    }
     const core = ensureMediaCore();
     return core.jobs.get(id);
   });
@@ -879,7 +891,12 @@ export function registerIpc(): void {
     }
     let lastJob: DownloadJob | null = null;
     for (const jobId of targets) {
-      lastJob = await core.jobs.pause(jobId);
+      if (isPinforgeServerRunning()) {
+        lastJob = (await serverRequest<DownloadJob>("jobs.pause", { id: jobId })) ?? null;
+      }
+      if (!lastJob) {
+        lastJob = await core.jobs.pause(jobId);
+      }
       const run = activeRuns.get(jobId);
       if (run) {
         const store = getStore();
@@ -891,7 +908,12 @@ export function registerIpc(): void {
     }
     return { ok: true, message: "Paused", job: lastJob };
   });
-  ipcMain.handle("jobs:resume", async (e, id: string) => runProcessResume(e, id));
+  ipcMain.handle("jobs:resume", async (e, id: string) => {
+    if (isPinforgeServerRunning()) {
+      await serverRequest("jobs.resume", { id }).catch(() => undefined);
+    }
+    return runProcessResume(e, id);
+  });
   ipcMain.handle(
     "jobs:cancel",
     async (_e, payload: { id?: string; deleteFiles?: boolean } | string) => {
@@ -901,32 +923,79 @@ export function registerIpc(): void {
       const deleteFiles =
         typeof payload === "object" && payload ? Boolean(payload.deleteFiles) : false;
       if (!id) return { ok: false, message: "No job id", job: null as DownloadJob | null };
+      if (isPinforgeServerRunning()) {
+        const job = await serverRequest<DownloadJob>("jobs.cancel", { id });
+        if (job) return { ok: true, job };
+      }
       const job = await core.jobs.cancel(id, { deleteFiles } satisfies CancelJobOptions);
       return { ok: true, job };
     }
   );
   ipcMain.handle("jobs:recover", async () => {
+    if (isPinforgeServerRunning()) {
+      const recovered = await serverRequest<DownloadJob[]>("jobs.recover");
+      if (recovered) {
+        syncRecoveredJobsToPacks(recovered);
+        return recovered;
+      }
+    }
     const core = ensureMediaCore();
     const recovered = await core.recover();
     syncRecoveredJobsToPacks(recovered);
     return recovered;
   });
   ipcMain.handle("jobs:listUnfinished", async () => {
+    if (isPinforgeServerRunning()) {
+      const remote = await serverRequest<DownloadJob[]>("jobs.listUnfinished");
+      if (remote) return remote;
+    }
     const core = ensureMediaCore();
     return core.jobs.listUnfinished();
+  });
+
+  ipcMain.handle("server:ping", async () => {
+    if (!isPinforgeServerRunning()) return { ok: false, running: false };
+    try {
+      const result = await serverRequest("ping");
+      return { ok: true, running: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        running: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   });
 
   ipcMain.handle("media:detect", async (_e, url: string) => {
     try {
       const hit = resolveProviderForUrl(url);
-      if (!hit) return null;
-      return {
-        id: hit.id,
-        label: hit.label,
-        live: hit.live,
-        formats: hit.formats,
-        modes: hit.modes,
-      };
+      if (hit) {
+        return {
+          id: hit.id,
+          label: hit.label,
+          live: hit.live,
+          formats: hit.formats,
+          modes: hit.modes,
+        };
+      }
+      if (isPinforgeServerRunning()) {
+        const detected = await serverRequest<{
+          matched?: boolean;
+          provider?: string;
+          label?: string;
+        }>("providers.detect", { url });
+        if (detected?.matched && detected.provider) {
+          return {
+            id: detected.provider,
+            label: detected.label ?? detected.provider,
+            live: true,
+            formats: ["best"],
+            modes: ["single"],
+          };
+        }
+      }
+      return null;
     } catch (err) {
       if (err instanceof ProviderDisabledError) {
         return {
@@ -1272,6 +1341,22 @@ export function registerIpc(): void {
           }
         }
         applySystemPrefs(next);
+      }
+      // Mirror service prefs into Rust pinforge-server settings store
+      if (isPinforgeServerRunning()) {
+        void serverRequest("settings.set", {
+          outDir: store.get("outDir"),
+          preset: store.get("preset"),
+          delayMs: store.get("delayMs"),
+          enhance: store.get("enhance"),
+          format: store.get("format"),
+          youtube: store.get("youtube"),
+          pinterest: store.get("pinterest"),
+          maxParallelDownloads: store.get("maxParallelDownloads"),
+        }).catch(() => undefined);
+        if (partial.outDir) {
+          void serverRequest("config.setOutDir", { outDir: partial.outDir }).catch(() => undefined);
+        }
       }
       return {
         outDir: store.get("outDir"),

@@ -15,6 +15,7 @@ import {
 import { isUninstallWindow } from "./process/uninstallWindow";
 import { startClipboardMonitor } from "./process/clipboardMonitor";
 import { shutdownRemoteRuntime } from "./process/services/remoteRuntime";
+import { startPinforgeServer, stopPinforgeServer } from "./process/pinforgeServer";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -180,6 +181,10 @@ app.whenReady().then(() => {
   });
 
   applyLoginItem(getStore().get("system"));
+  // Rust desktop service layer (jobs/download/enhance/remote) — Node falls back if missing
+  void startPinforgeServer().catch((err) => {
+    console.warn("[pinforge-server] start failed:", err);
+  });
   registerIpc();
   createWindow();
   startClipboardMonitor(() => mainWindow);
@@ -202,6 +207,7 @@ app.whenReady().then(() => {
 app.on("before-quit", () => {
   markAppQuitting();
   void shutdownRemoteRuntime().catch(() => undefined);
+  void stopPinforgeServer().catch(() => undefined);
 });
 
 app.on("window-all-closed", () => {

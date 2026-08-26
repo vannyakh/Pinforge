@@ -482,6 +482,9 @@ try {
     console.log("📦 Using cached Vite build output");
   }
 
+  console.log("🦀 Building Rust pinforge-server…");
+  run(`node "${path.join(ROOT, "scripts", "build-rust-server.js")}"`);
+
   const viteOutputValidation = validateViteBuildOutput();
   if (!viteOutputValidation.valid) {
     throw new Error(

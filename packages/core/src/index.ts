@@ -72,6 +72,13 @@ export {
 } from "@pinforge/engine";
 export { resolveWorkerBinary, rustPing, rustEnhance, rustDownload } from "@pinforge/worker";
 export {
+  resolveServerBinary,
+  getServerClient,
+  ensureServer,
+  serverAvailable,
+  PinforgeServerClient,
+} from "@pinforge/worker";
+export {
   configureFfmpeg,
   clearFfmpegCache,
   resolveFfmpeg,

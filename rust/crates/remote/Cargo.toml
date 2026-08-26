@@ -1,0 +1,17 @@
+[package]
+name = "pinforge-remote"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Localhost HTTP remote API for pinforge-server."
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+pinforge-providers = { workspace = true }
+pinforge-engine = { workspace = true }
+tracing = { workspace = true }

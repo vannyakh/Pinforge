@@ -32,6 +32,10 @@ extraResources:
     to: thumbnails
     filter:
       - "**/*"
+  - from: resources/bin
+    to: bin
+    filter:
+      - "**/*"
 
 asarUnpack:
   - "**/*.node"

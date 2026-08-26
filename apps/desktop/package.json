@@ -21,7 +21,8 @@
     "dist:win": "node ../../scripts/build-with-builder.js auto --win",
     "dist:mac": "node ../../scripts/build-with-builder.js auto --mac",
     "dist:linux": "node ../../scripts/build-with-builder.js auto --linux",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "build:rust": "node ../../scripts/build-rust-server.js"
   },
   "dependencies": {
     "@arco-design/web-react": "^2.66.16",

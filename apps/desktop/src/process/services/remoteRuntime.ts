@@ -18,6 +18,7 @@ import {
   startRemoteApiServer,
   type RemoteApiServer,
 } from "../webserver/remoteApi";
+import { isPinforgeServerRunning, serverRequest } from "../pinforgeServer";
 import {
   downloadRemoteUrl,
   detectRemoteUrl,
@@ -67,6 +68,8 @@ const DEFAULT_STATUS: RemoteRuntimeStatus = {
 
 let status: RemoteRuntimeStatus = { ...DEFAULT_STATUS };
 let apiServer: RemoteApiServer | null = null;
+/** When true, HTTP API is served by pinforge-server (Rust), not Node. */
+let rustApiRunning = false;
 let telegramBot: TelegramBot | null = null;
 let cloudflaredProc: ChildProcess | null = null;
 let syncPromise: Promise<void> | null = null;
@@ -370,6 +373,10 @@ async function postJsonWebhook(webhookUrl: string, payload: unknown): Promise<vo
 }
 
 async function stopApi(): Promise<void> {
+  if (rustApiRunning && isPinforgeServerRunning()) {
+    await serverRequest("remote.stop").catch(() => undefined);
+    rustApiRunning = false;
+  }
   if (!apiServer) return;
   const closing = apiServer.close();
   apiServer = null;
@@ -467,16 +474,46 @@ async function applyRemoteRuntime(): Promise<void> {
 
   if (shouldRunApi) {
     try {
-      apiServer = await startRemoteApiServer(
-        port,
-        host,
-        createDefaultRemoteApiHandlers((url, target) => {
-          if (target.channel === "telegram" && typeof target.chatId === "number") {
-            registerSendBack(url, { kind: "telegram", chatId: target.chatId });
-          }
-        })
-      );
-      next.api = { running: true, port: apiServer.port, url: apiServer.url };
+      // Prefer Rust pinforge-server remote HTTP when available
+      if (isPinforgeServerRunning()) {
+        const store = (await import("../store")).getStore();
+        const outDir = store.get("outDir");
+        if (outDir) {
+          await serverRequest("config.setOutDir", { outDir }).catch(() => undefined);
+        }
+        const ytdlp = await (
+          await import("../ytdlpInstall")
+        ).resolveConfiguredYtdlp();
+        const ffmpeg = await (
+          await import("../ffmpegInstall")
+        ).resolveConfiguredFfmpeg();
+        if (ytdlp || ffmpeg) {
+          await serverRequest("tools.setPaths", {
+            ytdlp: ytdlp ?? undefined,
+            ffmpeg: ffmpeg ?? undefined,
+          }).catch(() => undefined);
+        }
+        const started = await serverRequest<{ port: number; url: string }>("remote.start", {
+          host,
+          port,
+        });
+        if (started?.url) {
+          rustApiRunning = true;
+          next.api = { running: true, port: started.port, url: started.url };
+        }
+      }
+      if (!next.api.running) {
+        apiServer = await startRemoteApiServer(
+          port,
+          host,
+          createDefaultRemoteApiHandlers((url, target) => {
+            if (target.channel === "telegram" && typeof target.chatId === "number") {
+              registerSendBack(url, { kind: "telegram", chatId: target.chatId });
+            }
+          })
+        );
+        next.api = { running: true, port: apiServer.port, url: apiServer.url };
+      }
     } catch (err) {
       next.api.error = err instanceof Error ? err.message : String(err);
     }
