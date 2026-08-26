@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { registerIpc } from "./process/ipc";
 import { getStore } from "./process/store";
 import { initAutoUpdater } from "./process/autoUpdater";
-import { recoverJobsOnStartup } from "./process/mediacore";
+import { recoverJobsOnStartup } from "./process/jobRecovery";
 import { applyLoginItem, markAppQuitting, wireCloseToTray } from "./process/systemPrefs";
 import {
   INSTALLER_HEIGHT,
@@ -167,7 +167,7 @@ function createWindow(): void {
   if (!needsInstaller) mainWindow = win;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   protocol.handle("pinmedia", async (request) => {
     try {
       const filePath = resolvePinmediaFilePath(request.url);
@@ -181,16 +181,17 @@ app.whenReady().then(() => {
   });
 
   applyLoginItem(getStore().get("system"));
-  // Rust desktop service layer (jobs/download/enhance/remote) — Node falls back if missing
-  void startPinforgeServer().catch((err) => {
-    console.warn("[pinforge-server] start failed:", err);
-  });
+  // Required: Rust pinforge-server owns downloads/jobs/remote
+  try {
+    await startPinforgeServer();
+  } catch (err) {
+    console.error("[pinforge-server] failed to start:", err);
+  }
   registerIpc();
   createWindow();
   startClipboardMonitor(() => mainWindow);
   initAutoUpdater();
 
-  // Mark crash-interrupted downloads as paused for resume UI
   void recoverJobsOnStartup().catch(() => undefined);
 
   app.on("activate", () => {

@@ -1,22 +1,22 @@
 /**
- * One-shot pinforge-worker CLI helpers + long-lived server routing.
+ * Native enhance/download via pinforge-server (preferred) or one-shot worker CLI (fallback).
  */
 
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { writeFile, readFile, unlink } from "node:fs/promises";
 import type { PresetName } from "@pinforge/types";
-import { getServerClient } from "./rustServer";
+import { getServerClient, resolveServerBinary } from "./rustServer";
+import { candidateWorkerBinaries, parseWorkerJsonLine } from "./paths";
 
 export interface RustEnhanceResult {
   buffer: Buffer;
   ext: string;
-  via: "rust" | "rust-server";
+  via: "rust-server" | "rust-worker-cli";
   width?: number;
   height?: number;
 }
@@ -25,35 +25,15 @@ export interface RustDownloadResult {
   path: string;
   bytes: number;
   usedFragments: boolean;
-  via: "rust" | "rust-server";
-}
-
-function electronResourcesPath(): string | undefined {
-  const p = process as NodeJS.Process & { resourcesPath?: string };
-  return typeof p.resourcesPath === "string" ? p.resourcesPath : undefined;
-}
-
-function candidateBinaries(): string[] {
-  const env = process.env.PINFORGE_WORKER?.trim();
-  const exe = process.platform === "win32" ? "pinforge-worker.exe" : "pinforge-worker";
-  const here = dirname(fileURLToPath(import.meta.url));
-  const repoRust = join(here, "..", "..", "..", "..", "rust", "target", "release", exe);
-  const repoRustDebug = join(here, "..", "..", "..", "..", "rust", "target", "debug", exe);
-  const resources: string[] = [];
-  const res = electronResourcesPath();
-  if (res) {
-    resources.push(join(res, "bin", exe));
-    resources.push(join(res, exe));
-  }
-  const list = [env, ...resources, repoRust, repoRustDebug].filter(Boolean) as string[];
-  return [...new Set(list)];
+  via: "rust-server" | "rust-worker-cli";
 }
 
 let cachedBin: string | null | undefined;
 
+/** @deprecated Prefer resolveServerBinary — one-shot CLI is fallback only. */
 export async function resolveWorkerBinary(): Promise<string | null> {
   if (cachedBin !== undefined) return cachedBin;
-  for (const p of candidateBinaries()) {
+  for (const p of candidateWorkerBinaries()) {
     try {
       await access(p, constants.X_OK).catch(async () => access(p, constants.F_OK));
       cachedBin = p;
@@ -92,19 +72,7 @@ function runWorker(bin: string, args: string[]): Promise<{ stdout: string; stder
   });
 }
 
-function parseJsonLine<T>(stdout: string): T {
-  const line = stdout
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .pop();
-  if (!line) throw new Error("empty worker response");
-  const parsed = JSON.parse(line) as { ok?: boolean; data?: T; error?: string };
-  if (parsed.ok === false) throw new Error(parsed.error || "worker failed");
-  if (parsed.data === undefined) throw new Error("worker response missing data");
-  return parsed.data;
-}
-
+/** Health: prefer live pinforge-server; else one-shot worker CLI. */
 export async function rustPing(): Promise<boolean> {
   const server = getServerClient();
   if (server.isRunning) {
@@ -115,18 +83,24 @@ export async function rustPing(): Promise<boolean> {
       /* fall through */
     }
   }
+
+  // Server binary present but not started yet — still counts as available for desktop.
+  if (await resolveServerBinary()) {
+    return true;
+  }
+
   const bin = await resolveWorkerBinary();
   if (!bin) return false;
   try {
     const { stdout } = await runWorker(bin, ["ping"]);
-    const data = parseJsonLine<{ enhance?: string }>(stdout);
+    const data = parseWorkerJsonLine<{ enhance?: string }>(stdout);
     return Boolean(data.enhance);
   } catch {
     return false;
   }
 }
 
-/** Enhance via Rust server when running, else one-shot worker CLI. */
+/** Enhance via pinforge-server when running; else worker CLI fallback. */
 export async function rustEnhance(
   buffer: Buffer,
   preset: PresetName
@@ -153,7 +127,7 @@ export async function rustEnhance(
           height: meta.height,
         };
       } catch {
-        /* fall through to CLI */
+        /* fall through to worker CLI */
       }
     }
 
@@ -168,12 +142,12 @@ export async function rustEnhance(
       "--output",
       output,
     ]);
-    const meta = parseJsonLine<{ ext?: string; width?: number; height?: number }>(stdout);
+    const meta = parseWorkerJsonLine<{ ext?: string; width?: number; height?: number }>(stdout);
     const outBuf = await readFile(output);
     return {
       buffer: outBuf,
       ext: meta.ext || "png",
-      via: "rust",
+      via: "rust-worker-cli",
       width: meta.width,
       height: meta.height,
     };
@@ -183,7 +157,7 @@ export async function rustEnhance(
   }
 }
 
-/** Fragment download via Rust server when running, else one-shot worker CLI. */
+/** Fragment download via pinforge-server when running; else worker CLI fallback. */
 export async function rustDownload(opts: {
   url: string;
   outPath: string;
@@ -211,7 +185,7 @@ export async function rustDownload(opts: {
         via: "rust-server",
       };
     } catch {
-      /* fall through */
+      /* fall through to worker CLI */
     }
   }
 
@@ -228,11 +202,11 @@ export async function rustDownload(opts: {
   ];
   if (opts.referer) args.push("--referer", opts.referer);
   const { stdout } = await runWorker(bin, args);
-  const data = parseJsonLine<{ path: string; bytes: number; used_fragments?: boolean }>(stdout);
+  const data = parseWorkerJsonLine<{ path: string; bytes: number; used_fragments?: boolean }>(stdout);
   return {
     path: data.path,
     bytes: data.bytes,
     usedFragments: Boolean(data.used_fragments),
-    via: "rust",
+    via: "rust-worker-cli",
   };
 }

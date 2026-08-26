@@ -14,11 +14,10 @@ import {
   formatRemoteUserLabel,
 } from "../channels/telegram";
 import {
-  createDefaultRemoteApiHandlers,
-  startRemoteApiServer,
-  type RemoteApiServer,
-} from "../webserver/remoteApi";
-import { isPinforgeServerRunning, serverRequest } from "../pinforgeServer";
+  isPinforgeServerRunning,
+  serverRequest,
+  requireServer,
+} from "../pinforgeServer";
 import {
   downloadRemoteUrl,
   detectRemoteUrl,
@@ -67,8 +66,7 @@ const DEFAULT_STATUS: RemoteRuntimeStatus = {
 };
 
 let status: RemoteRuntimeStatus = { ...DEFAULT_STATUS };
-let apiServer: RemoteApiServer | null = null;
-/** When true, HTTP API is served by pinforge-server (Rust), not Node. */
+/** When true, HTTP API is served by pinforge-server (Rust). */
 let rustApiRunning = false;
 let telegramBot: TelegramBot | null = null;
 let cloudflaredProc: ChildProcess | null = null;
@@ -377,10 +375,6 @@ async function stopApi(): Promise<void> {
     await serverRequest("remote.stop").catch(() => undefined);
     rustApiRunning = false;
   }
-  if (!apiServer) return;
-  const closing = apiServer.close();
-  apiServer = null;
-  await closing;
 }
 
 function stopTelegram(): void {
@@ -474,46 +468,29 @@ async function applyRemoteRuntime(): Promise<void> {
 
   if (shouldRunApi) {
     try {
-      // Prefer Rust pinforge-server remote HTTP when available
-      if (isPinforgeServerRunning()) {
-        const store = (await import("../store")).getStore();
-        const outDir = store.get("outDir");
-        if (outDir) {
-          await serverRequest("config.setOutDir", { outDir }).catch(() => undefined);
-        }
-        const ytdlp = await (
-          await import("../ytdlpInstall")
-        ).resolveConfiguredYtdlp();
-        const ffmpeg = await (
-          await import("../ffmpegInstall")
-        ).resolveConfiguredFfmpeg();
-        if (ytdlp || ffmpeg) {
-          await serverRequest("tools.setPaths", {
-            ytdlp: ytdlp ?? undefined,
-            ffmpeg: ffmpeg ?? undefined,
-          }).catch(() => undefined);
-        }
-        const started = await serverRequest<{ port: number; url: string }>("remote.start", {
-          host,
-          port,
-        });
-        if (started?.url) {
-          rustApiRunning = true;
-          next.api = { running: true, port: started.port, url: started.url };
-        }
+      await requireServer();
+      const store = (await import("../store")).getStore();
+      const outDir = store.get("outDir");
+      if (outDir) {
+        await serverRequest("config.setOutDir", { outDir }).catch(() => undefined);
       }
-      if (!next.api.running) {
-        apiServer = await startRemoteApiServer(
-          port,
-          host,
-          createDefaultRemoteApiHandlers((url, target) => {
-            if (target.channel === "telegram" && typeof target.chatId === "number") {
-              registerSendBack(url, { kind: "telegram", chatId: target.chatId });
-            }
-          })
-        );
-        next.api = { running: true, port: apiServer.port, url: apiServer.url };
+      const ytdlp = await (await import("../ytdlpInstall")).resolveConfiguredYtdlp();
+      const ffmpeg = await (await import("../ffmpegInstall")).resolveConfiguredFfmpeg();
+      if (ytdlp || ffmpeg) {
+        await serverRequest("tools.setPaths", {
+          ytdlp: ytdlp ?? undefined,
+          ffmpeg: ffmpeg ?? undefined,
+        }).catch(() => undefined);
       }
+      const started = await serverRequest<{ port: number; url: string }>("remote.start", {
+        host,
+        port,
+      });
+      if (!started?.url) {
+        throw new Error("pinforge-server remote.start failed");
+      }
+      rustApiRunning = true;
+      next.api = { running: true, port: started.port, url: started.url };
     } catch (err) {
       next.api.error = err instanceof Error ? err.message : String(err);
     }

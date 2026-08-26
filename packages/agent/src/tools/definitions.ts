@@ -36,7 +36,7 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
   },
   {
     name: "worker_ping",
-    description: "Check Rust pinforge-worker availability for native enhance/download.",
+    description: "Check Rust pinforge-server availability for native enhance/download/jobs.",
     parameters: {},
   },
 ];

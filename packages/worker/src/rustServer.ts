@@ -6,38 +6,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-
-interface Pending {
-  resolve: (value: unknown) => void;
-  reject: (err: Error) => void;
-}
-
-function electronResourcesPath(): string | undefined {
-  const p = process as NodeJS.Process & { resourcesPath?: string };
-  return typeof p.resourcesPath === "string" ? p.resourcesPath : undefined;
-}
-
-function candidateServerBinaries(): string[] {
-  const env = process.env.PINFORGE_SERVER?.trim();
-  const exe = process.platform === "win32" ? "pinforge-server.exe" : "pinforge-server";
-  const here = dirname(fileURLToPath(import.meta.url));
-  const repoRelease = join(here, "..", "..", "..", "..", "rust", "target", "release", exe);
-  const repoDebug = join(here, "..", "..", "..", "..", "rust", "target", "debug", exe);
-
-  const resources: string[] = [];
-  const res = electronResourcesPath();
-  if (res) {
-    resources.push(join(res, "bin", exe));
-    resources.push(join(res, exe));
-  }
-
-  const list = [env, ...resources, repoRelease, repoDebug].filter(Boolean) as string[];
-  return [...new Set(list)];
-}
+import { candidateServerBinaries, parseServerResponseLine } from "./paths";
 
 let cachedServerBin: string | null | undefined;
 
@@ -58,6 +29,11 @@ export async function resolveServerBinary(): Promise<string | null> {
 
 export function resetServerBinaryCache(): void {
   cachedServerBin = undefined;
+}
+
+interface Pending {
+  resolve: (value: unknown) => void;
+  reject: (err: Error) => void;
 }
 
 export class PinforgeServerClient extends EventEmitter {
@@ -160,33 +136,31 @@ export class PinforgeServerClient extends EventEmitter {
   }
 
   private handleLine(line: string): void {
-    let msg: Record<string, unknown>;
+    let parsed: ReturnType<typeof parseServerResponseLine>;
     try {
-      msg = JSON.parse(line) as Record<string, unknown>;
+      parsed = parseServerResponseLine(line);
     } catch {
       this.emit("parseError", line);
       return;
     }
 
-    if (typeof msg.event === "string") {
-      const event = msg.event;
-      const payload = msg.payload;
+    if (parsed.kind === "event") {
+      const event = parsed.event!;
+      const payload = parsed.payload;
       this.emit(event, payload);
       this.emit("event", event, payload);
-      if (event === "server.ready") {
-        this.ready = true;
-      }
+      if (event === "server.ready") this.ready = true;
       return;
     }
 
-    const id = msg.id != null ? String(msg.id) : null;
+    const id = parsed.id;
     if (id && this.pending.has(id)) {
       const p = this.pending.get(id)!;
       this.pending.delete(id);
-      if (msg.ok === false) {
-        p.reject(new Error(String(msg.error ?? "server error")));
+      if (parsed.kind === "error") {
+        p.reject(new Error(parsed.error ?? "server error"));
       } else {
-        p.resolve(msg.result);
+        p.resolve(parsed.result);
       }
     }
   }

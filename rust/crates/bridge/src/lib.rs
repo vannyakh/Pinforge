@@ -1,6 +1,7 @@
 //! Shared bridge markers (OpenCut-style).
 //!
-//! Desktop / native builds call crate APIs directly or via the `pinforge-worker` CLI.
+//! Desktop / native builds call crate APIs via the long-lived `pinforge-server`
+//! JSON-RPC process (or the one-shot `pinforge-worker` CLI as fallback).
 //! A future `wasm` feature can wrap the same functions for the web.
 
 /// Marker trait documenting that a type/function is part of the exported worker surface.

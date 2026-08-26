@@ -1,5 +1,5 @@
 /**
- * Desktop lifecycle for the Rust pinforge-server process.
+ * Desktop ↔ pinforge-server lifecycle (required for downloads/jobs).
  */
 
 import { join } from "node:path";
@@ -12,12 +12,13 @@ import {
 
 let started = false;
 
-export async function startPinforgeServer(): Promise<PinforgeServerClient | null> {
+export async function startPinforgeServer(): Promise<PinforgeServerClient> {
   const dataDir = join(app.getPath("userData"), "server");
   const client = await ensureServer(dataDir);
   if (!client) {
-    console.warn("[pinforge-server] binary not found — falling back to Node MediaCore / worker CLI");
-    return null;
+    throw new Error(
+      "pinforge-server binary not found. Run: node scripts/build-rust-server.js"
+    );
   }
   if (!started) {
     started = true;
@@ -52,7 +53,7 @@ export async function startPinforgeServer(): Promise<PinforgeServerClient | null
       await client.request("config.setOutDir", { outDir });
     }
   } catch {
-    /* optional */
+    /* optional tool sync */
   }
 
   return client;
@@ -73,12 +74,20 @@ export function pinforgeServer(): PinforgeServerClient {
 export async function serverRequest<T = unknown>(
   method: string,
   params?: unknown
-): Promise<T | null> {
+): Promise<T> {
   const client = getServerClient();
-  if (!client.isRunning) return null;
+  if (!client.isRunning) {
+    throw new Error("pinforge-server is not running");
+  }
   return client.request<T>(method, params);
 }
 
 export function isPinforgeServerRunning(): boolean {
   return getServerClient().isRunning;
+}
+
+export async function requireServer(): Promise<PinforgeServerClient> {
+  const client = getServerClient();
+  if (client.isRunning) return client;
+  return startPinforgeServer();
 }

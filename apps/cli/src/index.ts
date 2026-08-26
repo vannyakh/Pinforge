@@ -1,33 +1,52 @@
 #!/usr/bin/env node
+/**
+ * Pinforge CLI — thin client for pinforge-server (Rust).
+ */
 import { Command } from "commander";
 import ora from "ora";
 import pc from "picocolors";
 import prompts from "prompts";
 import path from "node:path";
-import { processMedia } from "@pinforge/core/process";
-import { listProviders } from "@pinforge/core/providers";
-import { normalizeDownloadOptions } from "@pinforge/api/download";
-import {
-  DEFAULT_PROVIDER_PREFS,
-  ProviderDisabledError,
-  resolveProviderForUrl,
-} from "@pinforge/api/providers";
+import { ensureServer, getServerClient } from "@pinforge/worker";
 import { printBanner } from "./banner.js";
 
 const program = new Command();
 
 program.name("pinforge").description("Pinforge — multi-source media downloader").version("0.1.0");
 
+async function withServer<T>(fn: () => Promise<T>): Promise<T> {
+  const dataDir = path.join(process.cwd(), ".pinforge-server-data");
+  const client = await ensureServer(dataDir);
+  if (!client) {
+    throw new Error("pinforge-server not found. Run: node scripts/build-rust-server.js");
+  }
+  try {
+    return await fn();
+  } finally {
+    // keep server for subsequent commands in same process; process exit cleans up
+  }
+}
+
 program
   .command("providers")
-  .description("List available providers")
-  .action(() => {
+  .description("List available providers (from pinforge-server)")
+  .action(async () => {
     printBanner();
-    for (const p of listProviders()) {
-      const badge = p.status === "live" ? pc.green("live") : pc.yellow(p.status);
-      console.log(`  ${pc.bold(p.label.padEnd(22))} ${badge}`);
+    try {
+      await withServer(async () => {
+        const list = await getServerClient().request<
+          Array<{ id: string; label: string; live: boolean }>
+        >("providers.list");
+        for (const p of list) {
+          const badge = p.live ? pc.green("live") : pc.yellow("stub");
+          console.log(`  ${pc.bold(p.label.padEnd(22))} ${badge}`);
+        }
+        console.log();
+      });
+    } catch (e) {
+      console.error(pc.red(e instanceof Error ? e.message : String(e)));
+      process.exitCode = 1;
     }
-    console.log();
   });
 
 program
@@ -48,41 +67,14 @@ program
         message: "Output folder",
         initial: path.join(process.cwd(), "downloads"),
       },
-      {
-        type: "select",
-        name: "format",
-        message: "Format",
-        choices: [
-          { title: "best", value: "best" },
-          { title: "mp4", value: "mp4" },
-          { title: "audio-only", value: "audio-only" },
-        ],
-        initial: 0,
-      },
-      {
-        type: "confirm",
-        name: "enhance",
-        message: "Enhance images (Pinterest stills)?",
-        initial: true,
-      },
     ]);
-
     if (!answers.url) return;
-    await runDownload(answers.url, {
-      outDir: answers.outDir,
-      format: answers.format,
-      enhance: answers.enhance,
-      preset: "auto",
-    });
+    await runDownload(answers.url, answers.outDir);
   });
 
 program
   .argument("[url]", "Media URL to download")
   .option("-o, --out <dir>", "Output directory", path.join(process.cwd(), "downloads"))
-  .option("-f, --format <preset>", "best | mp4 | audio-only", "best")
-  .option("--enhance <preset>", "Image enhance preset (auto|soft|crisp|upscale|off)", "auto")
-  .option("--extractor <url>", "Piped-compatible API base for YouTube")
-  .option("--flat", "Save multi-file downloads loose instead of in their own folder")
   .action(async (url: string | undefined, opts) => {
     if (!url) {
       printBanner();
@@ -90,70 +82,41 @@ program
       return;
     }
     printBanner();
-    await runDownload(url, {
-      outDir: opts.out,
-      format: opts.format,
-      preset: opts.enhance,
-      extractorUrl: opts.extractor,
-      packFolders: !opts.flat,
-    });
+    await runDownload(url, opts.out);
   });
 
-async function runDownload(
-  url: string,
-  opts: {
-    outDir: string;
-    format?: string;
-    enhance?: boolean;
-    preset?: string;
-    extractorUrl?: string;
-    packFolders?: boolean;
-  }
-) {
+async function runDownload(url: string, outDir: string) {
+  const spinner = ora("Downloading via pinforge-server…").start();
   try {
-    const provider = resolveProviderForUrl(url, DEFAULT_PROVIDER_PREFS, []);
-    if (!provider) {
-      throw new Error("No provider matched this URL");
-    }
-    console.log(
-      `  Provider: ${pc.cyan(provider.label)}${provider.live ? "" : pc.yellow(" (stub)")}`
-    );
-  } catch (e) {
-    if (e instanceof ProviderDisabledError) {
-      console.error(pc.red(e.message));
-    } else {
-      console.error(pc.red(e instanceof Error ? e.message : String(e)));
-    }
-    process.exitCode = 1;
-    return;
-  }
-
-  const processOpts = normalizeDownloadOptions({
-    outDir: opts.outDir,
-    format: opts.format,
-    enhance: opts.enhance,
-    preset: opts.preset,
-    extractorUrl: opts.extractorUrl,
-    packFolders: opts.packFolders,
-  });
-
-  const spinner = ora("Downloading…").start();
-  try {
-    const res = await processMedia(url, {
-      ...processOpts,
-      onProgress: (info) => {
-        spinner.text = `Downloading ${info.current}/${info.total}…`;
-      },
+    await withServer(async () => {
+      const client = getServerClient();
+      await client.request("config.setOutDir", { outDir });
+      const detected = await client.request<{
+        matched?: boolean;
+        provider?: string;
+        label?: string;
+      }>("providers.detect", { url });
+      if (detected?.label) {
+        spinner.text = `Provider: ${detected.label}`;
+      }
+      client.on("download.progress", (payload: unknown) => {
+        const p = payload as { percent?: number };
+        if (typeof p.percent === "number") {
+          spinner.text = `Downloading… ${Math.round(p.percent)}%`;
+        }
+      });
+      const result = await client.request<{
+        ok: boolean;
+        outPath?: string;
+        job?: { error?: string; status?: string };
+        via?: string;
+      }>("media.process", { url, outDir });
+      if (!result.ok || result.job?.status === "failed") {
+        throw new Error(result.job?.error || "Download failed");
+      }
+      spinner.succeed(`Saved${result.via ? ` (${result.via})` : ""}`);
+      if (result.outPath) console.log(pc.green(`  → ${result.outPath}`));
     });
-    spinner.succeed(
-      `Saved ${res.results.length} file(s)${res.errors.length ? `, ${res.errors.length} failed` : ""}`
-    );
-    for (const r of res.results) {
-      console.log(pc.green(`  → ${r.outPath}`));
-    }
-    for (const e of res.errors) {
-      console.log(pc.red(`  ✗ ${e.url}: ${e.error}`));
-    }
   } catch (e) {
     spinner.fail(e instanceof Error ? e.message : String(e));
     process.exitCode = 1;

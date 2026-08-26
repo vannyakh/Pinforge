@@ -12,3 +12,9 @@ export {
   ensureServer,
   serverAvailable,
 } from "./rustServer";
+export {
+  candidateServerBinaries,
+  candidateWorkerBinaries,
+  parseWorkerJsonLine,
+  parseServerResponseLine,
+} from "./paths";

@@ -1,6 +1,6 @@
 import type { AgentToolCall, AgentToolResult } from "@pinforge/agent";
 import { extractMediaPreview } from "@pinforge/core/preview";
-import { rustPing, resolveWorkerBinary } from "@pinforge/worker";
+import { rustPing, resolveServerBinary, getServerClient } from "@pinforge/worker";
 import {
   detectRemoteUrl,
   downloadRemoteUrl,
@@ -89,20 +89,26 @@ export async function executeAgentTool(
         return { name: call.name, ok: true, data: status };
       }
       case "worker_ping": {
-        const bin = await resolveWorkerBinary();
-        if (!bin) {
+        const serverBin = await resolveServerBinary();
+        const client = getServerClient();
+        const pong = await rustPing();
+        if (!serverBin && !pong) {
           return {
             name: call.name,
             ok: false,
-            error: "Rust pinforge-worker binary not found",
-            data: { available: false },
+            error: "Rust pinforge-server binary not found",
+            data: { available: false, serverRunning: false },
           };
         }
-        const pong = await rustPing();
         return {
           name: call.name,
           ok: Boolean(pong),
-          data: { available: Boolean(pong), binary: bin, pong },
+          data: {
+            available: Boolean(pong),
+            serverRunning: client.isRunning,
+            serverBinary: serverBin,
+            pong,
+          },
         };
       }
       default:

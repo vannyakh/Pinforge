@@ -6,8 +6,8 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 
 | Path                  | Role                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------ |
-| `apps/desktop/`       | Electron app (main / preload / renderer)                                             |
-| `apps/cli/`           | CLI                                                                                  |
+| `apps/desktop/`       | Electron thin host + React UI (client of pinforge-server)                |
+| `apps/cli/`           | CLI client of pinforge-server                                            |
 | `packages/core/`      | Thin `@pinforge/core` façade (`process`, `preview`, `zip`)                           |
 | `packages/api/`       | App-level helpers shared by CLI + desktop (provider prefs/resolve, download options) |
 | `packages/common/`    | Cross-package shared helpers (`@pinforge/common` — URL scrape utils, etc.)           |
@@ -17,9 +17,15 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 | `packages/enhance/`   | Image enhance pipeline                                                               |
 | `packages/types/`     | Shared domain types + utils                                                          |
 | `packages/tools/`     | ffmpeg / yt-dlp binary resolve                                                       |
-| `packages/worker/`    | Rust worker bridge                                                                   |
-| `packages/agent/`     | Multi-LLM agent core (URL intent, tools, orchestrator)                               |
-| `rust/`               | Optional native worker                                                               |
+| `packages/worker/`    | TS client for `pinforge-server` (JSON-RPC + events); worker CLI fallback |
+| `packages/agent/`     | Multi-LLM agent core (URL intent, tools, orchestrator)                   |
+| `rust/`               | **App server** — jobs, download, enhance, providers, remote (`pinforge-server`) |
+
+See `packages/LEGACY.md`: Node `download` / `engine` / `enhance` / `core/process` are not used by apps for execution.
+
+## Architecture — Rust executes, Node is client
+
+Desktop GUI and CLI are **clients**. Background tools and services run in **`pinforge-server`** (Rust). Clients request methods over NDJSON JSON-RPC and subscribe to event callbacks (`download.progress`, `job.updated`, …). Electron main only hosts the window and bridges IPC ↔ server. Do not add new permanent service logic in Node — extend `rust/crates/*` and call via `@pinforge/worker`. See `.cursor/rules/rust-server-client.mdc`.
 
 ## Shared library (`@pinforge/*`)
 

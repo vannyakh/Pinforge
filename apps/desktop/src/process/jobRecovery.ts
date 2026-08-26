@@ -1,6 +1,11 @@
-import { jobStatusToPackStatus } from "@pinforge/core/engine";
-import type { DownloadJob } from "@pinforge/core/jobs";
+/**
+ * Job recovery via pinforge-server (Rust). No Node MediaCore.
+ */
+
+import type { DownloadJob } from "./jobTypes";
+import { jobStatusToPackStatus } from "./jobTypes";
 import { getStore, type DownloadPack } from "./store";
+import { requireServer, serverRequest } from "./pinforgeServer";
 
 function upsertPack(pack: DownloadPack): void {
   const store = getStore();
@@ -8,7 +13,6 @@ function upsertPack(pack: DownloadPack): void {
   store.set("packs", [pack, ...packs].slice(0, 50));
 }
 
-/** Mirror recovered MediaCore jobs onto download packs for Tasks resume UI. */
 export function syncRecoveredJobsToPacks(recovered: DownloadJob[]): void {
   const store = getStore();
   const packs = store.get("packs");
@@ -23,4 +27,11 @@ export function syncRecoveredJobsToPacks(recovered: DownloadJob[]): void {
       updatedAt: Date.now(),
     });
   }
+}
+
+export async function recoverJobsOnStartup(): Promise<DownloadJob[]> {
+  await requireServer();
+  const recovered = await serverRequest<DownloadJob[]>("jobs.recover");
+  syncRecoveredJobsToPacks(recovered ?? []);
+  return recovered ?? [];
 }

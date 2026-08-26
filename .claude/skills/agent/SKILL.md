@@ -134,7 +134,7 @@ Defined in `packages/agent/src/tools/catalog.ts`, executed in `toolRuntime.ts`:
 | `queue_download` | Add to Tasks queue |
 | `start_download` | Start download (`downloadRemoteUrl`) |
 | `get_status` | Queue, outDir, ffmpeg/ytdlp readiness |
-| `worker_ping` | Rust `pinforge-worker` health |
+| `worker_ping` | Rust `pinforge-server` health (worker CLI fallback) |
 
 LLM tool syntax (in assistant reply):
 

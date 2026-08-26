@@ -1,16 +1,17 @@
 ---
 id: worker-health
-label: Rust worker health
+label: Rust server health
 taskIntent: worker_health
 tools: worker_ping
-keywords: rust, worker, native, pinforge-worker
+keywords: rust, server, native, pinforge-server, pinforge-worker
 priority: 60
 autoExecute: true
 ---
 
-# Worker health
+# Server health
 
-Check **pinforge-worker** (Rust) for native enhance/download.
+Check **pinforge-server** (Rust) for native enhance/download/jobs. One-shot
+`pinforge-worker` remains a fallback only when the server is not running.
 
 ## Steps
 
@@ -18,4 +19,4 @@ Check **pinforge-worker** (Rust) for native enhance/download.
 
 ## Reply
 
-Report whether the Rust binary is found and responding.
+Report whether the server binary is found, whether the live process is running, and ping status.

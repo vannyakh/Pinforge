@@ -51,7 +51,7 @@ When adding bot-facing features, extend `toolRuntime.ts` first, then mirror in `
 
 ## Rust worker
 
-`worker_ping` tool → `resolveWorkerBinary()` + `rustPing()` from `@pinforge/worker`.
+`worker_ping` tool → `resolveServerBinary()` + `rustPing()` from `@pinforge/worker` (prefers live `pinforge-server`).
 
 Native enhance/download already route through Rust in `@pinforge/enhance` and `@pinforge/download` — agent does not spawn worker directly except for health checks.
 
