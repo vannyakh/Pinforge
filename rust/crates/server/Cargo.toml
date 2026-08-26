@@ -16,6 +16,7 @@ download = { workspace = true }
 pinforge-engine = { workspace = true }
 pinforge-settings = { workspace = true }
 pinforge-providers = { workspace = true }
+pinforge-features = { workspace = true }
 pinforge-remote = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }

@@ -71,6 +71,14 @@ import type {
   AgentChatResponse,
   AgentAnalyzeUrlResponse,
   LlmProviderKind,
+  FeatureEntry,
+  FeatureSummary,
+  FeatureCategory,
+  FeatureStatus,
+  DramaScrapeResult,
+  DramaEpisodePreview,
+  ScrapeValidatePayload,
+  DramaScrapePayload,
 } from "../../preload/index";
 
 export type {
@@ -146,6 +154,14 @@ export type {
   AgentChatResponse,
   AgentAnalyzeUrlResponse,
   LlmProviderKind,
+  FeatureEntry,
+  FeatureSummary,
+  FeatureCategory,
+  FeatureStatus,
+  DramaScrapeResult,
+  DramaEpisodePreview,
+  ScrapeValidatePayload,
+  DramaScrapePayload,
 } from "../../preload/index";
 
 export const api = {
@@ -178,6 +194,14 @@ export const api = {
     }
   ) => window.api.extractPreview(url, opts),
   listProviders: () => window.api.listProviders(),
+  listFeatures: () => window.api.listFeatures(),
+  featuresSummary: () => window.api.featuresSummary(),
+  validateScrape: (payload: {
+    provider: string;
+    options?: Record<string, unknown>;
+  }) => window.api.validateScrape(payload),
+  scrapeDrama: (payload: { url: string; options?: Record<string, unknown> }) =>
+    window.api.scrapeDrama(payload),
   pickFolder: () => window.api.pickFolder(),
   pickFolderPath: (defaultPath?: string) => window.api.pickFolderPath(defaultPath),
   pickProviderSource: () => window.api.pickProviderSource(),

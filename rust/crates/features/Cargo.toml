@@ -1,15 +1,11 @@
 [package]
-name = "pinforge-providers"
+name = "pinforge-features"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "URL detect + yt-dlp/ffmpeg tool orchestration."
+description = "Feature catalog + scrape options for pinforge-server (134 wishlist features)."
 
 [dependencies]
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
-thiserror = { workspace = true }
-reqwest = { workspace = true }
-url = "2"

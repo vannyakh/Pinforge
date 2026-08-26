@@ -1,6 +1,13 @@
 //! URL provider detection + yt-dlp / ffmpeg tool spawning.
 
+mod drama;
+mod drama_scrape;
 mod playwright_sidecar;
+
+pub use drama::{detect_drama, list_drama_providers, normalize_douyin_profile, DRAMA_SITES};
+pub use drama_scrape::{
+    parse_drama_ref, scrape_drama, DramaEpisode, DramaRef, DramaScrapeOpts, DramaScrapeResult,
+};
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -80,6 +87,8 @@ const BUILTIN: &[(&str, &str, &[&str])] = &[
     ("twitter", "X (Twitter)", &["twitter.com", "x.com", "t.co"]),
     ("douyin", "Douyin", &["douyin.com", "iesdouyin.com"]),
     ("kuaishou", "Kuaishou", &["kuaishou.com", "gifshow.com"]),
+    ("sora2", "Sora2", &["sora.chatgpt.com", "sora.com"]),
+    ("soraPlayground", "Sora Playground", &["openai.com"]),
 ];
 
 pub fn list_providers() -> Vec<ProviderInfo> {
@@ -91,6 +100,7 @@ pub fn list_providers() -> Vec<ProviderInfo> {
             live: true,
         })
         .collect();
+    list.extend(list_drama_providers());
     list.push(ProviderInfo {
         id: "ytdlp".into(),
         label: "yt-dlp".into(),
@@ -99,37 +109,77 @@ pub fn list_providers() -> Vec<ProviderInfo> {
     list
 }
 
+fn host_matches(host: &str, pattern: &str) -> bool {
+    let p = pattern.to_ascii_lowercase();
+    host == p || host.ends_with(&format!(".{p}"))
+}
+
 pub fn detect_url(raw: &str) -> DetectResult {
-    let url = raw.trim();
-    let Ok(parsed) = Url::parse(url) else {
+    let trimmed = raw.trim();
+    // Douyin sec_user_id / bare id → canonical profile URL before parse
+    let url = if trimmed.contains("douyin")
+        || trimmed.starts_with("sec_user_id=")
+        || (trimmed.starts_with("MS4wLjAB") && !trimmed.contains('/'))
+    {
+        normalize_douyin_profile(trimmed)
+    } else {
+        trimmed.to_string()
+    };
+
+    let Ok(parsed) = Url::parse(&url) else {
         return DetectResult {
-            url: url.into(),
+            url,
             provider: None,
             label: None,
             matched: false,
         };
     };
     let host = parsed.host_str().unwrap_or("").to_ascii_lowercase();
+    let path = parsed.path().to_ascii_lowercase();
+
+    // Sora playground lives under openai.com/sora
+    if host_matches(&host, "openai.com") && path.contains("sora") {
+        return DetectResult {
+            url,
+            provider: Some("soraPlayground".into()),
+            label: Some("Sora Playground".into()),
+            matched: true,
+        };
+    }
+
     for (id, label, hosts) in BUILTIN {
-        if hosts.iter().any(|h| host == *h || host.ends_with(&format!(".{h}"))) {
+        if *id == "soraPlayground" {
+            continue; // handled above
+        }
+        if hosts.iter().any(|h| host_matches(&host, h)) {
             return DetectResult {
-                url: url.into(),
+                url,
                 provider: Some((*id).into()),
                 label: Some((*label).into()),
                 matched: true,
             };
         }
     }
+
+    if let Some((id, label)) = detect_drama(&host, &path) {
+        return DetectResult {
+            url,
+            provider: Some(id.into()),
+            label: Some(label.into()),
+            matched: true,
+        };
+    }
+
     if parsed.scheme() == "http" || parsed.scheme() == "https" {
         return DetectResult {
-            url: url.into(),
+            url,
             provider: Some("ytdlp".into()),
             label: Some("yt-dlp".into()),
             matched: true,
         };
     }
     DetectResult {
-        url: url.into(),
+        url,
         provider: None,
         label: None,
         matched: false,
@@ -250,9 +300,21 @@ mod tests {
     }
 
     #[test]
-    fn list_providers_includes_builtins_and_ytdlp() {
+    fn list_providers_includes_drama_and_sora() {
         let list = list_providers();
         assert!(list.iter().any(|p| p.id == "youtube"));
         assert!(list.iter().any(|p| p.id == "ytdlp"));
+        assert!(list.iter().any(|p| p.id == "dramabox"));
+        assert!(list.iter().any(|p| p.id == "sora2"));
+        assert!(list.len() > 40);
+    }
+
+    #[test]
+    fn detects_drama_and_douyin_normalize() {
+        let d = detect_url("https://www.dramabox.com/ep/1");
+        assert_eq!(d.provider.as_deref(), Some("dramabox"));
+        let dy = detect_url("sec_user_id=MS4wLjABAAAA");
+        assert_eq!(dy.provider.as_deref(), Some("douyin"));
+        assert!(dy.url.contains("douyin.com/user/"));
     }
 }

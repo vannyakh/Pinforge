@@ -10,7 +10,11 @@ mod rpc;
 use anyhow::{Context, Result};
 use download::{DownloadOptions, ProgressFn};
 use pinforge_engine::{CreateJobInput, JobEngine, JobProgress, JobStatus, ListJobsFilter, SharedEngine};
-use pinforge_providers::{detect_url, ffmpeg_version, list_providers, tool_status, ytdlp_download, ToolPaths};
+use pinforge_features::{feature_summary, list_features, validate_scrape, ScrapeOptions};
+use pinforge_providers::{
+    detect_url, ffmpeg_version, list_providers, scrape_drama, tool_status, ytdlp_download,
+    DramaScrapeOpts, ToolPaths,
+};
 use pinforge_remote::RemoteServer;
 use pinforge_settings::SettingsStore;
 use rpc::{emit_event, write_error, write_result, RpcRequest};
@@ -58,7 +62,9 @@ impl App {
                 "engine": pinforge_engine::ping(),
                 "settings": pinforge_settings::ping(),
                 "providers": pinforge_providers::ping(),
+                "features": pinforge_features::ping(),
                 "remote": pinforge_remote::ping(),
+                "featureTotal": pinforge_features::feature_count(),
                 "dataDir": self.data_dir.display().to_string(),
             })),
             "shutdown" => {
@@ -137,6 +143,42 @@ impl App {
                     .and_then(|v| v.as_str())
                     .context("missing url")?;
                 Ok(serde_json::to_value(detect_url(url))?)
+            }
+            "features.list" => Ok(serde_json::to_value(list_features())?),
+            "features.summary" => Ok(feature_summary()),
+            "scrape.validate" | "scrape.plan" => {
+                let provider = params
+                    .get("provider")
+                    .and_then(|v| v.as_str())
+                    .context("missing provider")?;
+                let opts: ScrapeOptions = params
+                    .get("options")
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()?
+                    .unwrap_or_default();
+                let plan = validate_scrape(provider, &opts)?;
+                Ok(serde_json::to_value(plan)?)
+            }
+            "drama.scrape" => {
+                let url = params
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .context("missing url")?;
+                let scrape_opts: ScrapeOptions = params
+                    .get("options")
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()?
+                    .unwrap_or_default();
+                let drama_opts = DramaScrapeOpts {
+                    max_items: scrape_opts.max_items,
+                    language: scrape_opts.language.clone(),
+                    episode_id: scrape_opts.episode_id.clone(),
+                    scrape_only: scrape_opts.scrape_only,
+                };
+                let result = scrape_drama(url, &drama_opts).await?;
+                Ok(serde_json::to_value(result)?)
             }
             "tools.status" => {
                 let tools = self.tools.lock().await;

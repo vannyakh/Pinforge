@@ -13,7 +13,7 @@ Pinforge desktop services and tools run in **Rust** (`pinforge-server`). Node mo
 |-------|------|--------|-------------|
 | `apps/desktop` renderer (React) | UI | Call `window.api` / IPC | Node APIs, business download/job logic |
 | `apps/desktop` main / preload | Thin host + bridge | Window, dialogs, shell, updater; spawn server; forward IPC ↔ JSON-RPC | Re‑implement jobs/download/enhance/providers/remote |
-| `apps/cli` | CLI client | Request methods on Rust server (or shared TS client) | Own long‑running service logic |
+| `pinforge` / `pinforge-worker` (Rust) | CLI client | Request methods on Rust server; installer / scripting entry | Own long‑running service logic |
 | `packages/*` (TS) | Shared client helpers / types / UI‑adjacent | Serialize requests, types, fallbacks only when server missing | Grow new permanent service implementations in Node |
 | `rust/` (`pinforge-server`) | Background app server | Execute tools/services; emit progress/job events (callbacks) | — |
 

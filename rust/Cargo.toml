@@ -7,6 +7,7 @@ members = [
   "crates/engine",
   "crates/settings",
   "crates/providers",
+  "crates/features",
   "crates/remote",
   "crates/server",
   "crates/worker",
@@ -25,6 +26,7 @@ download = { path = "crates/download" }
 pinforge-engine = { path = "crates/engine" }
 pinforge-settings = { path = "crates/settings" }
 pinforge-providers = { path = "crates/providers" }
+pinforge-features = { path = "crates/features" }
 pinforge-remote = { path = "crates/remote" }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }

@@ -89,7 +89,7 @@ macOS DMG drag-to-Applications art:
 
 Release checklist:
 
-1. Set package versions (`apps/desktop`, `apps/cli`, `packages/core`) to the release version (e.g. `0.1.1`).
+1. Set package versions (`apps/desktop`, `packages/core`) to the release version (e.g. `0.1.1`).
 2. Ensure **PR Checks** is green (`pnpm format:check`, `pnpm typecheck`, `pnpm test`).
 3. Commit and push to the default branch.
 4. Tag and push: `git tag v0.1.1 && git push origin v0.1.1`

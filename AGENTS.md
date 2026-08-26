@@ -6,8 +6,8 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 
 | Path                  | Role                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------ |
-| `apps/desktop/`       | Electron thin host + React UI (client of pinforge-server)                |
-| `apps/cli/`           | CLI client of pinforge-server                                            |
+| `apps/desktop/`       | Electron thin host + React UI — remote-controls `pinforge-server` via IPC |
+| `rust/crates/worker/` | Rust **`pinforge` / `pinforge-worker` CLI** — headless client of `pinforge-server` |
 | `packages/core/`      | Thin `@pinforge/core` façade (`process`, `preview`, `zip`)                           |
 | `packages/api/`       | App-level helpers shared by CLI + desktop (provider prefs/resolve, download options) |
 | `packages/common/`    | Cross-package shared helpers (`@pinforge/common` — URL scrape utils, etc.)           |
@@ -19,7 +19,7 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for PRs and commits.
 | `packages/tools/`     | ffmpeg / yt-dlp binary resolve                                                       |
 | `packages/worker/`    | TS client for `pinforge-server` (JSON-RPC + events); worker CLI fallback |
 | `packages/agent/`     | Multi-LLM agent core (URL intent, tools, orchestrator)                   |
-| `rust/`               | **App server** — jobs, download, enhance, providers, remote (`pinforge-server`) |
+| `rust/`               | **App server** — jobs, download, enhance, providers, features catalog, remote (`pinforge-server`) |
 
 See `packages/LEGACY.md`: Node `download` / `engine` / `enhance` / `core/process` are not used by apps for execution.
 

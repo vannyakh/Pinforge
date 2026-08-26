@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build pinforge-server (+ pinforge-worker) and stage into apps/desktop/resources/bin
+ * Build pinforge-server + pinforge CLI and stage into apps/desktop/resources/bin
  * for electron-builder extraResources.
  */
 
@@ -16,6 +16,7 @@ const OUT_BIN = path.join(ROOT, "apps", "desktop", "resources", "bin");
 const isWin = process.platform === "win32";
 const serverName = isWin ? "pinforge-server.exe" : "pinforge-server";
 const workerName = isWin ? "pinforge-worker.exe" : "pinforge-worker";
+const cliName = isWin ? "pinforge.exe" : "pinforge";
 
 function run(cmd) {
   console.log(`$ ${cmd}`);
@@ -42,7 +43,7 @@ function main() {
 
   fs.mkdirSync(OUT_BIN, { recursive: true });
   const release = path.join(TARGET, "release");
-  for (const name of [serverName, workerName]) {
+  for (const name of [serverName, workerName, cliName]) {
     const src = path.join(release, name);
     const dest = path.join(OUT_BIN, name);
     if (!fs.existsSync(src)) {

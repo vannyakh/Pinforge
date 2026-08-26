@@ -260,6 +260,58 @@ export interface ExtractPreview {
   qualities?: number[];
 }
 
+export type FeatureCategory = "social" | "advanced" | "basic";
+export type FeatureStatus = "done" | "partial" | "planned";
+
+export interface FeatureEntry {
+  id: string;
+  key: string;
+  label: string;
+  category: FeatureCategory;
+  status: FeatureStatus;
+  note?: string;
+}
+
+export interface FeatureSummary {
+  total: number;
+  done: number;
+  partial: number;
+  planned: number;
+  social: number;
+  advanced: number;
+  basic: number;
+}
+
+export interface ScrapeValidatePayload {
+  provider: string;
+  options?: Record<string, unknown>;
+}
+
+export interface DramaScrapePayload {
+  url: string;
+  options?: Record<string, unknown>;
+}
+
+export interface DramaEpisodePreview {
+  index: number;
+  id?: string;
+  title?: string;
+  mediaUrl?: string;
+  subtitleUrl?: string;
+  durationSec?: number;
+}
+
+export interface DramaScrapeResult {
+  provider: string;
+  sourceUrl: string;
+  bookId?: string;
+  title?: string;
+  coverUrl?: string;
+  language?: string;
+  episodes: DramaEpisodePreview[];
+  warnings: string[];
+}
+
 export interface SystemConfig {
   language: string;
   startOnBoot: boolean;
@@ -764,6 +816,12 @@ const api = {
     }
   ): Promise<ExtractPreview> => ipcRenderer.invoke("media:extract", url, opts),
   listProviders: (): Promise<ProviderInfo[]> => ipcRenderer.invoke("media:providers"),
+  listFeatures: (): Promise<FeatureEntry[]> => ipcRenderer.invoke("features:list"),
+  featuresSummary: (): Promise<FeatureSummary> => ipcRenderer.invoke("features:summary"),
+  validateScrape: (payload: ScrapeValidatePayload): Promise<unknown> =>
+    ipcRenderer.invoke("scrape:validate", payload),
+  scrapeDrama: (payload: DramaScrapePayload): Promise<DramaScrapeResult> =>
+    ipcRenderer.invoke("drama:scrape", payload),
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke("pin:pickFolder"),
   pickFolderPath: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke("dialog:pickFolder", defaultPath),

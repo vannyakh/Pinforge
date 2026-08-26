@@ -3,10 +3,14 @@ name = "pinforge-worker"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Pinforge Rust worker CLI — enhance + fragment download."
+description = "Pinforge Rust CLI — remote-controls pinforge-server (also pinforge-worker)."
 
 [[bin]]
 name = "pinforge-worker"
+path = "src/main.rs"
+
+[[bin]]
+name = "pinforge"
 path = "src/main.rs"
 
 [dependencies]
@@ -18,3 +22,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
+uuid = { workspace = true }

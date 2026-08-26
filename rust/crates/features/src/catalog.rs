@@ -1,0 +1,376 @@
+//! Complete 134-feature wishlist catalog with implementation status.
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FeatureCategory {
+    Social,
+    Advanced,
+    Basic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FeatureStatus {
+    /// Implemented in pinforge-server / providers
+    Done,
+    /// Partial / limited support
+    Partial,
+    /// Planned — not yet available
+    Planned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FeatureId {
+    // —— Social platforms ——
+    TikTok,
+    Douyin,
+    Kuaishou,
+    YouTube,
+    Instagram,
+    Facebook,
+    Pinterest,
+    Twitter,
+    Sora2,
+    SoraPlayground,
+    ReelShort,
+    ShortMax,
+    NetShort,
+    FlexTV,
+    MeloShort,
+    DramaWave,
+    FreeReels,
+    Reelife,
+    StardustTV,
+    DramaRush,
+    RapidTV,
+    DramaNova,
+    FunDrama,
+    StarShort,
+    Dramapops,
+    SnackShort,
+    DramaBite,
+    SodaReels,
+    BiliTV,
+    IDrama,
+    Reelala,
+    ShotShort,
+    MicroDrama,
+    RadReels,
+    Sereal,
+    CashDrama,
+    FlickShort,
+    MoboReels,
+    SarosTV,
+    DramaBox,
+    GoodShort,
+    Melolo,
+    Velolo,
+    FlickReels,
+    SerialPlus,
+    DotDrama,
+    ShortsWave,
+    CubeTV,
+    ReelBuzz,
+    FlareFlow,
+    HappyShort,
+    PineDrama,
+    // —— Advanced ——
+    UsernameScrape,
+    KeywordScrape,
+    ScrapeOnly,
+    ProfileAllPosts,
+    ConfigurableVideoCount,
+    AnalystDataExport,
+    RemixScrapeSora2,
+    PlaylistScrapeYouTube,
+    YouTubeShortLongFilter,
+    RegionFilter,
+    TikTokPublishTimeFilter,
+    DouyinProfileNormalize,
+    KuaishouCookieAuth,
+    FacebookPageInput,
+    FacebookPhotoScrape,
+    FacebookGroupPhotoScrape,
+    PinterestBoardSection,
+    PinterestPinId,
+    PinterestPhotoVideoFilter,
+    PinterestIngredientExtract,
+    TwitterPhotoVideoFilter,
+    TwitterCookieAuth,
+    DramaEpisodeSubtitle,
+    DramaSearch,
+    DramaLanguageSelect,
+    RateLimitThrottle,
+    StopInProgress,
+    VideoAudioMerge,
+    GpuEncoding,
+    RerenderVideo,
+    RerenderLdPlayer,
+    AiVoiceDubbing,
+    AudioExtraction,
+    CodecConversion,
+    CpuGpuAutoDetect,
+    VideoQualityPresets,
+    SortByPopularity,
+    ContentTranslation,
+    RemoveHashtags,
+    DataAnalytics,
+    GoogleSheets,
+    InstagramReelScrape,
+    InstagramFeedScrape,
+    AlbumCarouselDownload,
+    CookieAuthentication,
+    CookieBrowserExtension,
+    CreatedSavedPinsFilter,
+    KeywordSearchPins,
+    ShowSystemInfo,
+    ThreadCountRamOpt,
+    YtdlpAutoUpdate,
+    ProxyManagement,
+    DarkLightMode,
+    BugReportScreenshot,
+    TelegramLogging,
+    AppUpdateManager,
+    KeyboardShortcuts,
+    // —— Basic ——
+    HdDownload,
+    FullHdDownload,
+    UltraHd4kDownload,
+    PhotoDownload,
+    BulkDownload,
+    DownloadWhileScraping,
+    AutoDownloadAfterScrape,
+    MultiThreadedDownload,
+    WatermarkOptions,
+    M3u8StreamDownload,
+    AudioDownloadYouTube,
+    SubtitleDownloadDrama,
+    SelectiveDownload,
+    ViewLikesCommentsViews,
+    ViewFollowerCount,
+    ViewPostStatistics,
+    SaveCaptionTxt,
+    SortByDate,
+    CustomFileNaming,
+    DuplicateFileDetection,
+    DownloadProgressTracking,
+    OpenDownloadFolder,
+    CopyClipboardLink,
+    SearchInTables,
+    UniversalFreeDownload,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeatureEntry {
+    pub id: FeatureId,
+    pub key: &'static str,
+    pub label: &'static str,
+    pub category: FeatureCategory,
+    pub status: FeatureStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<&'static str>,
+}
+
+macro_rules! feat {
+    ($id:ident, $key:expr, $label:expr, $cat:ident, $status:ident) => {
+        FeatureEntry {
+            id: FeatureId::$id,
+            key: $key,
+            label: $label,
+            category: FeatureCategory::$cat,
+            status: FeatureStatus::$status,
+            note: None,
+        }
+    };
+    ($id:ident, $key:expr, $label:expr, $cat:ident, $status:ident, $note:expr) => {
+        FeatureEntry {
+            id: FeatureId::$id,
+            key: $key,
+            label: $label,
+            category: FeatureCategory::$cat,
+            status: FeatureStatus::$status,
+            note: Some($note),
+        }
+    };
+}
+
+/// All 134 wishlist features with current Pinforge status.
+pub fn list_features() -> Vec<FeatureEntry> {
+    vec![
+        // Social (52)
+        feat!(TikTok, "tiktok", "TikTok", Social, Partial, "Video + profile; watermark limited"),
+        feat!(Douyin, "douyin", "Douyin", Social, Partial, "Detect + yt-dlp; sec_user_id normalize live"),
+        feat!(Kuaishou, "kuaishou", "Kuaishou", Social, Partial, "Detect + yt-dlp; cookie/cURL auth planned"),
+        feat!(YouTube, "youtube", "YouTube", Social, Done),
+        feat!(Instagram, "instagram", "Instagram (Reel & Feed)", Social, Partial),
+        feat!(Facebook, "facebook", "Facebook (Reel & Feed)", Social, Partial),
+        feat!(Pinterest, "pinterest", "Pinterest", Social, Done),
+        feat!(Twitter, "twitter", "X (Twitter)", Social, Partial, "Detect + yt-dlp; cookie filter planned"),
+        feat!(Sora2, "sora2", "Sora2", Social, Partial, "URL detect live; extract planned"),
+        feat!(SoraPlayground, "soraPlayground", "Sora Playground", Social, Partial, "URL detect live; extract planned"),
+        feat!(ReelShort, "reelShort", "ReelShort", Social, Partial, "Host detect + page episode scrape"),
+        feat!(ShortMax, "shortMax", "ShortMax", Social, Partial, "Host detect live; episode scrape planned"),
+        feat!(NetShort, "netShort", "NetShort", Social, Partial, "Host detect live"),
+        feat!(FlexTV, "flexTv", "FlexTV", Social, Partial, "Host detect live"),
+        feat!(MeloShort, "meloShort", "MeloShort", Social, Partial, "Host detect live"),
+        feat!(DramaWave, "dramaWave", "DramaWave", Social, Partial, "Host detect live"),
+        feat!(FreeReels, "freeReels", "FreeReels", Social, Partial, "Host detect live"),
+        feat!(Reelife, "reelife", "Reelife", Social, Partial, "Host detect live"),
+        feat!(StardustTV, "stardustTv", "StardustTV", Social, Partial, "Host detect live"),
+        feat!(DramaRush, "dramaRush", "DramaRush", Social, Partial, "Host detect live"),
+        feat!(RapidTV, "rapidTv", "RapidTV", Social, Partial, "Host detect live"),
+        feat!(DramaNova, "dramaNova", "DramaNova", Social, Partial, "Host detect live"),
+        feat!(FunDrama, "funDrama", "FunDrama", Social, Partial, "Host detect live"),
+        feat!(StarShort, "starShort", "StarShort", Social, Partial, "Host detect live"),
+        feat!(Dramapops, "dramapops", "Dramapops", Social, Partial, "Host detect live"),
+        feat!(SnackShort, "snackShort", "SnackShort", Social, Partial, "Host detect live"),
+        feat!(DramaBite, "dramaBite", "DramaBite", Social, Partial, "Host detect live"),
+        feat!(SodaReels, "sodaReels", "SodaReels", Social, Partial, "Host detect live"),
+        feat!(BiliTV, "biliTv", "BiliTV", Social, Partial, "Host detect live"),
+        feat!(IDrama, "iDrama", "iDrama", Social, Partial, "Host detect live"),
+        feat!(Reelala, "reelala", "Reelala", Social, Partial, "Host detect live"),
+        feat!(ShotShort, "shotShort", "ShotShort", Social, Partial, "Host detect live"),
+        feat!(MicroDrama, "microDrama", "MicroDrama", Social, Partial, "Host detect live"),
+        feat!(RadReels, "radReels", "RadReels", Social, Partial, "Host detect live"),
+        feat!(Sereal, "sereal", "Sereal", Social, Partial, "Host detect live"),
+        feat!(CashDrama, "cashDrama", "CashDrama", Social, Partial, "Host detect live"),
+        feat!(FlickShort, "flickShort", "FlickShort", Social, Partial, "Host detect live"),
+        feat!(MoboReels, "moboReels", "MoboReels", Social, Partial, "Host detect live"),
+        feat!(SarosTV, "sarosTv", "SarosTV", Social, Partial, "Host detect live"),
+        feat!(DramaBox, "dramaBox", "DramaBox", Social, Partial, "Host detect + page episode scrape"),
+        feat!(GoodShort, "goodShort", "GoodShort", Social, Partial, "Host detect live"),
+        feat!(Melolo, "melolo", "Melolo", Social, Partial, "Host detect live"),
+        feat!(Velolo, "velolo", "Velolo", Social, Partial, "Host detect live"),
+        feat!(FlickReels, "flickReels", "FlickReels", Social, Partial, "Host detect live"),
+        feat!(SerialPlus, "serialPlus", "Serial+", Social, Partial, "Host detect live"),
+        feat!(DotDrama, "dotDrama", "DotDrama", Social, Partial, "Host detect live"),
+        feat!(ShortsWave, "shortsWave", "ShortsWave", Social, Partial, "Host detect live"),
+        feat!(CubeTV, "cubeTv", "CubeTV", Social, Partial, "Host detect live"),
+        feat!(ReelBuzz, "reelBuzz", "ReelBuzz", Social, Partial, "Host detect live"),
+        feat!(FlareFlow, "flareFlow", "FlareFlow", Social, Partial, "Host detect live"),
+        feat!(HappyShort, "happyShort", "HappyShort", Social, Partial, "Host detect live"),
+        feat!(PineDrama, "pineDrama", "PineDrama", Social, Partial, "Host detect live"),
+        // Advanced (57)
+        feat!(UsernameScrape, "usernameScrape", "Username-based Scraping", Advanced, Partial),
+        feat!(KeywordScrape, "keywordScrape", "Keyword-based Scraping", Advanced, Partial, "Pinterest search"),
+        feat!(ScrapeOnly, "scrapeOnly", "Only Scrape (No Download)", Advanced, Partial),
+        feat!(ProfileAllPosts, "profileAllPosts", "Get All Posts by Profile", Advanced, Partial),
+        feat!(ConfigurableVideoCount, "configurableVideoCount", "Configurable Video Count", Advanced, Partial),
+        feat!(AnalystDataExport, "analystDataExport", "Get All Data for Analyst", Advanced, Planned),
+        feat!(RemixScrapeSora2, "remixScrapeSora2", "Remix Scraping (Sora2)", Advanced, Planned),
+        feat!(PlaylistScrapeYouTube, "playlistScrapeYouTube", "Playlist Scraping (YouTube)", Advanced, Done),
+        feat!(YouTubeShortLongFilter, "youtubeShortLongFilter", "YouTube Short / Long Video Filter", Advanced, Partial),
+        feat!(RegionFilter, "regionFilter", "Region Selection Filter (200+ Countries)", Advanced, Planned),
+        feat!(TikTokPublishTimeFilter, "tiktokPublishTimeFilter", "TikTok Publish-Time Filter", Advanced, Planned),
+        feat!(DouyinProfileNormalize, "douyinProfileNormalize", "Douyin Profile URL / sec_user_id Auto-Normalization", Advanced, Done),
+        feat!(KuaishouCookieAuth, "kuaishouCookieAuth", "Kuaishou Cookie / Copied cURL Authentication", Advanced, Planned),
+        feat!(FacebookPageInput, "facebookPageInput", "Facebook Page URL / Page ID Input", Advanced, Planned),
+        feat!(FacebookPhotoScrape, "facebookPhotoScrape", "Facebook Photo Scraping", Advanced, Partial),
+        feat!(FacebookGroupPhotoScrape, "facebookGroupPhotoScrape", "Facebook Group Photo Scraping", Advanced, Planned),
+        feat!(PinterestBoardSection, "pinterestBoardSection", "Pinterest Board / Section Scraping", Advanced, Done),
+        feat!(PinterestPinId, "pinterestPinId", "Pinterest Pin ID Scraping", Advanced, Done),
+        feat!(PinterestPhotoVideoFilter, "pinterestPhotoVideoFilter", "Pinterest Photo / Video Filter", Advanced, Planned),
+        feat!(PinterestIngredientExtract, "pinterestIngredientExtract", "Pinterest Ingredient Extraction", Advanced, Planned),
+        feat!(TwitterPhotoVideoFilter, "twitterPhotoVideoFilter", "X (Twitter) Photo / Video Filter", Advanced, Planned),
+        feat!(TwitterCookieAuth, "twitterCookieAuth", "X (Twitter) Cookie Authentication", Advanced, Planned),
+        feat!(DramaEpisodeSubtitle, "dramaEpisodeSubtitle", "Drama Episode / Subtitle Scraping", Advanced, Partial, "DramaBox/ReelShort HTML + embedded JSON"),
+        feat!(DramaSearch, "dramaSearch", "Drama Search by Episode ID / Keyword", Advanced, Planned),
+        feat!(DramaLanguageSelect, "dramaLanguageSelect", "Drama Language Selection (13 Languages)", Advanced, Planned),
+        feat!(RateLimitThrottle, "rateLimitThrottle", "Rate-Limit / Throttling Management", Advanced, Partial),
+        feat!(StopInProgress, "stopInProgress", "Stop In-Progress Scrape / Download", Advanced, Done),
+        feat!(VideoAudioMerge, "videoAudioMerge", "Video + Audio Merging", Advanced, Done),
+        feat!(GpuEncoding, "gpuEncoding", "GPU Accelerated Encoding (NVIDIA/AMD/Intel)", Advanced, Planned),
+        feat!(RerenderVideo, "rerenderVideo", "Re-render Video Support", Advanced, Planned),
+        feat!(RerenderLdPlayer, "rerenderLdPlayer", "Re-Render for LDPlayer Support", Advanced, Planned),
+        feat!(AiVoiceDubbing, "aiVoiceDubbing", "AI Voice Dubbing", Advanced, Planned),
+        feat!(AudioExtraction, "audioExtraction", "Audio Extraction", Advanced, Done),
+        feat!(CodecConversion, "codecConversion", "Video Codec Conversion (H264/HEVC/AV1)", Advanced, Partial),
+        feat!(CpuGpuAutoDetect, "cpuGpuAutoDetect", "CPU/GPU Auto-Detection", Advanced, Partial),
+        feat!(VideoQualityPresets, "videoQualityPresets", "Video Quality Presets", Advanced, Partial),
+        feat!(SortByPopularity, "sortByPopularity", "Sort by Popularity", Advanced, Planned),
+        feat!(ContentTranslation, "contentTranslation", "Content Translation (100+ Languages)", Advanced, Planned),
+        feat!(RemoveHashtags, "removeHashtags", "Remove Hashtags from Captions", Advanced, Planned),
+        feat!(DataAnalytics, "dataAnalytics", "Data Analytics", Advanced, Planned),
+        feat!(GoogleSheets, "googleSheets", "Google Sheets Integration", Advanced, Planned),
+        feat!(InstagramReelScrape, "instagramReelScrape", "Instagram Reel Scraping", Advanced, Partial),
+        feat!(InstagramFeedScrape, "instagramFeedScrape", "Instagram Feed Scraping", Advanced, Partial),
+        feat!(AlbumCarouselDownload, "albumCarouselDownload", "Album/Carousel Download", Advanced, Partial),
+        feat!(CookieAuthentication, "cookieAuthentication", "Cookie Authentication", Advanced, Partial),
+        feat!(CookieBrowserExtension, "cookieBrowserExtension", "Get Cookie Browser Extension", Advanced, Planned),
+        feat!(CreatedSavedPinsFilter, "createdSavedPinsFilter", "Created/Saved Pins Filter", Advanced, Partial),
+        feat!(KeywordSearchPins, "keywordSearchPins", "Keyword Search Pins", Advanced, Partial),
+        feat!(ShowSystemInfo, "showSystemInfo", "Show System Info", Advanced, Partial),
+        feat!(ThreadCountRamOpt, "threadCountRamOpt", "Thread Count Optimization (RAM-based)", Advanced, Partial),
+        feat!(YtdlpAutoUpdate, "ytdlpAutoUpdate", "yt-dlp Auto-Update", Advanced, Partial),
+        feat!(ProxyManagement, "proxyManagement", "Proxy Management / Proxy API", Advanced, Planned),
+        feat!(DarkLightMode, "darkLightMode", "Dark Mode / Light Mode", Advanced, Done),
+        feat!(BugReportScreenshot, "bugReportScreenshot", "Bug Report with Screenshot", Advanced, Partial),
+        feat!(TelegramLogging, "telegramLogging", "Telegram Logging", Advanced, Partial),
+        feat!(AppUpdateManager, "appUpdateManager", "Application Update Manager", Advanced, Done),
+        feat!(KeyboardShortcuts, "keyboardShortcuts", "Keyboard Shortcuts", Advanced, Planned),
+        // Basic (25)
+        feat!(HdDownload, "hdDownload", "HD Video Download", Basic, Done),
+        feat!(FullHdDownload, "fullHdDownload", "Full HD Download", Basic, Done),
+        feat!(UltraHd4kDownload, "ultraHd4kDownload", "Ultra HD (4K) Download", Basic, Done),
+        feat!(PhotoDownload, "photoDownload", "Photo Download", Basic, Done),
+        feat!(BulkDownload, "bulkDownload", "Bulk Download", Basic, Done),
+        feat!(DownloadWhileScraping, "downloadWhileScraping", "Download While Scraping", Basic, Partial),
+        feat!(AutoDownloadAfterScrape, "autoDownloadAfterScrape", "Auto Download After Scrape", Basic, Partial),
+        feat!(MultiThreadedDownload, "multiThreadedDownload", "Multi-threaded Download (1-30 threads)", Basic, Partial),
+        feat!(WatermarkOptions, "watermarkOptions", "Watermark / No Watermark Options", Basic, Partial),
+        feat!(M3u8StreamDownload, "m3u8StreamDownload", "M3U8 Stream Download", Basic, Done),
+        feat!(AudioDownloadYouTube, "audioDownloadYouTube", "Audio Download (YouTube)", Basic, Done),
+        feat!(SubtitleDownloadDrama, "subtitleDownloadDrama", "Subtitle Download (Drama)", Basic, Planned),
+        feat!(SelectiveDownload, "selectiveDownload", "Selective Download", Basic, Done),
+        feat!(ViewLikesCommentsViews, "viewLikesCommentsViews", "View Likes, Comments, Views Count", Basic, Partial),
+        feat!(ViewFollowerCount, "viewFollowerCount", "View Follower Count", Basic, Partial),
+        feat!(ViewPostStatistics, "viewPostStatistics", "View Post Statistics", Basic, Partial),
+        feat!(SaveCaptionTxt, "saveCaptionTxt", "Save Caption as .txt", Basic, Planned),
+        feat!(SortByDate, "sortByDate", "Sort by Date (Newest/Oldest)", Basic, Planned),
+        feat!(CustomFileNaming, "customFileNaming", "Custom File Naming", Basic, Done),
+        feat!(DuplicateFileDetection, "duplicateFileDetection", "Duplicate File Detection", Basic, Partial),
+        feat!(DownloadProgressTracking, "downloadProgressTracking", "Download Progress Tracking", Basic, Done),
+        feat!(OpenDownloadFolder, "openDownloadFolder", "Open Download Folder", Basic, Done),
+        feat!(CopyClipboardLink, "copyClipboardLink", "Copy to Clipboard / Copy Link", Basic, Done),
+        feat!(SearchInTables, "searchInTables", "Search in Tables", Basic, Partial),
+        feat!(UniversalFreeDownload, "universalFreeDownload", "Free Download Tool (Universal)", Basic, Done, "yt-dlp catch-all"),
+    ]
+}
+
+pub fn feature_count() -> usize {
+    list_features().len()
+}
+
+pub fn features_by_category(cat: FeatureCategory) -> Vec<FeatureEntry> {
+    list_features()
+        .into_iter()
+        .filter(|f| f.category == cat)
+        .collect()
+}
+
+pub fn feature_summary() -> serde_json::Value {
+    let all = list_features();
+    let mut done = 0usize;
+    let mut partial = 0usize;
+    let mut planned = 0usize;
+    for f in &all {
+        match f.status {
+            FeatureStatus::Done => done += 1,
+            FeatureStatus::Partial => partial += 1,
+            FeatureStatus::Planned => planned += 1,
+        }
+    }
+    serde_json::json!({
+        "total": all.len(),
+        "done": done,
+        "partial": partial,
+        "planned": planned,
+        "social": features_by_category(FeatureCategory::Social).len(),
+        "advanced": features_by_category(FeatureCategory::Advanced).len(),
+        "basic": features_by_category(FeatureCategory::Basic).len(),
+    })
+}

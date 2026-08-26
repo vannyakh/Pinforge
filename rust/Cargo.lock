@@ -893,10 +893,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pinforge-features"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pinforge-providers"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror",
@@ -928,6 +938,7 @@ dependencies = [
  "download",
  "enhance",
  "pinforge-engine",
+ "pinforge-features",
  "pinforge-providers",
  "pinforge-remote",
  "pinforge-settings",
@@ -960,6 +971,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

@@ -20,7 +20,7 @@ rust/
     providers/            # URL detect + yt-dlp / ffmpeg spawn
     remote/               # localhost HTTP remote API (Axum)
     server/               # pinforge-server JSON-RPC binary
-    worker/               # pinforge-worker one-shot CLI (tests / fallback)
+    worker/               # pinforge / pinforge-worker CLI (headless server client)
 ```
 
 ## Build
@@ -41,8 +41,8 @@ node scripts/build-rust-server.js
 
 Binaries:
 
-- Windows: `rust/target/release/pinforge-server.exe`, `pinforge-worker.exe`
-- macOS/Linux: `rust/target/release/pinforge-server`, `pinforge-worker`
+- Windows: `rust/target/release/pinforge-server.exe`, `pinforge.exe`, `pinforge-worker.exe`
+- macOS/Linux: `rust/target/release/pinforge-server`, `pinforge`, `pinforge-worker`
 
 Env overrides:
 
@@ -65,13 +65,22 @@ Core methods: `ping`, `shutdown`, `enhance.run`, `download.run`, `jobs.*`, `medi
 `settings.get` / `settings.set`, `providers.list` / `providers.detect`, `tools.*`,
 `remote.start` / `remote.stop`.
 
-## pinforge-worker CLI (one-shot)
+## pinforge CLI (headless client)
+
+Spawns `pinforge-server`, issues one RPC, then shuts down. Same binary as `pinforge-worker`.
 
 ```bash
-pinforge-worker ping
-pinforge-worker enhance --preset auto --input in.jpg --output out.png
-pinforge-worker download --url https://… --out file.mp4 --concurrency 4
+pinforge ping
+pinforge providers
+pinforge detect --url "https://youtube.com/watch?v=…"
+pinforge features --summary
+pinforge process --url "https://…" -o ./downloads
+pinforge drama-scrape --url "https://www.dramabox.com/doc/41000122939"
+pinforge enhance --preset auto --input in.jpg --output out.png
+pinforge download --url https://… --out file.mp4 --concurrency 4
 ```
+
+Set `PINFORGE_JSON=1` for machine-readable output on `providers`.
 
 ## How Electron uses it
 

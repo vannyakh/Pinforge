@@ -55,21 +55,25 @@ Use the `*-x64.dmg` / `*-x64.zip` asset on Intel Macs, and `*-arm64.*` on Apple 
 
 ## CLI
 
+Build Rust binaries (server + CLI), then use **`pinforge`** — it spawns `pinforge-server` and talks JSON-RPC:
+
 ```bash
-pnpm --filter pinforge-cli start -- providers
-pnpm --filter pinforge-cli start -- interactive
-pnpm --filter pinforge-cli start -- "https://www.youtube.com/watch?v=…" -o ./downloads -f mp4
-pnpm --filter pinforge-cli start -- "https://www.pinterest.com/pin/…" -o ./downloads --enhance auto
+node scripts/build-rust-server.js
+pnpm cli -- providers
+pnpm cli -- features --summary
+pnpm cli -- detect --url "https://www.youtube.com/watch?v=…"
+pnpm cli -- process --url "https://…" -o ./downloads
+pnpm cli -- drama-scrape --url "https://www.dramabox.com/doc/41000122939"
 ```
 
-Root shortcut: `pnpm cli -- providers`
+Installed app: CLI lives in `resources/bin/pinforge` next to `pinforge-server`.
 
 ## Layout
 
 ```
-apps/desktop/     Electron (AionUi-style shell + settings sidebar)
-apps/cli/         pinforge CLI
-packages/core/    provider registry + extractors + processMedia + enhance
+apps/desktop/     Electron (thin host — IPC ↔ pinforge-server)
+rust/crates/      pinforge-server (core) + pinforge CLI
+packages/core/    provider registry + extract-preview (legacy paths)
 resources/        App icon and shared assets
 ```
 
@@ -78,6 +82,6 @@ resources/        App icon and shared assets
 | Command                         | What             |
 | ------------------------------- | ---------------- |
 | `pnpm --filter desktop run dev` | Desktop HMR      |
-| `pnpm cli -- <args>`            | CLI              |
+| `pnpm cli -- <args>`            | Rust `pinforge` CLI (via pinforge-server) |
 | `pnpm build`                    | Build workspace  |
 | `pnpm package`                  | electron-builder |

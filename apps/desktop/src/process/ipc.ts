@@ -532,6 +532,67 @@ export function registerIpc(): void {
           path: ytdlpPath ?? system.ytdlpPath ?? undefined,
           enabled: Boolean(system.ytdlpEnabled) && Boolean(ytdlpPath),
         });
+
+        // DramaBox / ReelShort: prefer Rust page scrape when server is up
+        if (isPinforgeServerRunning()) {
+          try {
+            const detected = await serverRequest<{
+              matched?: boolean;
+              provider?: string;
+              label?: string;
+            }>("providers.detect", { url });
+            const dramaIds = new Set(["dramabox", "reelshort"]);
+            if (detected?.matched && detected.provider && dramaIds.has(detected.provider)) {
+              const scraped = await serverRequest<{
+                provider: string;
+                sourceUrl: string;
+                title?: string;
+                coverUrl?: string;
+                episodes: Array<{
+                  index: number;
+                  id?: string;
+                  title?: string;
+                  mediaUrl?: string;
+                  subtitleUrl?: string;
+                  durationSec?: number;
+                }>;
+                warnings?: string[];
+              }>("drama.scrape", {
+                url,
+                options: {
+                  maxItems: opts?.playlistMaxVideos ?? opts?.channelMaxVideos ?? 50,
+                  scrapeOnly: true,
+                },
+              });
+              const items = (scraped.episodes ?? []).map((ep, i) => ({
+                index: i,
+                url: ep.mediaUrl || scraped.sourceUrl || url,
+                title: ep.title || `Episode ${ep.index}`,
+                coverUrl: scraped.coverUrl,
+                durationSec: ep.durationSec,
+              }));
+              return {
+                sourceUrl: scraped.sourceUrl || url,
+                title: scraped.title,
+                provider: {
+                  id: scraped.provider || detected.provider,
+                  label: detected.label ?? scraped.provider,
+                  live: true,
+                },
+                mode: "playlist" as const,
+                modeSupported: true,
+                formats: ["best"],
+                supportedModes: ["single", "playlist"],
+                items,
+                itemCount: items.length,
+                message: scraped.warnings?.length ? scraped.warnings.join("; ") : undefined,
+              };
+            }
+          } catch {
+            /* fall through to Node preview */
+          }
+        }
+
         return await extractMediaPreview(url, {
           channelMaxVideos: opts?.channelMaxVideos ?? youtube.channelMaxVideos,
           playlistMaxVideos: opts?.playlistMaxVideos ?? youtube.playlistMaxVideos,
@@ -555,6 +616,50 @@ export function registerIpc(): void {
   );
 
   ipcMain.handle("media:providers", async () => listProviders());
+
+  ipcMain.handle("features:list", async () => {
+    await requireServer();
+    return serverRequest("features.list");
+  });
+
+  ipcMain.handle("features:summary", async () => {
+    await requireServer();
+    return serverRequest("features.summary");
+  });
+
+  ipcMain.handle(
+    "scrape:validate",
+    async (
+      _e,
+      payload: {
+        provider: string;
+        options?: Record<string, unknown>;
+      }
+    ) => {
+      await requireServer();
+      return serverRequest("scrape.validate", {
+        provider: payload.provider,
+        options: payload.options ?? {},
+      });
+    }
+  );
+
+  ipcMain.handle(
+    "drama:scrape",
+    async (
+      _e,
+      payload: {
+        url: string;
+        options?: Record<string, unknown>;
+      }
+    ) => {
+      await requireServer();
+      return serverRequest("drama.scrape", {
+        url: payload.url,
+        options: payload.options ?? {},
+      });
+    }
+  );
 
   ipcMain.handle("pin:pickFolder", async () => {
     const store = getStore();

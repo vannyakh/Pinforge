@@ -11,7 +11,8 @@ autoExecute: true
 # Server health
 
 Check **pinforge-server** (Rust) for native enhance/download/jobs. One-shot
-`pinforge-worker` remains a fallback only when the server is not running.
+Headless CLI is **`pinforge`** / **`pinforge-worker`** (Rust, `rust/crates/worker`) — spawns `pinforge-server` for RPC.
+Node `apps/cli` was removed; use `pnpm cli --` or `pinforge` from `resources/bin/`.
 
 ## Steps
 
